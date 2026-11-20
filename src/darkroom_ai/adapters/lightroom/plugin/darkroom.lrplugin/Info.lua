@@ -14,10 +14,18 @@ return {
 	LrPluginName = "darkroom_ai Bridge",
 
 	LrInitPlugin = "Init.lua",
+	-- LrForceInitPlugin only runs Init.lua at application start-up when the plug-in
+	-- contributes at least one menu item (SDK Guide, "Declaring the contents of a plug-in").
 	LrForceInitPlugin = true,
 	LrDisablePlugin = "Stop.lua",
 	LrShutdownPlugin = "Shutdown.lua",
 	LrShutdownApp = "Shutdown.lua",
 
-	VERSION = { major = 0, minor = 1, revision = 0, build = 1 },
+	-- File > Plug-in Extras
+	LrExportMenuItems = {
+		{ title = "Start darkroom_ai Bridge", file = "Start.lua" },
+		{ title = "Stop darkroom_ai Bridge", file = "Stop.lua" },
+	},
+
+	VERSION = { major = 0, minor = 1, revision = 1, build = 1 },
 }
