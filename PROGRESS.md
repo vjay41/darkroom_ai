@@ -3,9 +3,9 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — PAUSED by the user (2026-11-21, about 00:30)
+## CURRENT STATE — 2026-11-21 07:45: hand-off spike PASSED end to end; waiting for the user
 
-Do not touch Lightroom or Photoshop until the user says go. Do not push `dev`.
+Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
 ### Phase status
 | Phase | Status |
@@ -14,34 +14,47 @@ Do not touch Lightroom or Photoshop until the user says go. Do not push `dev`.
 | 1 lightroom-cli review | Done (not adopted; own plug-in) |
 | 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
-| 4 Imaging toolkit | Started with the hand-off spike only: Photoshop half PASSED; Lightroom `export_tiff` NOT tested. The imaging toolkit and the mask model have not been started. |
+| 4 Imaging toolkit | Hand-off spike DONE (Lightroom 16-bit TIFF -> Photoshop mask -> PSD + JPG). The imaging toolkit (analysis, ONNX mask model on GPU 1) has not been started. |
 | 5-8 | Not started |
 
-### Next step when the user resumes (their words)
-1. The user imports the five test copies by hand (Import > "Add", source `D:\darkroom_test`) and reloads the plug-in.
-2. Run a selftest that lists the registered plug-in commands (`list_commands`; `export_tiff` must be in the write list; the
-   build should report version 0.2.0).
-3. Run the Lightroom half of the hand-off spike on copies only:
-   `poetry run python scripts/handoff_spike.py --photo D:\darkroom_test\DSC_2457-37.jpg`
-   and report: bit depth in the TIFF header, colour profile, export time, and that the original JPG is byte-identical.
-- Do NOT build an add-photos command (user decision).
+### Catalog facts (corrects earlier counts in this file)
+- The user imported the test copies by hand on 2026-11-21. They are in the catalog as `D:\darkroom_test\TEST_2457-37.jpg` ...
+  `TEST_2467-47.jpg` (same SHA-256 as the `DSC_...` copies, which are in the catalog too).
+- The catalog had 79 photos at that point (user's count; the catalog database read-only shows 78 files + 1 virtual copy).
+  After the hand-off run it has 80 (one more virtual copy). Earlier counts in this file (62, 67, 68, 72) were snapshots of
+  earlier states and are stale.
+- By folder: 67 files in `D:\Photos\Gallery\101D7500_Processed` (off limits), 10 in `D:\darkroom_test`, and 1 stray file in
+  `D:\darkroom_test\lr_sdk\API Reference` (an SDK picture that came in with the import; not used).
+
+### Hand-off spike result (2026-11-21 07:43, on a virtual copy of `TEST_2457-37.jpg`)
+- Selftest: plug-in build 0.2.0; `list_commands` shows `export_tiff` among the write commands.
+- Lightroom: virtual copy `darkroom handoff 20261121-074305`; `export_tiff` took 0.7 s; TIFF header 16/16/16 bits per sample,
+  5568 x 3712, embedded profile "sRGB IEC61966-2.1" (sRGB was requested), 124.0 MB (uncompressed), written to
+  `outputs\handoff`. So Lightroom does write a 16-bit TIFF from a JPG source.
+- Guards verified LIVE in Lightroom: export from the master refused (`NOT_A_VIRTUAL_COPY`); a second export with the same name
+  refused (`FILE_EXISTS`); a develop edit on the master refused (`NOT_A_VIRTUAL_COPY`); earlier, a write on a gallery photo
+  refused (`PHOTO_OUTSIDE_ROOT`).
+- Develop edit on the virtual copy: `Exposure2012` 0 -> 0.3 -> 0 (reverted from the recorded value); the master stayed at 0.
+- Photoshop 27.8.0: opened a COPY of the TIFF (16 bit), layer mask from the PNG, fill layer below, new PSD + flattened JPG,
+  closed without saving. Numeric checks passed (centre unchanged 85.8/130.1/123.2; corner 200/30/31 vs fill 200/30/30).
+- Original `TEST_2457-37.jpg`: same size, modified time and SHA-256 (`F8BFDC77...46F8`) before the run, after the export and
+  after the edit + revert; no `.xmp` sidecar.
 
 ### Open threads
-- Import: as of 00:20 the test catalog holds 67 files, all under `D:\Photos\Gallery\101D7500_Processed`, and none under
-  `D:\darkroom_test` (checked by path through the plug-in and by reading the catalog database read-only). Verify by path
-  before running anything.
-- Plug-in in Lightroom: last start logged at 00:11:29, so it does not yet have `list_commands` (added afterwards). It does have
-  `export_tiff` and the guards (`photos_root` shows in `ping`). Needs one "Reload Plug-in".
-- Rules in force: edits only on virtual copies of photos under `D:\darkroom_test`; gallery photos are off limits (the one-off
-  approval for `DSC_3533_final.jpg` is revoked); Photoshop works only on copies inside `outputs\photoshop`.
 - Due before Phase 5: live wrong-catalog refusal test (dummy path in `bridge.json`, then restore it).
-- Not tested in Lightroom: `export_tiff` (16-bit from a JPG source, colour profile, refusal for masters, refusal of an existing
-  name), selection restore when nothing was selected, RAW files.
-- Not tested in Photoshop: a real start/sign-in screen (the 30 s early error is covered by unit tests only).
-- Left behind: test catalog has one virtual copy `darkroom 20261120-233520` of a gallery photo with snapshot `darkroom-before`
-  (from the Phase 2 spike, settings back to original). `outputs\` holds about 465 MB of spike files and `previews\` ten JPEGs
-  (both git-ignored). Photoshop and Lightroom were left running.
-- Last commit before this note: 77b4e82. `make quality` passes (188 tests with `DARKROOM_LUAC` set to the SDK's `luac.exe`).
+- Rules in force: edits only on virtual copies of photos under `D:\darkroom_test`; gallery photos are off limits; Photoshop
+  works only on copies inside `outputs\photoshop`; no add-photos command (user decision).
+- Not tested: which TIFF compression key spelling Lightroom honours (the file is uncompressed, as intended, but both
+  spellings were sent); AdobeRGB / ProPhotoRGB export; RAW files; selection restore when nothing was selected; a real
+  Photoshop start/sign-in screen (unit tests only).
+- Left behind: test catalog has virtual copies `darkroom handoff 20261121-074305` (of `TEST_2457-37.jpg`, settings back to
+  original) and `darkroom 20261120-233520` (of a gallery photo, from the Phase 2 spike) with snapshot `darkroom-before`.
+  `outputs\` holds the spike files (git-ignored). Lightroom and Photoshop were left running.
+
+### Next step
+Phase 4 proper: imaging toolkit (preview analysis: histogram, clipping, colour cast, face/skin-tone level) and the local mask
+model via ONNX on GPU 1. Needs from the user: the path of the mask ONNX model file (nothing is downloaded). Start with a short
+plan and wait for the go.
 
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 
@@ -271,7 +284,7 @@ Phase 3 (below).
   the 30 s path is covered by unit tests only.
 - Unverified: 16-bit TIFF hand-off, masks/background layers, behavior on Photoshop's start/sign-in screen, UXP/batchPlay route.
 
-## Phase 4 (start) — hand-off spike (2026-11-21) — Photoshop half PASSED; Lightroom export NOT tested
+## Phase 4 (start) — hand-off spike (2026-11-21) — DONE, full chain passed
 
 ### Done (no app contact)
 - Lightroom plug-in command `export_tiff`: full-size 16-bit TIFF of a VIRTUAL COPY. It is a write command, so it goes through
@@ -296,8 +309,12 @@ Phase 3 (below).
   - Numeric: centre region identical before/after the mask (85.9/130.1/123.4); corner = fill colour (200/30/31 vs 200/30/30).
   - TIFF and test photo byte-identical afterwards.
 
+### Run on 2026-11-21 07:43 (full chain, Lightroom half included) — PASSED
+- At 00:05-00:20 the test copies were not in the catalog (it then held 67 files, all gallery photos). The user imported them
+  by hand later (as `TEST_*.jpg` plus the `DSC_*.jpg` copies); the catalog then had 79 photos. Counts earlier in this file
+  were taken before that import and are stale.
+- Results are in "CURRENT STATE" at the top of this file: 16-bit TIFF from a virtual copy in 0.7 s, sRGB profile embedded,
+  refusals for a master and for an existing name verified live, Photoshop chain passed, original byte-identical.
+
 ### Open threads
-- NOT TESTED: the Lightroom half (`export_tiff` from a virtual copy, 16-bit from a JPG source, the TIFF compression key
-  spelling, refusal for masters, refusal of an existing name). Reason: `find_photo` still returns nothing for all five test
-  files in the open catalog (checked 00:05 and 00:11), although the user reported the import as done.
 - Still due before Phase 5: live wrong-catalog refusal test.
