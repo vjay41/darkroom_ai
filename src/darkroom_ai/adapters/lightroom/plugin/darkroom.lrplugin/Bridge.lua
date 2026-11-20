@@ -17,7 +17,9 @@ Safety:
 ]]
 
 local LrApplication = import "LrApplication"
+local LrDate = import "LrDate"
 local LrFileUtils = import "LrFileUtils"
+local LrPrefs = import "LrPrefs"
 local LrFunctionContext = import "LrFunctionContext"
 local LrLogger = import "LrLogger"
 local LrPathUtils = import "LrPathUtils"
@@ -255,23 +257,26 @@ local function runSession(config, active)
 	end)
 end
 
--- Each start claims a new generation. A run loop ends when it is told to stop or when a newer
--- generation exists, so "Reload Plug-in" (old shutdown + new init, in either order) leaves
--- exactly one loop running.
+-- Each start claims a new instance id in the plug-in preferences. Observed on Lightroom 15.2.1:
+-- "Reload Plug-in" gives the new code a fresh global table while the old run loop keeps running,
+-- so globals cannot be used to stop it. The preferences are shared, so every run loop ends as
+-- soon as a newer instance id appears (or when this instance is told to stop).
 function Bridge.start()
 	local bridge = state()
+	local prefs = LrPrefs.prefsForPlugin()
+	local instance = string.format("%.3f-%d", LrDate.currentTime(), math.random(1, 1000000))
+	prefs.activeInstance = instance
 
 	LrTasks.startAsyncTask(function()
-		-- On a reload, give the previous instance's shutdown time to finish first.
+		-- Give a previous instance time to notice the new id and close its sockets.
 		LrTasks.sleep(1.5)
-		bridge.generation = (bridge.generation or 0) + 1
-		local generation = bridge.generation
 		bridge.stop = false
 		bridge.running = true
-		logger:info("bridge starting (generation " .. generation .. ")")
+		local generation = instance
+		logger:info("bridge starting (instance " .. instance .. ")")
 
 		local function active()
-			return not bridge.stop and bridge.generation == generation
+			return not bridge.stop and prefs.activeInstance == instance
 		end
 
 		while active() do
@@ -290,10 +295,8 @@ function Bridge.start()
 			end
 			LrTasks.sleep(0.3)
 		end
-		if bridge.generation == generation then
-			bridge.running = false
-		end
-		logger:info("bridge stopped (generation " .. generation .. ")")
+		bridge.running = false
+		logger:info("bridge stopped (instance " .. generation .. ")")
 	end, "darkroom_ai bridge")
 end
 
