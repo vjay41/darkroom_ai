@@ -289,8 +289,21 @@ class LightroomClient:
         data = self.call("create_snapshot", {"photo_id": photo_id, "name": name})
         return self._typed(SnapshotResult, "create_snapshot", data)
 
-    def apply_snapshot(self, photo_id: str, snapshot_id: str) -> Snapshot:
-        data = self.call("apply_snapshot", {"photo_id": photo_id, "snapshot_id": snapshot_id})
+    def apply_snapshot(
+        self,
+        photo_id: str,
+        snapshot_id: str,
+        *,
+        id_kind: str | None = None,
+        gate: bool | None = None,
+    ) -> Snapshot:
+        """Apply a snapshot. `id_kind` / `gate` select plug-in variants (spike use only)."""
+        params: dict[str, Any] = {"photo_id": photo_id, "snapshot_id": snapshot_id}
+        if id_kind is not None:
+            params["id_kind"] = id_kind
+        if gate is not None:
+            params["gate"] = gate
+        data = self.call("apply_snapshot", params)
         return self._typed(Snapshot, "apply_snapshot", data.get("applied"))
 
     def apply_develop_settings(

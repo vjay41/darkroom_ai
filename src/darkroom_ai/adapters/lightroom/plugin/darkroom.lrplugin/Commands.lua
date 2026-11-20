@@ -279,7 +279,8 @@ function Commands.write.create_virtual_copy(params, ctx)
 			else
 				catalog:setActiveSources(savedSources)
 			end
-			LrTasks.sleep(0.3)
+			-- Switching the source changes the selection a moment later; wait before restoring it.
+			LrTasks.sleep(1)
 		end
 	end
 	local function restoreView()
@@ -355,10 +356,18 @@ function Commands.write.apply_snapshot(params, ctx)
 	if not target then
 		fail("SNAPSHOT_NOT_FOUND", "No matching snapshot on this photo")
 	end
-	withWrite(ctx, "darkroom_ai: apply snapshot", function()
-		photo:applyDevelopSnapshot(target.id)
-	end)
-	return { applied = target }
+	-- The SDK reference does not say which snapshot id applyDevelopSnapshot expects or whether it
+	-- needs a write gate, so both are selectable until the spike has settled it.
+	local id = params.id_kind == "global" and target.global_id or target.id
+	local function apply()
+		photo:applyDevelopSnapshot(id)
+	end
+	if params.gate == false then
+		apply()
+	else
+		withWrite(ctx, "darkroom_ai: apply snapshot", apply)
+	end
+	return { applied = target, id_kind = params.id_kind or "local", gate = params.gate ~= false }
 end
 
 function Commands.write.apply_settings(params, ctx)
