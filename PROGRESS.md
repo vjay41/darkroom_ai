@@ -27,16 +27,60 @@ Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit
 - Direct dependencies are pinned exactly in `pyproject.toml`; `poetry.lock` pins the rest with hashes.
 - Git: commit only to `dev`, never push without the user's say-so, check staged files before every commit.
 
+### Follow-up after the gate (2026-11-20)
+- CLAUDE.md and PRD.md updated as approved (Poetry, Makefile, Python `>=3.13,<3.15`, PRD s10 wording, scikit-image, git rules).
+- `.gitattributes` (`* text=auto`) added; `pytest-timeout` 2.4.0 added to dev (60 s per test).
+- `rembg` removed from the `ml` extra (user decision): masks use onnxruntime directly on user-provided ONNX files; no automatic
+  model downloads. To be confirmed again in the Phase 4 plan. `requests` remains in the lock only through pip-audit (dev).
+
 ### Open threads
-- CLAUDE.md and PRD.md updates (Poetry, Makefile, Python `>=3.13,<3.15`, PRD s10 wording, scikit-image) — diff proposed, not applied yet.
-- `rembg` (ml extra) pulls pooch + requests and by default downloads model files on first use; it also brings scikit-image back
-  transitively. Needs a decision before Phase 4 on how (or whether) it is used. Not installed yet.
 - `mcp` pulls `opentelemetry-api` (interface only); Phase 7 must prove it and uvicorn open no connection.
-- The guarded httpx2 client factory is not written yet (Phase 6, after reading the installed httpx2 source).
+- Phase 6 httpx2 client factory: `trust_env=False`, no proxy mounts, tested with `HTTP_PROXY` set (user requirement).
 - `vision` / `tool_mode` values in `darkroom.toml` are unverified starting values (Phase 6).
-- pytest-timeout is not in the dev group (not in the requested list); timeout tests use their own deadlines unless it is added.
 - Unverified: Python 3.14 (only 3.13 was run); the ml extra install and CUDA 13 loading (Phase 4); everything involving Adobe apps or a model.
-- Needed for Phase 1: exact URL and version/commit of the `lightroom-cli` repository.
+
+## Phase 1 — lightroom-cli source review (2026-11-20) — DONE, waiting at GATE
+
+Read-only review; nothing from it was imported, run, built or installed. Files live in a temp folder outside the project.
+
+### What was reviewed
+- PyPI `lightroom-cli` 1.2.2: sdist sha256 `fbcd1aee…9a2b`, wheel sha256 `417d6ef0…d1b5` (both match PyPI's digests).
+- Git tag `v1.2.2` = commit `a4fc4f65a14ef3fc8e7b495b11a795c94020b19e` (2026-04-06).
+- sdist vs tag: identical content for every shared file (differences were line endings from my checkout only). The tag additionally has
+  CI workflows, docs, a Claude plugin/skill folder, version scripts and e2e/integration tests. Wheel files are identical to the sdist.
+
+### Findings
+- **Lua plugin network**: only `LrSocket.bind` with `address = "localhost"`, two fixed ports (54322 send, 54323 receive). No `LrHttp`,
+  no process execution (`LrTasks.execute`, `LrShell`, `os.execute`), no `loadstring`/`dofile`. Whether "localhost" really binds
+  loopback-only is unverified until Phase 2.
+- **Lua plugin files**: writes/deletes one port file `lightroom_ports.txt` in the temp folder; logs through `LrLogger` at debug level,
+  including every command's parameters (file paths, metadata) in Lightroom's log folder.
+- **No authentication**: any local process can connect and call ~150 commands, including `catalog.removeFromCatalog`, with no check of
+  which catalog is open (no command returns the catalog path).
+- **Python side**: `asyncio.open_connection` to host `localhost` (host is a parameter, so not forced local); no HTTP client, no
+  subprocess, no telemetry. `lr plugin install` deletes and replaces the plugin folder under `%APPDATA%\Adobe\Lightroom\Modules`;
+  `lr mcp install` edits Claude Desktop's config file.
+- **Dependencies**: click, rich, pydantic, platformdirs, fastmcp (a large MCP/web stack we do not otherwise need). Top-level
+  package names are generic (`cli`, `mcp_server`).
+- **Fit for our needs** (from reading; unverified in Lightroom):
+  - Develop edits go through `LrDevelopController` (acts on the active photo in the Develop module and changes the selection);
+    `getSettings` refuses photos that are not RAW/DNG or a virtual copy, which conflicts with our JPG default.
+  - No snapshot apply/revert or snapshot listing; `createVirtualCopy` calls `photo:createVirtualCopy()`, which I could not confirm in the SDK.
+  - Previews come from `requestJpegThumbnail` as base64 over the socket (not an export to file; may lag behind edits).
+  - Hand-written JSON: the encoder does not escape backslashes or control characters (Windows paths would produce invalid JSON);
+    the decoder does not unescape strings and does not handle nested arrays.
+- **Windows**: its changelog says Windows support is "not yet tested on real hardware". Plugin `Info.lua` still reports 1.2.1.
+- **License**: MIT (LICENSE file, copyright "motokiendo"; PyPI author "M.Endo").
+
+### Recommendation
+Write our own small plugin (ping, catalog info, selected photo, virtual copy, snapshot create/apply, set/get Develop settings, export
+preview to file), reusing lightroom-cli's two-socket `LrSocket` pattern as reference with MIT attribution. Do not install lightroom-cli.
+
+### Open threads for Phase 2
+- Confirm with `Get-NetTCPConnection` that `LrSocket.bind` listens on loopback only.
+- Add what lightroom-cli lacks: catalog-path check before any write, a shared token per request, proper JSON escaping.
+- Find out which Develop operations work without the Develop module (`photo:applyDevelopSettings` vs `LrDevelopController`).
 
 ### Next step
-Phase 1 — review `lightroom-cli` source in a temp folder outside the project (no install), after the user says "proceed".
+Phase 2 plan (exact Lightroom actions + the manual steps for the user), after the user says "proceed". Needs: TEST catalog path and a
+folder of test-photo copies.
