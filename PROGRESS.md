@@ -126,8 +126,16 @@ Phase 2 (below).
   2. "Reload Plug-in": the old instance's shutdown stopped the new run loop. Run loops are now generation-based.
   3. Reconnecting within ~0.3 s of a disconnect hits sockets the plug-in is still closing (measured: 1 s is reliable).
      The client now waits 1 s after a disconnect and proves the link with a `ping` before sending a real command.
-- WAITING (edit steps NOT run): the selected photo is `D:\Photos\Gallery\101D7500_Processed\DSC_3533_final.jpg`, which is not one
-  of the five test copies in `D:\darkroom_test`. Need the user's decision before any write.
+- Two more plug-in bugs found and fixed (verified in Lightroom at 23:22):
+  4. "Reload Plug-in" creates a NEW global environment and leaves the old run loop alive (SDK Guide p.32 confirms the new
+     environment). Run loops now stop when a newer instance id appears in the shared plug-in preferences (`LrPrefs`).
+  5. `LrForceInitPlugin` only runs the init script at launch if the plug-in contributes a menu item (SDK Guide p.23). Added
+     File > Plug-in Extras > Start/Stop. The plug-in now starts by itself when Lightroom starts.
+- Safety additions: `lightroom.test_photos_dir` (the spike refuses edit steps for photos outside it) and a `find_photo` read
+  command (look-up by file path, so the selection is not needed).
+- WAITING (edit steps NOT run): the five test copies in `D:\darkroom_test` are NOT in the catalog (`find_photo` returns nothing
+  for all five; a known catalog photo is found, so the look-up works). The user has to import them with "Add". The photo that
+  was selected earlier, `D:\Photos\Gallery\101D7500_Processed\DSC_3533_final.jpg`, is not a test copy and will not be edited.
 - Plug-in log location on this machine: `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\darkroom_ai.log`.
 - Unverified until run in Lightroom: everything in the plug-in at runtime (socket message framing, `withWriteAccessDo` behavior,
   export via `renditions()`/`waitForRender()`, selection restore, snapshot ID semantics, loopback-only listening).
