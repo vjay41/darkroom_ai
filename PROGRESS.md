@@ -221,5 +221,12 @@ Phase 3 (below).
 ### Open threads
 - Modal-dialog test DONE: with a Photoshop dialog open, the call failed after 0.2 s with `PS_NOT_REACHABLE`
   ("busy ... likely a dialog is open", COM result 0x8001010A). No hang.
-- If the recommendation is accepted: remove `photoshop-python-api` and `comtypes` from the dependencies.
+- DONE (user decision 2026-11-21): raw pywin32 accepted; `photoshop-python-api` and `comtypes` removed, re-locked
+  (`wheel` went with them), `pip check` clean. PRD 5.2 and CLAUDE.md updated.
+- Auto-start is configurable in `darkroom.toml` (`photoshop.auto_start`, `start_timeout_s`, `ready_grace_s`).
+- Start / sign-in screen: `connect()` now watches Photoshop's top-level windows (plain Win32, no COM). If Photoshop is on
+  screen but has not answered for `ready_grace_s` (30 s), it raises `PS_NOT_REACHABLE` naming the open windows instead of
+  waiting 120 s. Verified: window listing works (saw the main window and an open 'Preferences' dialog); an already-running
+  Photoshop with a dialog open answers "busy" in 0.2 s. NOT verified: a real sign-in screen (cannot be triggered here), so
+  the 30 s path is covered by unit tests only.
 - Unverified: 16-bit TIFF hand-off, masks/background layers, behavior on Photoshop's start/sign-in screen, UXP/batchPlay route.

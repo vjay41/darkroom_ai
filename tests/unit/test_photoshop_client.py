@@ -9,6 +9,7 @@ import pytest
 
 from darkroom_ai.adapters.photoshop import jsx_dir
 from darkroom_ai.adapters.photoshop.client import PhotoshopClient, unique_path
+from darkroom_ai.adapters.photoshop.windows import StartWatchdog, WindowInfo
 from darkroom_ai.adapters.photoshop.worker import ChildProcessRunner
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.interfaces import PhotoshopAdapter
@@ -20,10 +21,19 @@ class FakeRunner:
     def __init__(self, version: str = "27.8.0") -> None:
         self.version = version
         self.calls: list[tuple[str, dict[str, Any], float]] = []
+        self.watchdogs: list[Any] = []
         self.open: dict[str, int] = {}
 
-    def __call__(self, name: str, kwargs: dict[str, Any], *, timeout_s: float) -> dict[str, Any]:
+    def __call__(
+        self,
+        name: str,
+        kwargs: dict[str, Any],
+        *,
+        timeout_s: float,
+        watchdog: Any = None,
+    ) -> dict[str, Any]:
         self.calls.append((name, kwargs, timeout_s))
+        self.watchdogs.append(watchdog)
         if name == "info":
             return {"name": "Adobe Photoshop", "version": self.version, "documents": len(self.open)}
         if name == "open_document":
@@ -70,7 +80,11 @@ def runner() -> FakeRunner:
 @pytest.fixture
 def client(tmp_path: Path, runner: FakeRunner) -> PhotoshopClient:
     return PhotoshopClient(
-        work_dir=tmp_path / "work", timeout_s=5, start_timeout_s=60, runner=runner
+        work_dir=tmp_path / "work",
+        timeout_s=5,
+        start_timeout_s=60,
+        list_windows=list,
+        runner=runner,
     )
 
 
@@ -91,6 +105,46 @@ def test_connect_uses_the_long_start_deadline(client: PhotoshopClient, runner: F
     client.connect()
     client.info()
     assert [timeout for _, _, timeout in runner.calls] == [60, 5]
+    assert isinstance(runner.watchdogs[0], StartWatchdog)
+    assert runner.watchdogs[1] is None
+
+
+def test_watchdog_reports_a_silent_photoshop_after_the_grace_period() -> None:
+    now = [100.0]
+    windows: list[WindowInfo] = []
+    watchdog = StartWatchdog(30, list_windows=lambda: windows, clock=lambda: now[0])
+
+    assert watchdog() is None  # Photoshop not on screen yet: keep waiting
+    now[0] += 50
+    assert watchdog() is None
+    windows.append(WindowInfo("Sign in - Adobe", "SomeDialog"))
+    assert watchdog() is None  # just appeared
+    now[0] += 29
+    assert watchdog() is None
+    now[0] += 2
+    problem = watchdog()
+    assert problem is not None
+    assert problem.code is ErrorCode.PS_NOT_REACHABLE
+    assert problem.details == {"reason": "not_answering", "windows": ["Sign in - Adobe"]}
+    assert "Sign in - Adobe" in problem.message
+    assert "likely" in problem.message.lower()
+
+
+def test_worker_stops_early_when_the_watchdog_reports_a_problem() -> None:
+    run = ChildProcessRunner("Photoshop.Application")
+    calls = [0]
+
+    def watchdog() -> DarkroomError | None:
+        calls[0] += 1
+        if calls[0] < 2:
+            return None
+        return DarkroomError(ErrorCode.PS_NOT_REACHABLE, "silent", details={"reason": "x"})
+
+    started = time.monotonic()
+    with pytest.raises(DarkroomError) as caught:
+        run("diag_sleep", {"seconds": 30}, timeout_s=30, watchdog=watchdog)
+    assert caught.value.details == {"reason": "x"}
+    assert time.monotonic() - started < 10
 
 
 def test_layered_edit_on_a_copy(client: PhotoshopClient, source: Path, tmp_path: Path) -> None:
@@ -150,7 +204,9 @@ def test_missing_source_is_reported(client: PhotoshopClient, tmp_path: Path) -> 
 
 
 def test_untested_version_is_reported(tmp_path: Path) -> None:
-    client = PhotoshopClient(work_dir=tmp_path, runner=FakeRunner(version="99.1.0"))
+    client = PhotoshopClient(
+        work_dir=tmp_path, list_windows=list, runner=FakeRunner(version="99.1.0")
+    )
     with pytest.raises(DarkroomError) as caught:
         client.check_version()
     assert caught.value.code is ErrorCode.ADOBE_VERSION_UNSUPPORTED

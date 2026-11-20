@@ -86,6 +86,9 @@ class PhotoshopSettings(_Section):
     # Launch Photoshop through COM when it is not running (it can take a while to start).
     auto_start: bool = True
     start_timeout_s: float = Field(default=120.0, gt=0.0, le=900.0)
+    # If Photoshop is on screen but does not answer for this long (start, sign-in or another
+    # blocking screen), connecting fails early with a clear error.
+    ready_grace_s: float = Field(default=30.0, gt=0.0, le=600.0)
 
 
 class GuardrailSettings(_Section):

@@ -12,17 +12,28 @@ With auto_start, the first call may launch Photoshop; use a long deadline for th
 from __future__ import annotations
 
 import multiprocessing
+import time
+from collections.abc import Callable
 from multiprocessing.connection import Connection
 from typing import Any, Protocol
 
 from darkroom_ai.errors import DarkroomError, ErrorCode
 
 _JOIN_GRACE_S = 2.0
+_POLL_S = 0.5
+
+# Called while waiting; returning an error ends the wait early with that error.
+Watchdog = Callable[[], DarkroomError | None]
 
 
 class OperationRunner(Protocol):
     def __call__(
-        self, name: str, kwargs: dict[str, Any], *, timeout_s: float
+        self,
+        name: str,
+        kwargs: dict[str, Any],
+        *,
+        timeout_s: float,
+        watchdog: Watchdog | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -59,7 +70,14 @@ class ChildProcessRunner:
         self._auto_start = auto_start
         self._context = multiprocessing.get_context("spawn")
 
-    def __call__(self, name: str, kwargs: dict[str, Any], *, timeout_s: float) -> dict[str, Any]:
+    def __call__(
+        self,
+        name: str,
+        kwargs: dict[str, Any],
+        *,
+        timeout_s: float,
+        watchdog: Watchdog | None = None,
+    ) -> dict[str, Any]:
         parent, child = self._context.Pipe(duplex=False)
         process = self._context.Process(
             target=_child,
@@ -69,7 +87,18 @@ class ChildProcessRunner:
         process.start()
         child.close()
         try:
-            if not parent.poll(timeout_s):
+            deadline = time.monotonic() + timeout_s
+            answered = False
+            while not answered:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                answered = parent.poll(min(_POLL_S, remaining))
+                if not answered and watchdog is not None:
+                    problem = watchdog()
+                    if problem is not None:
+                        raise problem
+            if not answered:
                 raise DarkroomError(
                     ErrorCode.PS_NOT_REACHABLE,
                     f"Photoshop did not finish '{name}' within {timeout_s:g} s "

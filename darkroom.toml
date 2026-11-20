@@ -45,7 +45,8 @@ timeout_s = 10
 prog_id = "Photoshop.Application"
 timeout_s = 30
 auto_start = true           # launch Photoshop when it is not running
-start_timeout_s = 120
+start_timeout_s = 120       # longest wait for Photoshop to launch
+ready_grace_s = 30          # on screen but silent this long -> error (start/sign-in screen)
 
 [guardrails]
 max_passes = 3

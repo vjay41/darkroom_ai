@@ -29,7 +29,7 @@ Out: cloud/generative features (e.g. Generative Fill), GUI, video, license handl
 - Python: 3.14 and 3.13 installed -> requires-python ">=3.13,<3.15"; develop on **3.13 in the in-project .venv**, managed by Poetry 2.x
 - LM Studio at D:\LM Studio; server http://127.0.0.1:1234/v1
 - Installed models: qwen/qwen3.8-27b (17.7 GB), meta/muse-glimmer (28B, 18.2 GB), google/gemma-4-e4b (6.3 GB)
-- Windows wheels exist for pywin32, photoshop-python-api, numpy, opencv, rawpy, onnxruntime-gpu, pillow, mcp (3.13 and 3.14).
+- Windows wheels exist for pywin32, numpy, opencv, rawpy, onnxruntime-gpu, pillow, mcp (3.13 and 3.14).
   scikit-image is not a dependency. No 3.15 wheels yet for onnxruntime(-gpu), scikit-image.
   NOT yet checked: PyTorch + CUDA for the RTX 5090 (prefer ONNX models).
 
@@ -68,8 +68,10 @@ Verified in the Phase 2 spike (Lightroom Classic 15.2.1, 2026-11-20):
   the plug-in switches to "All Photographs" for the moment a virtual copy is created.
 
 ### 5.2 Photoshop connection
-Python attaches via COM (pywin32 / photoshop-python-api) to Photoshop 2026. Uses ExtendScript and Action Manager for full coverage.
-Photoshop must be running; there is no headless mode. Library lists tested versions only up to 2025 -> spike verifies 2026.
+Python attaches via COM with raw pywin32 to Photoshop 2026 (decision 2026-11-21 after the Phase 3 spike; photoshop-python-api
+was compared and dropped). Every COM call runs in a child process with a deadline. Uses ExtendScript and Action Manager for full coverage.
+There is no headless mode. With `photoshop.auto_start` on (default) Photoshop is launched through COM when it is not running;
+with it off, a closed Photoshop gives PS_NOT_REACHABLE. Verified on Photoshop 27.8 in the Phase 3 spike.
 Backup route if COM misbehaves: UXP/batchPlay.
 
 ### 5.3 Lightroom <-> Photoshop hand-off

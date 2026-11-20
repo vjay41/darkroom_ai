@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Self
 
@@ -19,6 +20,7 @@ from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.adapters.photoshop import read_jsx
 from darkroom_ai.adapters.photoshop.models import ActionManagerInfo, DocumentInfo, PhotoshopInfo
+from darkroom_ai.adapters.photoshop.windows import StartWatchdog, WindowInfo, photoshop_windows
 from darkroom_ai.adapters.photoshop.worker import ChildProcessRunner, OperationRunner
 from darkroom_ai.config import Settings
 from darkroom_ai.errors import DarkroomError, ErrorCode
@@ -44,12 +46,16 @@ class PhotoshopClient:
         work_dir: Path,
         timeout_s: float = 30.0,
         start_timeout_s: float = 120.0,
+        ready_grace_s: float = 30.0,
+        list_windows: Callable[[], list[WindowInfo]] = photoshop_windows,
         runner: OperationRunner,
         tested_versions: tuple[str, ...] = TESTED_VERSIONS,
     ) -> None:
         self._work_dir = work_dir
         self._timeout_s = timeout_s
         self._start_timeout_s = start_timeout_s
+        self._ready_grace_s = ready_grace_s
+        self._list_windows = list_windows
         self._run = runner
         self._tested_versions = tested_versions
 
@@ -59,6 +65,7 @@ class PhotoshopClient:
             work_dir=settings.paths.outputs_dir.resolve() / "photoshop",
             timeout_s=settings.photoshop.timeout_s,
             start_timeout_s=settings.photoshop.start_timeout_s,
+            ready_grace_s=settings.photoshop.ready_grace_s,
             runner=ChildProcessRunner(
                 settings.photoshop.prog_id, auto_start=settings.photoshop.auto_start
             ),
@@ -107,8 +114,14 @@ class PhotoshopClient:
     # -- operations ---------------------------------------------------------------------------
 
     def connect(self) -> PhotoshopInfo:
-        """First contact. Uses the long start deadline because Photoshop may have to launch."""
-        data = self._call("info", timeout_s=self._start_timeout_s)
+        """First contact. Uses the long start deadline because Photoshop may have to launch.
+
+        If Photoshop is on screen but does not answer for `ready_grace_s` seconds (a start,
+        sign-in or other blocking screen), this fails early with a clear error instead of
+        waiting for the whole start deadline.
+        """
+        watchdog = StartWatchdog(self._ready_grace_s, list_windows=self._list_windows)
+        data = self._run("info", {}, timeout_s=self._start_timeout_s, watchdog=watchdog)
         return self._typed(PhotoshopInfo, "info", data)
 
     def info(self) -> PhotoshopInfo:

@@ -4,7 +4,7 @@ Steps: connect (launching Photoshop if needed), open a copy, run ExtendScript, o
 call, add a layer, save a NEW layered PSD, close without saving. Then the error paths.
 
 Usage:  poetry run python scripts/photoshop_spike.py --photo PATH [--step STEP]
-Steps:  not-running | edit | timeout | dialog | compare   (default: edit)
+Steps:  not-running | edit | timeout | dialog   (default: edit)
 """
 
 from __future__ import annotations
@@ -144,34 +144,13 @@ def step_dialog(settings: Settings) -> None:
         )
 
 
-def step_compare(settings: Settings) -> None:
-    """photoshop-python-api (comtypes) vs raw pywin32: attach and read the version with each."""
-    import win32com.client
-
-    started = time.monotonic()
-    app = win32com.client.Dispatch(settings.photoshop.prog_id)
-    print(f"  pywin32: version {app.Version}, {time.monotonic() - started:.2f} s")
-
-    started = time.monotonic()
-    try:
-        import photoshop.api as ps
-
-        api_app = ps.Application()
-        elapsed = time.monotonic() - started
-        print(f"  photoshop-python-api: version {api_app.version}, {elapsed:.2f} s")
-        check("photoshop-python-api attaches to this Photoshop", str(api_app.version) != "")
-    except Exception as exc:
-        print(f"  photoshop-python-api failed: {type(exc).__name__}: {exc}")
-        check("photoshop-python-api attaches to this Photoshop", False)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--photo", type=Path, default=None, help="test photo (copied, not opened)")
     parser.add_argument(
         "--step",
         default="edit",
-        choices=["not-running", "edit", "timeout", "dialog", "compare"],
+        choices=["not-running", "edit", "timeout", "dialog"],
     )
     parser.add_argument("--config", type=Path, default=None)
     args = parser.parse_args()
@@ -187,10 +166,8 @@ def main() -> int:
             step_edit(settings, args.photo)
         elif args.step == "timeout":
             step_timeout(settings)
-        elif args.step == "dialog":
-            step_dialog(settings)
         else:
-            step_compare(settings)
+            step_dialog(settings)
     except DarkroomError as exc:
         print(f"[{exc.code.value}] {exc.message}\nNext step: {exc.next_step}", file=sys.stderr)
         print(f"details: {exc.details}", file=sys.stderr)

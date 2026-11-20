@@ -13,7 +13,7 @@ Photoshop 2026 (27.8) on Windows 11. Read PRD.md for scope, architecture, and th
 - Python: requires-python is ">=3.13,<3.15"; develop on 3.13 in the in-project .venv. 3.15 is blocked (onnxruntime, onnxruntime-gpu
   and scikit-image have no 3.15 wheels as of 2026-11-20) - revisit when they ship.
 - Packaging: Poetry 2.x (pyproject.toml, PEP 621, src layout). Pin direct dependencies exactly; poetry.lock is committed.
-  Never install Poetry into .venv or create a second venv. Groups: main, win32-marked (pywin32, comtypes, photoshop-python-api),
+  Never install Poetry into .venv or create a second venv. Groups: main, win32-marked (pywin32; Photoshop is driven with raw pywin32),
   extra `ml` (onnxruntime-gpu), dev. First dev step: `make install`, then `poetry run pip check`.
 - Use the Makefile; `make quality` (lint + format-check + typecheck + test) must pass at the end of every phase.
 - Dependency injection: adapters, LLM client, imaging and journal are passed through constructors against Protocols
