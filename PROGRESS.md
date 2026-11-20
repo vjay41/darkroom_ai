@@ -87,7 +87,7 @@ Approved: write our OWN Lightroom plugin; lightroom-cli is not installed. PRD 5.
 ### Next step
 Phase 2 (below).
 
-## Phase 2 — Lightroom spike (2026-11-20) — plug-in and client BUILT; Lightroom NOT touched yet
+## Phase 2 — Lightroom spike (2026-11-20) — DONE (one item failed: snapshot apply), waiting at GATE
 
 ### Done (no Lightroom interaction)
 - SDK reference: user-provided Lightroom Classic 15.2 SDK at `D:\darkroom_test\lr_sdk` (API Reference HTML + SDK Guide PDF). Read for
@@ -137,9 +137,48 @@ Phase 2 (below).
   for all five; a known catalog photo is found, so the look-up works). The user has to import them with "Add". The photo that
   was selected earlier, `D:\Photos\Gallery\101D7500_Processed\DSC_3533_final.jpg`, is not a test copy and will not be edited.
 - Plug-in log location on this machine: `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\darkroom_ai.log`.
-- Unverified until run in Lightroom: everything in the plug-in at runtime (socket message framing, `withWriteAccessDo` behavior,
-  export via `renditions()`/`waitForRender()`, selection restore, snapshot ID semantics, loopback-only listening).
 - `test_lua_syntax` runs only when `DARKROOM_LUAC` points at the SDK's `luac.exe`.
 
+### Spike result (run in Lightroom 15.2.1, 2026-11-20 23:35-23:40) — waiting at GATE
+The user explicitly approved using `D:\Photos\Gallery\101D7500_Processed\DSC_3533_final.jpg` (the five test copies were never
+imported). All writes went to a virtual copy of it.
+
+Verified (with evidence from the run):
+- Virtual copy created by photo ID; the plug-in had to switch the grid to "All Photographs" because the photo was not in the
+  current view (a photo that is not shown cannot be selected), then switched back.
+- Snapshot `darkroom-before` created (`createDevelopSnapshot` in a write gate).
+- Develop settings applied to a JPG virtual copy with `photo:applyDevelopSettings` from the Library module (no Develop module
+  needed): `Exposure2012` 0 -> 0.30, read back; the original stayed at 0.
+- Preview export to a file via `LrExportSession` + `renditions()` + `waitForRender()`: JPEG, long edge <= 1024 px, in `previews/`.
+- The edit is visible: mean brightness 97.75 -> 108.34; after undo exactly 97.75.
+- Undo by re-applying the journaled "before" settings works.
+- The original file is byte-identical after all runs (same size, mtime and SHA-256; no `.xmp` sidecar).
+- Loopback only: both ports on `127.0.0.1`, owned by Lightroom; no other local address.
+- Wrong token rejected; unknown photo ID refused; wrong-catalog refusal is covered by unit tests against the fake only
+  (NOT exercised in Lightroom - it needs bridge.json pointed at a dummy path).
+
+Failed / not working:
+- `photo:applyDevelopSnapshot` had no effect on the virtual copy in all four variants (local or global snapshot id, inside or
+  outside a write gate; no error raised). Undo therefore uses the before/after settings journal; the snapshot is kept as a
+  marker the user can click in Lightroom. Untested: applying a snapshot to a master photo.
+
+Findings that change later phases:
+- The effective Basic-panel keys are the `...2012` ones (`Exposure2012`, `Contrast2012`, `Highlights2012`, `Shadows2012`,
+  `Whites2012`, `Blacks2012`, `Clarity2012`); legacy `Exposure` is stored but inert. Process version here is 15.4. Phase 5 needs
+  a name map and must check `ProcessVersion`.
+- Snapshots are shared between a master and its virtual copies (the snapshot made on the copy also lists on the original).
+- Reconnect needs ~1 s after a disconnect; the plug-in serves one client at a time.
+- Plug-in start-up needs a menu item for `LrForceInitPlugin`; "Reload Plug-in" creates a new environment (see bugs 1-5 above).
+
+Unverified:
+- Selection restore after a virtual copy when nothing was selected before (one run ended with the first grid photo selected;
+  a longer wait was added but not re-tested).
+- RAW files; photos hidden by a Library filter; more than one client; long exports; behavior with a dialog open in Lightroom.
+- Whether "Automatically write changes into XMP" is off in this catalog (the file hash did not change in this run).
+
+Left in the test catalog: one virtual copy `darkroom 20261120-233520` (settings back to Exposure 0), one snapshot
+`darkroom-before`, history steps on the copy. Ten preview JPEGs in `previews/` (git-ignored). Nothing was deleted.
+
 ### Next step
-User fixes the catalog/photo paths, adds the plug-in in Lightroom and says "proceed"; then run the spike (read-only first, then `--write`).
+Phase 3 — Photoshop spike, after the user says "proceed". Proposed PRD 5.1 wording change (not applied): Develop edits via the
+LrPhoto calls work from the Library module; undo uses the settings journal because snapshot apply had no effect.
