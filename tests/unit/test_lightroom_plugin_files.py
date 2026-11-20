@@ -109,6 +109,7 @@ def test_write_and_load_bridge_file(tmp_path: Path) -> None:
         "preview_dir",
         "request_port",
         "response_port",
+        "photos_root",
     }
 
 

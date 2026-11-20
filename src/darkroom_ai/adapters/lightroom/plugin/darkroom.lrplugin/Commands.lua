@@ -54,6 +54,34 @@ local function findPhoto(ctx, id)
 	return photo
 end
 
+local function normalizePath(path)
+	if type(path) ~= "string" then
+		return nil
+	end
+	local p = string.lower(string.gsub(path, "/", "\\"))
+	return (string.gsub(p, "\\+$", ""))
+end
+
+-- Photo lookup for write commands, with two extra refusals:
+-- * photos_root (optional, from bridge.json): the photo's file must be under that folder.
+--   A virtual copy has the same file path as its master, so the rule covers copies too.
+-- * needsVirtualCopy: develop edits are only made to virtual copies, never to master photos.
+local function findWritablePhoto(ctx, id, needsVirtualCopy)
+	local photo = findPhoto(ctx, id)
+	local root = ctx.config.photos_root
+	if type(root) == "string" and root ~= "" then
+		local path = normalizePath(photo:getRawMetadata("path"))
+		local prefix = normalizePath(root) .. "\\"
+		if not path or string.sub(path, 1, #prefix) ~= prefix then
+			fail("PHOTO_OUTSIDE_ROOT", "Refused: the photo's file is not under the allowed folder (" .. root .. ")")
+		end
+	end
+	if needsVirtualCopy and not photo:getRawMetadata("isVirtualCopy") then
+		fail("NOT_A_VIRTUAL_COPY", "Refused: develop edits are only made to virtual copies, never to master photos")
+	end
+	return photo
+end
+
 local function summary(photo)
 	local isCopy = photo:getRawMetadata("isVirtualCopy") and true or false
 	local master = isCopy and photo:getRawMetadata("masterPhoto") or nil
@@ -115,6 +143,7 @@ function Commands.read.ping(_, ctx)
 		lightroom_version = LrApplication.versionString(),
 		catalog_path = ctx.catalog_path,
 		configured_catalog = ctx.config.catalog_path,
+		photos_root = ctx.config.photos_root,
 		writes_allowed = ctx.writes_allowed,
 	}
 end
@@ -210,7 +239,7 @@ end
 -- set to the one target photo, verified, and restored afterwards.
 function Commands.write.create_virtual_copy(params, ctx)
 	local catalog = ctx.catalog
-	local photo = findPhoto(ctx, params.photo_id)
+	local photo = findWritablePhoto(ctx, params.photo_id, false)
 	local targetId = photo.localIdentifier
 
 	local active = catalog:getTargetPhoto()
@@ -328,7 +357,7 @@ function Commands.write.create_virtual_copy(params, ctx)
 end
 
 function Commands.write.create_snapshot(params, ctx)
-	local photo = findPhoto(ctx, params.photo_id)
+	local photo = findWritablePhoto(ctx, params.photo_id, false)
 	if type(params.name) ~= "string" or params.name == "" then
 		fail("INVALID_PARAMS", "name is required")
 	end
@@ -346,7 +375,7 @@ function Commands.write.create_snapshot(params, ctx)
 end
 
 function Commands.write.apply_snapshot(params, ctx)
-	local photo = findPhoto(ctx, params.photo_id)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
 	local target
 	for _, snap in ipairs(snapshots(photo)) do
 		if (params.snapshot_id and snap.id == params.snapshot_id) or (params.name and snap.name == params.name) then
@@ -371,7 +400,7 @@ function Commands.write.apply_snapshot(params, ctx)
 end
 
 function Commands.write.apply_settings(params, ctx)
-	local photo = findPhoto(ctx, params.photo_id)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
 	local settings = params.settings
 	if type(settings) ~= "table" or next(settings) == nil then
 		fail("INVALID_PARAMS", "settings must be a non-empty object")
@@ -396,7 +425,7 @@ end
 -- Exports a JPEG preview into the configured preview folder only (never an arbitrary path).
 -- Existing files are never overwritten: Lightroom renames on collision and the real path is returned.
 function Commands.write.export_preview(params, ctx)
-	local photo = findPhoto(ctx, params.photo_id)
+	local photo = findWritablePhoto(ctx, params.photo_id, false)
 	local name = params.name
 	if type(name) ~= "string" or not string.match(name, "^[%w_%-]+$") or #name > 80 then
 		fail("INVALID_PARAMS", "name must be 1-80 characters of letters, digits, '_' or '-'")

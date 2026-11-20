@@ -113,8 +113,8 @@ Phase 2 (below).
 ### Open threads
 - RESOLVED (user, 2026-11-20): the TEST catalog is
   `D:\darkroom_test\photos\D7500UMNSG_NSGTH(En)07.pdf\D7500UMNSG_NSGTH(En)07.pdf.lrcat` (the earlier `catalog\DarkroomTest.lrcat`
-  path does not exist). The five JPGs in `D:\darkroom_test` are copies and are imported. `darkroom.local.toml` and `bridge.json`
-  are written (both git-ignored).
+  path does not exist). The five JPGs in `D:\darkroom_test` are copies but are NOT imported into the catalog (checked by file
+  path on 2026-11-20). `darkroom.local.toml` and `bridge.json` are written (both git-ignored).
 - Read-only spike run in Lightroom 15.2.1 (2026-11-20 23:0x) — PASSED:
   - Loopback only: `Get-NetTCPConnection` shows both ports on `127.0.0.1`, owned by `Lightroom` (no other address).
   - `ping` (catalog path = configured path, writes allowed), JSON round trip inside Lightroom (backslashes, quotes, unicode,
@@ -179,6 +179,18 @@ Unverified:
 Left in the test catalog: one virtual copy `darkroom 20261120-233520` (settings back to Exposure 0), one snapshot
 `darkroom-before`, history steps on the copy. Ten preview JPEGs in `previews/` (git-ignored). Nothing was deleted.
 
+### Decisions after the gate (user, 2026-11-20)
+- Undo = settings journal; the snapshot stays a marker; no more time on snapshot apply.
+- PRD 5.1 updated with the spike findings (virtual copies only, `...2012` keys / process version 15.4, ~1 s reconnect delay,
+  shared snapshots).
+- Edits go to files under `test_photos_dir` only. The one-off approval for `DSC_3533_final.jpg` is REVOKED; the spike's
+  override flag was removed, and the plug-in itself now enforces the folder (`photos_root` in `bridge.json`) and refuses
+  develop edits on photos that are not virtual copies.
+
+### Open threads carried forward
+- BEFORE PHASE 5: run the wrong-catalog refusal live in Lightroom (dummy path in `bridge.json`, then restore it).
+- The five test copies in `D:\darkroom_test` must be imported into the test catalog ("Add") before any further Lightroom edit.
+- The plug-in changes above need "Reload Plug-in" once (not yet reloaded or re-tested in Lightroom).
+
 ### Next step
-Phase 3 — Photoshop spike, after the user says "proceed". Proposed PRD 5.1 wording change (not applied): Develop edits via the
-LrPhoto calls work from the Library module; undo uses the settings journal because snapshot apply had no effect.
+Phase 3 — Photoshop spike: show the exact Photoshop actions, wait for the user's go.

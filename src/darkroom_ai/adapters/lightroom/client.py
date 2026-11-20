@@ -219,6 +219,14 @@ class LightroomClient:
         details = {"command": command, "plugin_code": code}
         if code == "WRONG_CATALOG":
             return DarkroomError(ErrorCode.LR_WRONG_CATALOG, text or None, details=details)
+        if code in ("PHOTO_OUTSIDE_ROOT", "NOT_A_VIRTUAL_COPY"):
+            return DarkroomError(
+                ErrorCode.GUARDRAIL_REJECTED,
+                text or None,
+                next_step="Edits are only made to virtual copies of photos in the allowed folder. "
+                "Create a virtual copy first, or use a photo from that folder. Nothing changed.",
+                details=details,
+            )
         if code == "UNAUTHORIZED":
             return DarkroomError(
                 ErrorCode.LR_COMMAND_FAILED,

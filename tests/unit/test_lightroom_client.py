@@ -100,6 +100,42 @@ def test_find_photo_by_path(client: LightroomClient) -> None:
     assert client.find_photo("D:\\photos\\missing.jpg") is None
 
 
+def test_develop_edits_are_refused_on_master_photos(
+    plugin: FakeLightroomPlugin, client: LightroomClient
+) -> None:
+    with pytest.raises(DarkroomError) as caught:
+        client.apply_develop_settings("uuid-1", {"Exposure2012": 0.3})
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert caught.value.details["plugin_code"] == "NOT_A_VIRTUAL_COPY"
+    assert plugin.photos["uuid-1"].settings["Exposure"] == 0.0
+
+
+def test_writes_are_refused_outside_the_photos_root() -> None:
+    with (
+        FakeLightroomPlugin(photos_root=r"D:\darkroom_test") as fake,
+        _client(fake) as lightroom,
+    ):
+        assert lightroom.get_photo("uuid-1").path == r"D:\photos\DSC_0001.jpg"
+        for write in (
+            lambda: lightroom.create_virtual_copy("uuid-1", "x"),
+            lambda: lightroom.create_snapshot("uuid-1", "x"),
+            lambda: lightroom.export_preview("uuid-1", "x"),
+        ):
+            with pytest.raises(DarkroomError) as caught:
+                write()
+            assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+            assert caught.value.details["plugin_code"] == "PHOTO_OUTSIDE_ROOT"
+        assert len(fake.photos) == 1
+
+
+def test_writes_are_allowed_inside_the_photos_root() -> None:
+    with FakeLightroomPlugin(photos_root=r"D:\photos") as fake, _client(fake) as lightroom:
+        copy = lightroom.create_virtual_copy("uuid-1", "x")
+        assert lightroom.apply_develop_settings(copy.id, {"Exposure": 0.2}).after == {
+            "Exposure": 0.2
+        }
+
+
 def test_second_snapshot_with_same_name_is_not_created(client: LightroomClient) -> None:
     assert client.create_snapshot("uuid-1", "s").created is True
     assert client.create_snapshot("uuid-1", "s").created is False

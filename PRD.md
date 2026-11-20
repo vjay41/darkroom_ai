@@ -53,7 +53,19 @@ settings calls so JPG works; no network or process calls.
 Decision (Phase 1, 2026-11-20): `lightroom-cli` 1.2.2 was reviewed and is NOT installed or adopted (no authentication, no catalog
 check, no snapshot revert, refuses plain JPG, hand-written JSON that breaks on Windows paths, heavy dependency, untested on Windows).
 Its two-socket LrSocket pattern is used as a reference only (MIT, with attribution). Fallback if the plugin route fails: write
-Develop settings via XMP/preset files. Some Develop controls may require the Develop module to be active -> spike verifies.
+Develop settings via XMP/preset files.
+Verified in the Phase 2 spike (Lightroom Classic 15.2.1, 2026-11-20):
+- Develop edits via the LrPhoto settings calls work on JPG from the Library module; the Develop module is not needed.
+- ALL edits go to virtual copies, never to master photos. During development, edits are only made to photos whose files are
+  under the configured test-photo folder.
+- Undo = the before/after settings journal (re-apply the recorded "before" values). Applying a snapshot had no effect on a
+  virtual copy, so a snapshot is only a marker the user can click. Snapshots are shared between a master and its virtual copies.
+- The effective Basic-panel settings are the `...2012` keys (`Exposure2012`, `Contrast2012`, `Highlights2012`, `Shadows2012`,
+  `Whites2012`, `Blacks2012`, `Clarity2012`) under process version 15.4; the legacy `Exposure` key is stored but does not change
+  the image. The tool layer maps friendly names to these keys and checks the process version.
+- The plug-in serves one client at a time and needs about 1 s after a disconnect before a new connection works; the client waits.
+- Previews are exported to files with an export session. A photo that is not shown in the Library grid cannot be selected, so
+  the plug-in switches to "All Photographs" for the moment a virtual copy is created.
 
 ### 5.2 Photoshop connection
 Python attaches via COM (pywin32 / photoshop-python-api) to Photoshop 2026. Uses ExtendScript and Action Manager for full coverage.

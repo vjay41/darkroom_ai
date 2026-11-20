@@ -19,6 +19,8 @@ class PingInfo(_Result):
     catalog_path: str
     configured_catalog: str
     writes_allowed: bool
+    # When set, the plug-in refuses writes for photos whose files are outside this folder.
+    photos_root: str | None = None
 
 
 class Snapshot(_Result):

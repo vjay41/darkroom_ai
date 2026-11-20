@@ -51,7 +51,6 @@ def run(
     write: bool,
     photo_path: Path | None,
     allowed_dir: Path | None,
-    allow_outside: bool = False,
     reuse_copy_id: str | None = None,
 ) -> int:
     failures: list[str] = []
@@ -115,11 +114,8 @@ def run(
         and original.path is not None
         and Path(original.path).resolve().is_relative_to(allowed_dir.resolve())
     )
-    if allow_outside and not in_test_folder:
-        print(f"  [NOTE] target is outside {allowed_dir}; allowed explicitly on the command line")
-    else:
-        check(f"target photo is a test copy under {allowed_dir}", in_test_folder)
-    if write and not in_test_folder and not allow_outside:
+    check(f"target photo is a test copy under {allowed_dir}", in_test_folder)
+    if write and not in_test_folder:
         print("\nRefusing the edit steps: the target photo is not in the test-photo folder.")
         return 1
     original_exposure = client.get_develop_settings(original.id, [EXPOSURE_KEY])
@@ -236,12 +232,6 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--photo", type=Path, default=None, help="file path of the photo to use")
     parser.add_argument(
-        "--allow-outside-test-folder",
-        action="store_true",
-        help="allow the edit steps on the --photo file even though it is outside "
-        "lightroom.test_photos_dir (only with the owner's explicit approval)",
-    )
-    parser.add_argument(
         "--reuse-copy",
         default=None,
         metavar="ID",
@@ -256,7 +246,6 @@ def main() -> int:
                 write=args.write,
                 photo_path=args.photo,
                 allowed_dir=settings.lightroom.test_photos_dir,
-                allow_outside=args.allow_outside_test_folder and args.photo is not None,
                 reuse_copy_id=args.reuse_copy,
             )
     except DarkroomError as exc:

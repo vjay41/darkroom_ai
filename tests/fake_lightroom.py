@@ -69,7 +69,9 @@ class FakeLightroomPlugin:
         configured_catalog: str | None = None,
         silent: bool = False,
         garbage: bool = False,
+        photos_root: str | None = None,
     ) -> None:
+        self.photos_root = photos_root
         self.token = token
         self.catalog_path = catalog_path
         self.configured_catalog = configured_catalog or catalog_path
@@ -186,6 +188,16 @@ class FakeLightroomPlugin:
             raise PluginError("PHOTO_NOT_FOUND", "No photo with that id in the open catalog")
         return photo
 
+    def _writable(self, params: dict[str, Any], *, needs_copy: bool = False) -> FakePhoto:
+        photo = self._photo(params)
+        if self.photos_root:
+            prefix = self.photos_root.lower().rstrip("\\") + "\\"
+            if not photo.summary()["path"].lower().startswith(prefix):
+                raise PluginError("PHOTO_OUTSIDE_ROOT", "Refused: not under the allowed folder")
+        if needs_copy and not photo.is_virtual_copy:
+            raise PluginError("NOT_A_VIRTUAL_COPY", "Refused: only virtual copies are edited")
+        return photo
+
     def _cmd_ping(self, _: dict[str, Any]) -> dict[str, Any]:
         return {
             "plugin_version": "0.1.0",
@@ -222,7 +234,7 @@ class FakeLightroomPlugin:
         return {"snapshots": self._photo(params).summary()["snapshots"]}
 
     def _cmd_create_virtual_copy(self, params: dict[str, Any]) -> dict[str, Any]:
-        master = self._photo(params)
+        master = self._writable(params)
         copy = FakePhoto(
             id=f"{master.id}-vc{len(self.photos)}",
             file_name=master.file_name,
@@ -236,7 +248,7 @@ class FakeLightroomPlugin:
         return copy.summary()
 
     def _cmd_create_snapshot(self, params: dict[str, Any]) -> dict[str, Any]:
-        photo = self._photo(params)
+        photo = self._writable(params)
         name = params.get("name")
         if not name:
             raise PluginError("INVALID_PARAMS", "name is required")
@@ -252,7 +264,7 @@ class FakeLightroomPlugin:
         return {"created": True, "snapshot": {"id": snapshot["id"], "name": name}}
 
     def _cmd_apply_snapshot(self, params: dict[str, Any]) -> dict[str, Any]:
-        photo = self._photo(params)
+        photo = self._writable(params, needs_copy=True)
         snapshot = next((s for s in photo.snapshots if s["id"] == params.get("snapshot_id")), None)
         if snapshot is None:
             raise PluginError("SNAPSHOT_NOT_FOUND", "No matching snapshot on this photo")
@@ -260,7 +272,7 @@ class FakeLightroomPlugin:
         return {"applied": {"id": snapshot["id"], "name": snapshot["name"]}}
 
     def _cmd_apply_settings(self, params: dict[str, Any]) -> dict[str, Any]:
-        photo = self._photo(params)
+        photo = self._writable(params, needs_copy=True)
         settings = params.get("settings")
         if not isinstance(settings, dict) or not settings:
             raise PluginError("INVALID_PARAMS", "settings must be a non-empty object")
@@ -269,7 +281,7 @@ class FakeLightroomPlugin:
         return {"before": before, "after": {k: photo.settings[k] for k in settings}}
 
     def _cmd_export_preview(self, params: dict[str, Any]) -> dict[str, Any]:
-        self._photo(params)
+        self._writable(params)
         self.exports.append(params)
         return {
             "path": f"D:\\previews\\{params['name']}.jpg",
