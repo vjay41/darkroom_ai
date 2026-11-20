@@ -1,0 +1,56 @@
+# darkroom_ai configuration (checked in; no secrets, no personal paths).
+# Put machine-specific overrides in darkroom.local.toml next to this file (git-ignored).
+# Every address must be a loopback address (127.0.0.1, localhost, ::1); anything else is rejected.
+
+[llm]
+active_profile = "primary"
+
+# vision / tool_mode below are starting values and are UNVERIFIED until `darkroom models test` (phase 6).
+[llm.profiles.primary]
+base_url = "http://127.0.0.1:1234/v1"
+model = "qwen/qwen3.8-27b"
+vision = true
+tool_mode = "native"        # native | json_schema | prompt
+temperature = 0.2
+max_image_px = 1024
+max_images = 2
+timeout_s = 120
+
+[llm.profiles.glimmer]
+base_url = "http://127.0.0.1:1234/v1"
+model = "meta/muse-glimmer"
+vision = true
+tool_mode = "json_schema"
+temperature = 0.2
+max_image_px = 1024
+max_images = 2
+timeout_s = 120
+
+[llm.profiles.fast]
+base_url = "http://127.0.0.1:1234/v1"
+model = "google/gemma-4-e4b"
+vision = true
+tool_mode = "json_schema"
+temperature = 0.2
+max_image_px = 768
+max_images = 1
+timeout_s = 60
+
+[lightroom]
+host = "127.0.0.1"
+timeout_s = 10
+# test_catalog = "D:/path/to/test_catalog/Test.lrcat"   # set in darkroom.local.toml
+
+[photoshop]
+prog_id = "Photoshop.Application"
+timeout_s = 30
+
+[guardrails]
+max_passes = 3
+exposure_ev_per_pass = 1.5
+
+[paths]
+logs_dir = "logs"
+outputs_dir = "outputs"
+previews_dir = "previews"
+models_dir = "models"

@@ -10,3 +10,20 @@ htmlcov/
 .env
 .env.*
 !.env.example
+
+# Build output
+build/
+dist/
+*.egg-info/
+
+# Runtime data: never commit logs, outputs, previews, model weights or catalogs
+logs/
+outputs/
+previews/
+models/
+*.onnx
+*.gguf
+test_catalog/
+*.lrcat*
+*.lrdata/
+darkroom.local.toml

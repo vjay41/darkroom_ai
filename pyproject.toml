@@ -1,0 +1,75 @@
+[project]
+name = "darkroom-ai"
+version = "0.1.0"
+description = "Local, offline AI photo-editing agent that drives Lightroom Classic and Photoshop with a local vision LLM."
+readme = "README.md"
+requires-python = ">=3.13,<3.15"
+# Direct dependencies are pinned exactly; poetry.lock pins (with hashes) everything else.
+dependencies = [
+    "pydantic==2.14.4",
+    "numpy==2.5.5",
+    "opencv-python-headless==5.1.0.95",
+    "pillow==13.0.0",
+    "rawpy==0.28.0",
+    "mcp==2.3.0",
+    "httpx2==2.16.2",
+    "pywin32==312; sys_platform == 'win32'",
+    "comtypes==1.5.0; sys_platform == 'win32'",
+    "photoshop-python-api==0.24.2; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+# Local mask/segmentation models (RTX 3090). Install with `make install-ml`.
+ml = [
+    "onnxruntime-gpu[cuda,cudnn]==1.32.0",
+    "rembg==2.0.87",
+]
+
+[project.scripts]
+darkroom = "darkroom_ai.cli:main"
+
+[tool.poetry]
+packages = [{ include = "darkroom_ai", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+ruff = "0.17.6"
+pytest = "9.2.0"
+pytest-cov = "7.1.0"
+mypy = "2.4.1"
+pip-audit = "2.10.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs a real app, model or GPU; skipped unless the matching DARKROOM_IT_* env var is set",
+    "lightroom: needs Lightroom Classic on the TEST catalog (DARKROOM_IT_LIGHTROOM=1)",
+    "photoshop: needs Photoshop running (DARKROOM_IT_PHOTOSHOP=1)",
+    "llm: needs the local model server (DARKROOM_IT_LLM=1)",
+    "gpu: needs the mask-model GPU (DARKROOM_IT_GPU=1)",
+]
+
+[tool.coverage.run]
+source = ["darkroom_ai"]
+branch = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["darkroom_ai", "conftest", "fakes"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src", "scripts"]
+plugins = ["pydantic.mypy"]
