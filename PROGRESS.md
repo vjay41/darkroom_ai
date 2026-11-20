@@ -111,8 +111,12 @@ Phase 2 (below).
 - Preview export counts as a write (refused on the wrong catalog) and never overwrites: Lightroom renames on collision.
 
 ### Open threads
-- BLOCKER: `D:\darkroom_test\catalog\DarkroomTest.lrcat` does not exist; `D:\darkroom_test\photos` has no images (five JPGs are in
-  `D:\darkroom_test`, and a catalog named `D7500UMNSG_NSGTH(En)07.pdf.lrcat` sits under `photos\`). Waiting for the user.
+- RESOLVED (user, 2026-11-20): the TEST catalog is
+  `D:\darkroom_test\photos\D7500UMNSG_NSGTH(En)07.pdf\D7500UMNSG_NSGTH(En)07.pdf.lrcat` (the earlier `catalog\DarkroomTest.lrcat`
+  path does not exist). The five JPGs in `D:\darkroom_test` are copies and are imported. `darkroom.local.toml` and `bridge.json`
+  are written (both git-ignored).
+- WAITING: the plug-in is not loaded in Lightroom yet (no listener on 58763/58764, no `darkroom_ai.log`). The user has to add it
+  in the Plug-in Manager.
 - Unverified until run in Lightroom: everything in the plug-in at runtime (socket message framing, `withWriteAccessDo` behavior,
   export via `renditions()`/`waitForRender()`, selection restore, snapshot ID semantics, loopback-only listening).
 - `test_lua_syntax` runs only when `DARKROOM_LUAC` points at the SDK's `luac.exe`.
