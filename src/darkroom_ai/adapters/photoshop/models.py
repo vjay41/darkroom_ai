@@ -29,3 +29,9 @@ class ActionManagerInfo(_Result):
     document_id: int
     number_of_layers: int
     has_background_layer: bool
+
+
+class LayerInfo(_Result):
+    name: str
+    has_mask: bool
+    is_background: bool

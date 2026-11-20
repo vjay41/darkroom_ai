@@ -110,6 +110,7 @@ def test_write_and_load_bridge_file(tmp_path: Path) -> None:
         "request_port",
         "response_port",
         "photos_root",
+        "handoff_dir",
     }
 
 
@@ -140,3 +141,21 @@ def test_missing_or_broken_bridge_file(tmp_path: Path) -> None:
 def test_bridge_file_is_git_ignored() -> None:
     repo = Path(__file__).resolve().parents[2]
     assert "bridge.json" in (repo / ".gitignore").read_text(encoding="utf-8").split()
+
+
+def test_tiff_export_is_gated_and_confined_to_the_handoff_folder() -> None:
+    code = (plugin_dir() / "Commands.lua").read_text(encoding="utf-8")
+    start = code.index("function Commands.write.export_tiff")
+    body = code[start : code.index("\nend\n", start)]
+    # virtual copies only, folder from bridge.json only, refuse existing names, rename as backstop
+    assert "findWritablePhoto(ctx, params.photo_id, true)" in body
+    assert "ctx.config.handoff_dir" in body
+    assert "LR_export_destinationPathPrefix = folder" in body
+    assert "params.path" not in body and "params.folder" not in body
+    assert 'fail("FILE_EXISTS"' in body
+    assert 'LR_collisionHandling = "rename"' in body
+    assert "LR_export_bitDepth = 16" in body
+    # every write command goes through the token + catalog gate in Bridge.lua
+    bridge = (plugin_dir() / "Bridge.lua").read_text(encoding="utf-8")
+    assert "request.token ~= config.token" in bridge
+    assert "isWrite and not ctx.writes_allowed" in bridge

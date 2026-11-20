@@ -136,6 +136,32 @@ def test_writes_are_allowed_inside_the_photos_root() -> None:
         }
 
 
+def test_export_tiff_only_for_virtual_copies_and_never_overwrites(client: LightroomClient) -> None:
+    with pytest.raises(DarkroomError) as caught:
+        client.export_tiff("uuid-1", "handoff-1")
+    assert caught.value.details["plugin_code"] == "NOT_A_VIRTUAL_COPY"
+
+    copy = client.create_virtual_copy("uuid-1", "x")
+    exported = client.export_tiff(copy.id, "handoff-1")
+    assert exported.bit_depth == 16
+    assert exported.path.name == "handoff-1.tif"
+
+    with pytest.raises(DarkroomError) as caught:
+        client.export_tiff(copy.id, "handoff-1")
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert caught.value.details["plugin_code"] == "FILE_EXISTS"
+
+
+def test_export_tiff_is_refused_on_the_wrong_catalog() -> None:
+    with (
+        FakeLightroomPlugin(configured_catalog="D:\\other\\Main.lrcat") as fake,
+        _client(fake) as lightroom,
+        pytest.raises(DarkroomError) as caught,
+    ):
+        lightroom.export_tiff("uuid-1", "handoff-1")
+    assert caught.value.code is ErrorCode.LR_WRONG_CATALOG
+
+
 def test_second_snapshot_with_same_name_is_not_created(client: LightroomClient) -> None:
     assert client.create_snapshot("uuid-1", "s").created is True
     assert client.create_snapshot("uuid-1", "s").created is False

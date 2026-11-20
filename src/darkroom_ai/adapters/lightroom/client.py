@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.adapters.lightroom.bridge_file import BridgeFile
 from darkroom_ai.adapters.lightroom.models import (
+    ExportedTiff,
     PhotoInfo,
     PingInfo,
     PreviewFile,
@@ -219,7 +220,7 @@ class LightroomClient:
         details = {"command": command, "plugin_code": code}
         if code == "WRONG_CATALOG":
             return DarkroomError(ErrorCode.LR_WRONG_CATALOG, text or None, details=details)
-        if code in ("PHOTO_OUTSIDE_ROOT", "NOT_A_VIRTUAL_COPY"):
+        if code in ("PHOTO_OUTSIDE_ROOT", "NOT_A_VIRTUAL_COPY", "FILE_EXISTS"):
             return DarkroomError(
                 ErrorCode.GUARDRAIL_REJECTED,
                 text or None,
@@ -330,3 +331,12 @@ class LightroomClient:
             timeout_s=self._export_timeout_s,
         )
         return self._typed(PreviewFile, "export_preview", data)
+
+    def export_tiff(self, photo_id: str, name: str, color_space: str = "sRGB") -> ExportedTiff:
+        """Export a full-size 16-bit TIFF of a virtual copy into the hand-off folder."""
+        data = self.call(
+            "export_tiff",
+            {"photo_id": photo_id, "name": name, "color_space": color_space},
+            timeout_s=self._export_timeout_s,
+        )
+        return self._typed(ExportedTiff, "export_tiff", data)

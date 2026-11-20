@@ -12,14 +12,19 @@ from __future__ import annotations
 
 import json
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Self
 
 from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.adapters.photoshop import read_jsx
-from darkroom_ai.adapters.photoshop.models import ActionManagerInfo, DocumentInfo, PhotoshopInfo
+from darkroom_ai.adapters.photoshop.models import (
+    ActionManagerInfo,
+    DocumentInfo,
+    LayerInfo,
+    PhotoshopInfo,
+)
 from darkroom_ai.adapters.photoshop.windows import StartWatchdog, WindowInfo, photoshop_windows
 from darkroom_ai.adapters.photoshop.worker import ChildProcessRunner, OperationRunner
 from darkroom_ai.config import Settings
@@ -155,10 +160,17 @@ class PhotoshopClient:
         return self.document_info(resolved)
 
     def run_script(
-        self, code: str, *, document: Path | None = None, timeout_s: float | None = None
+        self,
+        code: str,
+        *,
+        document: Path | None = None,
+        args: Sequence[str] | None = None,
+        timeout_s: float | None = None,
     ) -> str:
-        """Run ExtendScript and return its result as text."""
+        """Run ExtendScript and return its result as text. `args` become the script's arguments."""
         kwargs: dict[str, Any] = {"code": code}
+        if args:
+            kwargs["args"] = [str(value) for value in args]
         if document is not None:
             kwargs["path"] = str(self._inside_work_dir(document))
         return str(self._call("run_script", timeout_s=timeout_s, **kwargs).get("result", ""))
@@ -191,3 +203,40 @@ class PhotoshopClient:
     def close_document(self, path: Path) -> None:
         """Close the document without saving it."""
         self._call("close_document", path=str(self._inside_work_dir(path)))
+
+    def apply_mask_from_png(self, path: Path, mask_png: Path, layer_name: str = "subject") -> None:
+        """Make the bottom layer a normal layer and mask it with a same-size grayscale PNG.
+
+        White keeps the picture, black hides it. The clipboard is not used.
+        """
+        mask = self._inside_work_dir(mask_png)
+        self.run_script(read_jsx("apply_mask.jsx"), document=path, args=[str(mask), layer_name])
+
+    def add_fill_layer_below(
+        self, path: Path, rgb: tuple[int, int, int], name: str = "background"
+    ) -> None:
+        """Add a new bottom layer filled with one colour (the new background)."""
+        if not all(0 <= value <= 255 for value in rgb):
+            raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, f"Colour values must be 0-255: {rgb}")
+        self.run_script(
+            read_jsx("add_fill_layer_below.jsx"),
+            document=path,
+            args=[name, str(rgb[0]), str(rgb[1]), str(rgb[2])],
+        )
+
+    def layers(self, path: Path) -> tuple[LayerInfo, ...]:
+        """Layers from top to bottom, with whether each has a layer mask."""
+        data = self._script_json("layers_info.jsx", path)
+        if not isinstance(data, list):
+            raise DarkroomError(ErrorCode.PS_COMMAND_FAILED, "Unexpected layer list.")
+        return tuple(self._typed(LayerInfo, "layers", item) for item in data)
+
+    def save_jpg(self, path: Path, out_path: Path | None = None, quality: int = 10) -> Path:
+        """Save a flattened JPEG next to the working copy. Never overwrites (new name chosen)."""
+        if not 0 <= quality <= 12:
+            raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, "JPEG quality must be 0-12.")
+        resolved = self._inside_work_dir(path)
+        wanted = out_path or resolved.with_name(f"{resolved.stem}_darkroom.jpg")
+        target = unique_path(self._inside_work_dir(wanted))
+        self._call("save_jpg", path=str(resolved), out_path=str(target), quality=quality)
+        return target

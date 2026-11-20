@@ -230,3 +230,23 @@ Phase 3 (below).
   Photoshop with a dialog open answers "busy" in 0.2 s. NOT verified: a real sign-in screen (cannot be triggered here), so
   the 30 s path is covered by unit tests only.
 - Unverified: 16-bit TIFF hand-off, masks/background layers, behavior on Photoshop's start/sign-in screen, UXP/batchPlay route.
+
+## Phase 4 (start) — hand-off spike (2026-11-21) — BUILT, not yet run in Lightroom or Photoshop
+
+### Done (no app contact)
+- Lightroom plug-in command `export_tiff`: full-size 16-bit TIFF of a VIRTUAL COPY. It is a write command, so it goes through
+  the same gate as all writes (token, open catalog == configured catalog, photo under `photos_root`). It writes only into
+  `handoff_dir` from `bridge.json` (= `outputs\handoff`; no path is accepted from the request), refuses an existing file name
+  (`FILE_EXISTS`) and additionally sets Lightroom's collision handling to "rename".
+- Photoshop adapter: `apply_mask_from_png` (background -> layer, layer mask from a same-size grayscale PNG via Action Manager,
+  no clipboard), `add_fill_layer_below`, `layers` (with `hasUserMask`), `save_jpg` (flattened copy, never overwrites).
+- `scripts/handoff_spike.py`: Lightroom virtual copy -> TIFF -> Photoshop copy -> mask -> PSD + JPG, with numeric checks
+  (TIFF header bit depth, layer/mask report, centre unchanged vs. a reference JPG, corner == fill colour, file hashes).
+- 187 tests pass with the Lua syntax check; `make quality` clean. `bridge.json` rewritten with `handoff_dir` and `photos_root`.
+
+### Open threads
+- The user reported the five test copies as imported, but `find_photo` still returns nothing for all five paths in the open
+  catalog (2026-11-21 00:05). Needs checking in Lightroom before the Lightroom half can run.
+- The plug-in in Lightroom is still the old build (ping shows no `photos_root`): needs "Reload Plug-in".
+- Unverified until run: 16-bit TIFF from a JPG source, the TIFF compression key spelling, the mask script, JPG save from a
+  16-bit document.

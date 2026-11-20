@@ -65,3 +65,9 @@ class SnapshotResult(_Result):
 class PreviewFile(_Result):
     path: Path
     long_edge: int
+
+
+class ExportedTiff(_Result):
+    path: Path
+    bit_depth: int
+    color_space: str

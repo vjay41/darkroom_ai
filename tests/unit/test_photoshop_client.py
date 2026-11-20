@@ -23,6 +23,9 @@ class FakeRunner:
         self.calls: list[tuple[str, dict[str, Any], float]] = []
         self.watchdogs: list[Any] = []
         self.open: dict[str, int] = {}
+        self.layer_lists: dict[str, list[dict[str, Any]]] = {}
+        self.masks: list[str] = []
+        self.fills: list[tuple[int, ...]] = []
 
     def __call__(
         self,
@@ -38,9 +41,28 @@ class FakeRunner:
             return {"name": "Adobe Photoshop", "version": self.version, "documents": len(self.open)}
         if name == "open_document":
             self.open[kwargs["path"]] = 1
+            self.layer_lists[kwargs["path"]] = [
+                {"name": "Background", "has_mask": False, "is_background": True}
+            ]
             return {"name": Path(kwargs["path"]).name}
         if name == "run_script":
             path = kwargs.get("path", "")
+            if "hasUserMask" in kwargs["code"]:
+                return {"result": json.dumps(self.layer_lists[path])}
+            if "RvlS" in kwargs["code"]:
+                self.layer_lists[path][-1] = {
+                    "name": kwargs["args"][1],
+                    "has_mask": True,
+                    "is_background": False,
+                }
+                self.masks.append(kwargs["args"][0])
+                return {"result": "ok"}
+            if "SolidColor" in kwargs["code"]:
+                self.layer_lists[path].append(
+                    {"name": kwargs["args"][0], "has_mask": False, "is_background": False}
+                )
+                self.fills.append(tuple(int(v) for v in kwargs["args"][1:]))
+                return {"result": "ok"}
             if "executeActionGet" in kwargs["code"]:
                 data: dict[str, Any] = {
                     "title": Path(path).name,
@@ -66,6 +88,9 @@ class FakeRunner:
         if name == "save_psd":
             Path(kwargs["out_path"]).write_bytes(b"8BPS")
             return {"path": kwargs["out_path"], "size": 4}
+        if name == "save_jpg":
+            Path(kwargs["out_path"]).write_bytes(b"\xff\xd8jpg")
+            return {"path": kwargs["out_path"], "size": 5}
         if name == "close_document":
             del self.open[kwargs["path"]]
             return {"closed": True}
@@ -169,6 +194,46 @@ def test_layered_edit_on_a_copy(client: PhotoshopClient, source: Path, tmp_path:
     assert sorted(p.name for p in source.parent.iterdir()) == ["DSC_0001.jpg"]
 
 
+def test_mask_fill_layer_and_flattened_jpg(
+    client: PhotoshopClient, runner: FakeRunner, source: Path, tmp_path: Path
+) -> None:
+    copy = client.prepare_copy(source)
+    client.open_document(copy)
+    mask = tmp_path / "work" / "mask.png"
+    mask.write_bytes(b"png")
+
+    client.apply_mask_from_png(copy, mask, "subject")
+    client.add_fill_layer_below(copy, (200, 30, 30), "background")
+    layers = client.layers(copy)
+    assert [(layer.name, layer.has_mask) for layer in layers] == [
+        ("subject", True),
+        ("background", False),
+    ]
+    assert runner.masks == [str(mask.resolve())]
+    assert runner.fills == [(200, 30, 30)]
+
+    jpg = client.save_jpg(copy)
+    again = client.save_jpg(copy)
+    assert jpg.name == "DSC_0001_copy_darkroom.jpg"
+    assert again.name == "DSC_0001_copy_darkroom-2.jpg"
+
+
+def test_mask_outside_the_work_folder_and_bad_values_are_refused(
+    client: PhotoshopClient, runner: FakeRunner, source: Path
+) -> None:
+    copy = client.prepare_copy(source)
+    for action in (
+        lambda: client.apply_mask_from_png(copy, source),
+        lambda: client.add_fill_layer_below(copy, (300, 0, 0)),
+        lambda: client.save_jpg(copy, quality=99),
+        lambda: client.save_jpg(copy, source.with_suffix(".jpg")),
+    ):
+        with pytest.raises(DarkroomError) as caught:
+            action()
+        assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert runner.calls == []
+
+
 def test_second_copy_and_second_psd_get_new_names(client: PhotoshopClient, source: Path) -> None:
     first = client.prepare_copy(source)
     second = client.prepare_copy(source)
@@ -228,7 +293,13 @@ def test_unique_path(tmp_path: Path) -> None:
 
 def test_jsx_files_exist() -> None:
     names = {p.name for p in jsx_dir().glob("*.jsx")}
-    assert {"document_info.jsx", "am_document_info.jsx"} <= names
+    assert {
+        "document_info.jsx",
+        "am_document_info.jsx",
+        "apply_mask.jsx",
+        "add_fill_layer_below.jsx",
+        "layers_info.jsx",
+    } <= names
 
 
 def test_worker_deadline_kills_a_stuck_operation() -> None:

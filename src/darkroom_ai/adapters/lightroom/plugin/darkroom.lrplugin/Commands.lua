@@ -21,6 +21,7 @@ Rules:
 local LrApplication = import "LrApplication"
 local LrExportSession = import "LrExportSession"
 local LrFileUtils = import "LrFileUtils"
+local LrPathUtils = import "LrPathUtils"
 local LrSelection = import "LrSelection"
 local LrTasks = import "LrTasks"
 
@@ -491,6 +492,79 @@ function Commands.write.export_preview(params, ctx)
 		fail("EXPORT_FAILED", "Lightroom reported no rendered file")
 	end
 	return { path = path, long_edge = longEdge }
+end
+
+-- Exports a full-size 16-bit TIFF of a VIRTUAL COPY for the Photoshop hand-off.
+-- * Write-gated like every command here: token + open catalog must be the configured catalog,
+--   and the photo must be under photos_root when that is set.
+-- * Writes only into handoff_dir from bridge.json (never a path from the request).
+-- * Never overwrites: an existing target name is refused, and Lightroom's collision handling is
+--   set to "rename" as a second line of defence. The real path is returned.
+function Commands.write.export_tiff(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local name = params.name
+	if type(name) ~= "string" or not string.match(name, "^[%w_%-]+$") or #name > 80 then
+		fail("INVALID_PARAMS", "name must be 1-80 characters of letters, digits, '_' or '-'")
+	end
+	local colorSpace = params.color_space or "sRGB"
+	if colorSpace ~= "sRGB" and colorSpace ~= "AdobeRGB" and colorSpace ~= "ProPhotoRGB" then
+		fail("INVALID_PARAMS", "color_space must be sRGB, AdobeRGB or ProPhotoRGB")
+	end
+
+	local folder = ctx.config.handoff_dir
+	if type(folder) ~= "string" or folder == "" then
+		fail("EXPORT_FAILED", "handoff_dir is not set in bridge.json (run `darkroom lightroom setup`)")
+	end
+	if LrFileUtils.exists(folder) ~= "directory" then
+		LrFileUtils.createAllDirectories(folder)
+	end
+	if LrFileUtils.exists(folder) ~= "directory" then
+		fail("EXPORT_FAILED", "Hand-off folder does not exist and could not be created: " .. folder)
+	end
+	local target = LrPathUtils.child(folder, name .. ".tif")
+	if LrFileUtils.exists(target) then
+		fail("FILE_EXISTS", "Refused: a file with this name already exists: " .. target)
+	end
+
+	local session = LrExportSession({
+		photosToExport = { photo },
+		exportSettings = {
+			LR_export_destinationType = "specificFolder",
+			LR_export_destinationPathPrefix = folder,
+			LR_export_useSubfolder = false,
+			LR_reimportExportedPhoto = false,
+			LR_collisionHandling = "rename",
+			LR_renamingTokensOn = true,
+			LR_tokens = "{{custom_token}}",
+			LR_tokenCustomString = name,
+			LR_extensionCase = "lowercase",
+			LR_format = "TIFF",
+			LR_export_bitDepth = 16,
+			LR_export_colorSpace = colorSpace,
+			-- The SDK guide prints this key without the underscore; set both spellings.
+			LR_tiff_compressionMethod = "compressionMethod_None",
+			LRtiff_compressionMethod = "compressionMethod_None",
+			LR_size_doConstrain = false,
+			LR_outputSharpeningOn = false,
+			LR_minimizeEmbeddedMetadata = true,
+			LR_removeLocationMetadata = true,
+			LR_useWatermark = false,
+			LR_includeVideoFiles = false,
+		},
+	})
+
+	local path
+	for _, rendition in session:renditions() do
+		local ok, pathOrMessage = rendition:waitForRender()
+		if not ok then
+			fail("EXPORT_FAILED", tostring(pathOrMessage))
+		end
+		path = pathOrMessage
+	end
+	if not path or LrFileUtils.exists(path) ~= "file" then
+		fail("EXPORT_FAILED", "Lightroom reported no rendered file")
+	end
+	return { path = path, bit_depth = 16, color_space = colorSpace }
 end
 
 return Commands

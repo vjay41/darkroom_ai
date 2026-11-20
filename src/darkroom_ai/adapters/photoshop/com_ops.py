@@ -18,6 +18,7 @@ from darkroom_ai.errors import DarkroomError, ErrorCode
 PS_WINDOW_CLASS = "Photoshop"
 PS_DISPLAY_NO_DIALOGS = 3  # PsDialogModes.psDisplayNoDialogs
 PS_DO_NOT_SAVE_CHANGES = 2  # PsSaveOptions.psDoNotSaveChanges
+PS_EXECUTION_MODE_NEVER_DEBUG = 1  # PsJavaScriptExecutionMode.psNeverShowDebugger
 # COM "server is busy" results: Photoshop answers like this while a modal dialog is open.
 RPC_E_CALL_REJECTED = -2147418111  # 0x80010001
 RPC_E_SERVERCALL_RETRYLATER = -2147417846  # 0x8001010A
@@ -103,11 +104,19 @@ def op_open_document(app: Any, *, path: str) -> dict[str, Any]:
         return {"name": str(document.Name)}
 
 
-def op_run_script(app: Any, *, code: str, path: str | None = None) -> dict[str, Any]:
-    """Run ExtendScript. With `path`, that document is made active first."""
+def op_run_script(
+    app: Any, *, code: str, path: str | None = None, args: list[str] | None = None
+) -> dict[str, Any]:
+    """Run ExtendScript. With `path`, that document is made active first.
+
+    `args` are passed to the script as its `arguments` array (strings).
+    """
     with _no_dialogs(app):
         if path is not None:
             app.ActiveDocument = _find_document(app, path)
+        if args:
+            result = app.DoJavaScript(code, list(args), PS_EXECUTION_MODE_NEVER_DEBUG)
+            return {"result": str(result)}
         return {"result": str(app.DoJavaScript(code))}
 
 
@@ -138,6 +147,25 @@ def op_save_psd(app: Any, *, path: str, out_path: str) -> dict[str, Any]:
     return {"path": out_path, "size": os.path.getsize(out_path)}
 
 
+def op_save_jpg(app: Any, *, path: str, out_path: str, quality: int = 10) -> dict[str, Any]:
+    """Save a flattened JPEG copy of the open document to a NEW file (never overwrites)."""
+    import win32com.client
+
+    if os.path.exists(out_path):
+        raise DarkroomError(
+            ErrorCode.PS_COMMAND_FAILED,
+            f"Refusing to overwrite an existing file: {out_path}",
+            details={"reason": "exists", "path": out_path},
+        )
+    with _no_dialogs(app):
+        document = _find_document(app, path)
+        options = win32com.client.Dispatch("Photoshop.JPEGSaveOptions")
+        options.Quality = int(quality)
+        options.EmbedColorProfile = True
+        document.SaveAs(out_path, options, True)  # True = save as a copy
+    return {"path": out_path, "size": os.path.getsize(out_path)}
+
+
 def op_close_document(app: Any, *, path: str) -> dict[str, Any]:
     """Close the document WITHOUT saving."""
     with _no_dialogs(app):
@@ -151,6 +179,7 @@ OPERATIONS: dict[str, Callable[..., dict[str, Any]]] = {
     "run_script": op_run_script,
     "add_layer": op_add_layer,
     "save_psd": op_save_psd,
+    "save_jpg": op_save_jpg,
     "close_document": op_close_document,
 }
 

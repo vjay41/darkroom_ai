@@ -31,6 +31,8 @@ class BridgeFile(BaseModel):
     response_port: int = Field(ge=1024, le=65535)
     # Optional: the plug-in refuses writes for photos whose files are outside this folder.
     photos_root: str | None = None
+    # Folder the plug-in writes hand-off TIFFs into (under the outputs folder).
+    handoff_dir: str | None = None
 
 
 def bridge_path(folder: Path | None = None) -> Path:
@@ -83,6 +85,7 @@ def write_bridge_file(
         preview_dir=str(settings.paths.previews_dir.resolve()),
         request_port=settings.lightroom.request_port,
         response_port=settings.lightroom.response_port,
+        handoff_dir=str(settings.paths.outputs_dir.resolve() / "handoff"),
         photos_root=(
             str(settings.lightroom.test_photos_dir) if settings.lightroom.test_photos_dir else None
         ),

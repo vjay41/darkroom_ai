@@ -18,6 +18,7 @@ WRITE_COMMANDS = {
     "apply_snapshot",
     "apply_settings",
     "export_preview",
+    "export_tiff",
 }
 
 
@@ -81,6 +82,7 @@ class FakeLightroomPlugin:
         self.selected: list[str] = ["uuid-1"]
         self.commands: list[str] = []
         self.exports: list[dict[str, Any]] = []
+        self.tiffs: list[str] = []
         self._stop = threading.Event()
         self._request_listener = self._listen()
         self._response_listener = self._listen()
@@ -287,3 +289,11 @@ class FakeLightroomPlugin:
             "path": f"D:\\previews\\{params['name']}.jpg",
             "long_edge": params.get("long_edge", 1024),
         }
+
+    def _cmd_export_tiff(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._writable(params, needs_copy=True)
+        path = f"D:\\outputs\\handoff\\{params['name']}.tif"
+        if path in self.tiffs:
+            raise PluginError("FILE_EXISTS", "Refused: a file with this name already exists")
+        self.tiffs.append(path)
+        return {"path": path, "bit_depth": 16, "color_space": params.get("color_space", "sRGB")}
