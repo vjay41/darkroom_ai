@@ -232,9 +232,17 @@ function Commands.write.create_virtual_copy(params, ctx)
 	end
 
 	catalog:setSelectedPhotos(photo, {})
-	LrTasks.yield()
-	local nowActive = catalog:getTargetPhoto()
-	local nowSelected = catalog:getTargetPhotos()
+	-- Observed on Lightroom 15.2.1: the new selection is not visible right away, so wait for it
+	-- (up to 3 seconds) before trusting it.
+	local nowActive, nowSelected
+	for _ = 1, 30 do
+		LrTasks.sleep(0.1)
+		nowActive = catalog:getTargetPhoto()
+		nowSelected = catalog:getTargetPhotos()
+		if nowActive and nowActive.localIdentifier == targetId and #nowSelected == 1 then
+			break
+		end
+	end
 	if not nowActive or nowActive.localIdentifier ~= targetId or #nowSelected ~= 1 then
 		pcall(restoreSelection)
 		fail(

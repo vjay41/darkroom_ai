@@ -43,7 +43,12 @@ def report(label: str, value: object) -> None:
 
 
 def run(
-    client: LightroomClient, *, write: bool, photo_path: Path | None, allowed_dir: Path | None
+    client: LightroomClient,
+    *,
+    write: bool,
+    photo_path: Path | None,
+    allowed_dir: Path | None,
+    allow_outside: bool = False,
 ) -> int:
     failures: list[str] = []
 
@@ -82,7 +87,10 @@ def run(
         time.sleep(1.5)
 
     selection = client.get_selection()
-    selected_before = selection.active.id if selection.active else None
+    selected_before = (
+        selection.active.id if selection.active else None,
+        sorted(p.id for p in selection.photos),
+    )
     if photo_path is not None:
         # Address the photo by file path -> catalog ID; the selection is not used.
         found = client.find_photo(str(photo_path))
@@ -103,8 +111,11 @@ def run(
         and original.path is not None
         and Path(original.path).resolve().is_relative_to(allowed_dir.resolve())
     )
-    check(f"target photo is a test copy under {allowed_dir}", in_test_folder)
-    if write and not in_test_folder:
+    if allow_outside and not in_test_folder:
+        print(f"  [NOTE] target is outside {allowed_dir}; allowed explicitly on the command line")
+    else:
+        check(f"target photo is a test copy under {allowed_dir}", in_test_folder)
+    if write and not in_test_folder and not allow_outside:
         print("\nRefusing the edit steps: the target photo is not in the test-photo folder.")
         return 1
     original_exposure = client.get_develop_settings(original.id, ["Exposure"])
@@ -125,7 +136,11 @@ def run(
     after_copy = client.get_selection()
     check(
         "selection restored after creating the copy",
-        (after_copy.active.id if after_copy.active else None) == selected_before,
+        (
+            after_copy.active.id if after_copy.active else None,
+            sorted(p.id for p in after_copy.photos),
+        )
+        == selected_before,
     )
 
     snapshot = client.create_snapshot(copy.id, SNAPSHOT_NAME)
@@ -186,6 +201,12 @@ def main() -> int:
     parser.add_argument("--write", action="store_true", help="also run the edit steps")
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--photo", type=Path, default=None, help="file path of the photo to use")
+    parser.add_argument(
+        "--allow-outside-test-folder",
+        action="store_true",
+        help="allow the edit steps on the --photo file even though it is outside "
+        "lightroom.test_photos_dir (only with the owner's explicit approval)",
+    )
     args = parser.parse_args()
     try:
         settings = load_config(args.config)
@@ -195,6 +216,7 @@ def main() -> int:
                 write=args.write,
                 photo_path=args.photo,
                 allowed_dir=settings.lightroom.test_photos_dir,
+                allow_outside=args.allow_outside_test_folder and args.photo is not None,
             )
     except DarkroomError as exc:
         print(f"[{exc.code.value}] {exc.message}\nNext step: {exc.next_step}", file=sys.stderr)
