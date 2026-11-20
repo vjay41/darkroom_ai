@@ -231,24 +231,52 @@ function Commands.write.create_virtual_copy(params, ctx)
 		end
 	end
 
-	catalog:setSelectedPhotos(photo, {})
-	-- Observed on Lightroom 15.2.1: the new selection is not visible right away, so wait for it
-	-- (up to 3 seconds) before trusting it.
+	-- Waits up to `seconds` for the selection to be exactly the target photo.
 	local nowActive, nowSelected
-	for _ = 1, 30 do
-		LrTasks.sleep(0.1)
-		nowActive = catalog:getTargetPhoto()
-		nowSelected = catalog:getTargetPhotos()
-		if nowActive and nowActive.localIdentifier == targetId and #nowSelected == 1 then
-			break
+	local function onlyTargetSelected(seconds)
+		for _ = 1, math.floor(seconds * 10) do
+			LrTasks.sleep(0.1)
+			nowActive = catalog:getTargetPhoto()
+			nowSelected = catalog:getTargetPhotos()
+			if nowActive and nowActive.localIdentifier == targetId and #nowSelected == 1 then
+				return true
+			end
 		end
+		return false
 	end
-	if not nowActive or nowActive.localIdentifier ~= targetId or #nowSelected ~= 1 then
+
+	-- Try the plain call first, then inside a write gate (which of the two Lightroom needs is
+	-- not documented). The attempt that worked is reported in the result.
+	local method = "direct"
+	local directOk, directError = LrTasks.pcall(function()
+		catalog:setSelectedPhotos(photo, {})
+	end)
+	local selected = directOk and onlyTargetSelected(1.5)
+	local gateError
+	if not selected then
+		method = "write-gate"
+		local gateOk
+		gateOk, gateError = LrTasks.pcall(function()
+			withWrite(ctx, "darkroom_ai: select photo", function()
+				catalog:setSelectedPhotos(photo, {})
+			end)
+		end)
+		selected = gateOk and onlyTargetSelected(1.5)
+	end
+	if not selected then
 		pcall(restoreSelection)
 		fail(
 			"SELECTION_FAILED",
-			"Could not select only the requested photo (is it visible in the current Library source?). "
-				.. "No virtual copy was created."
+			"Could not select only the requested photo. No virtual copy was created. Details: target local id "
+				.. tostring(targetId)
+				.. ", active local id "
+				.. tostring(nowActive and nowActive.localIdentifier)
+				.. ", selected count "
+				.. tostring(nowSelected and #nowSelected)
+				.. ", direct call error "
+				.. tostring(directError)
+				.. ", write-gate error "
+				.. tostring(type(gateError) == "table" and gateError.message or gateError)
 		)
 	end
 
@@ -262,7 +290,9 @@ function Commands.write.create_virtual_copy(params, ctx)
 	if type(copies) ~= "table" or #copies ~= 1 then
 		fail("VIRTUAL_COPY_FAILED", "Expected exactly one virtual copy, got " .. tostring(copies and #copies))
 	end
-	return summary(copies[1])
+	local result = summary(copies[1])
+	result.selection_method = method
+	return result
 end
 
 function Commands.write.create_snapshot(params, ctx)
