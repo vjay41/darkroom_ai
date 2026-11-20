@@ -36,10 +36,16 @@ local MIN_TOKEN_LENGTH = 32
 local Bridge = {}
 
 local function state()
-	if not _G.DarkroomBridge then
-		_G.DarkroomBridge = { running = false, stop = false }
+	-- Lightroom raises an error when an undefined global is read, so read it under pcall.
+	local ok, existing = pcall(function()
+		return _G.DarkroomBridge
+	end)
+	if ok and type(existing) == "table" then
+		return existing
 	end
-	return _G.DarkroomBridge
+	local fresh = { running = false, stop = false }
+	_G.DarkroomBridge = fresh
+	return fresh
 end
 
 local function normalizePath(path)

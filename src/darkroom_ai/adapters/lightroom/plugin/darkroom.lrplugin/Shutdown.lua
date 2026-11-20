@@ -7,8 +7,11 @@ local LrTasks = import "LrTasks"
 return {
 	LrShutdownFunction = function(doneFunction, progressFunction)
 		LrTasks.startAsyncTask(function()
-			local bridge = _G.DarkroomBridge
-			if bridge and bridge.running then
+			-- Lightroom raises an error when an undefined global is read, so read it under pcall.
+			local ok, bridge = pcall(function()
+				return _G.DarkroomBridge
+			end)
+			if ok and type(bridge) == "table" and bridge.running then
 				bridge.stop = true
 				local start = LrDate.currentTime()
 				-- Wait up to 2 seconds for the run loop to end.
