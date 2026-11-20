@@ -71,3 +71,11 @@ class ExportedTiff(_Result):
     path: Path
     bit_depth: int
     color_space: str
+
+
+class CommandList(_Result):
+    """Commands registered in the plug-in build that is running inside Lightroom."""
+
+    plugin_version: str
+    read: tuple[str, ...] = ()
+    write: tuple[str, ...] = ()

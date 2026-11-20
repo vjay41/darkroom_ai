@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import sys
 import time
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageStat
+from PIL import Image, ImageCms, ImageDraw, ImageFilter, ImageStat
 
 from darkroom_ai.adapters.lightroom.bridge_file import load_bridge_file
 from darkroom_ai.adapters.lightroom.client import LightroomClient
@@ -47,6 +48,11 @@ def export_from_lightroom(settings: Settings, photo: Path, stamp: str) -> Path:
         print(f"  lightroom {info.lightroom_version}, writes allowed: {info.writes_allowed}")
         print(f"  plug-in photo folder rule: {info.photos_root}")
         check("plug-in enforces the test-photo folder", info.photos_root is not None)
+        commands = lightroom.list_commands()
+        print(f"  plug-in build {commands.plugin_version}")
+        print(f"  read commands: {', '.join(commands.read)}")
+        print(f"  write commands: {', '.join(commands.write)}")
+        check("export_tiff is registered as a write command", "export_tiff" in commands.write)
         master = lightroom.find_photo(str(photo))
         if master is None:
             raise SystemExit(f"{photo} is not in the open catalog (import it with 'Add').")
@@ -61,8 +67,11 @@ def export_from_lightroom(settings: Settings, photo: Path, stamp: str) -> Path:
                 "export from a master photo is refused",
                 exc.details.get("plugin_code") == "NOT_A_VIRTUAL_COPY",
             )
+        started = time.monotonic()
         exported = lightroom.export_tiff(copy.id, f"handoff-{stamp}")
         print(f"  TIFF: {exported.path}")
+        elapsed = time.monotonic() - started
+        print(f"  export time: {elapsed:.1f} s (requested {exported.color_space})")
         try:
             lightroom.export_tiff(copy.id, f"handoff-{stamp}")
             check("a second export with the same name is refused", False)
@@ -72,6 +81,14 @@ def export_from_lightroom(settings: Settings, photo: Path, stamp: str) -> Path:
                 exc.details.get("plugin_code") == "FILE_EXISTS",
             )
         return exported.path
+
+
+def profile_name(icc: bytes | None) -> str:
+    """Description of an embedded ICC profile, or a note that there is none."""
+    if not icc:
+        return "none embedded"
+    profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+    return (ImageCms.getProfileDescription(profile) or "unnamed profile").strip()
 
 
 def make_mask(size: tuple[int, int], target: Path) -> Path:
@@ -109,8 +126,11 @@ def run(settings: Settings, photo: Path, tiff: Path | None) -> None:
     check("TIFF is inside outputs", tiff.resolve().is_relative_to(outputs))
     with Image.open(tiff) as image:
         bits = tuple(image.tag_v2[TIFF_BITS_PER_SAMPLE])  # type: ignore[attr-defined]
+        icc = image.info.get("icc_profile")
         size = image.size
     print(f"  TIFF header: {size[0]} x {size[1]}, bits per sample {bits}")
+    print(f"  TIFF colour profile: {profile_name(icc)}")
+    print(f"  TIFF size on disk: {tiff.stat().st_size / 1_000_000:.1f} MB")
     check("TIFF is 16 bit per channel", set(bits) == {16})
     tiff_hash = sha256(tiff)
 

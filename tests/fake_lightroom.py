@@ -202,12 +202,20 @@ class FakeLightroomPlugin:
 
     def _cmd_ping(self, _: dict[str, Any]) -> dict[str, Any]:
         return {
-            "plugin_version": "0.1.0",
+            "plugin_version": "0.2.0",
             "protocol": 1,
             "lightroom_version": "15.2.1",
             "catalog_path": self.catalog_path,
             "configured_catalog": self.configured_catalog,
             "writes_allowed": self.writes_allowed,
+        }
+
+    def _cmd_list_commands(self, _: dict[str, Any]) -> dict[str, Any]:
+        names = sorted(name[5:] for name in dir(self) if name.startswith("_cmd_"))
+        return {
+            "plugin_version": "0.2.0",
+            "read": [name for name in names if name not in WRITE_COMMANDS],
+            "write": [name for name in names if name in WRITE_COMMANDS],
         }
 
     def _cmd_selftest(self, params: dict[str, Any]) -> dict[str, Any]:

@@ -27,7 +27,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.1.0"
+local PLUGIN_VERSION = "0.2.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 
@@ -147,6 +147,20 @@ function Commands.read.ping(_, ctx)
 		photos_root = ctx.config.photos_root,
 		writes_allowed = ctx.writes_allowed,
 	}
+end
+
+-- Lists the commands this running plug-in build has registered, so the client can check that
+-- the build it expects is the one loaded in Lightroom.
+function Commands.read.list_commands()
+	local function names(group)
+		local result = {}
+		for name in pairs(group) do
+			result[#result + 1] = name
+		end
+		table.sort(result)
+		return list(result)
+	end
+	return { plugin_version = PLUGIN_VERSION, read = names(Commands.read), write = names(Commands.write) }
 end
 
 -- Echoes params back so the client can verify the JSON encoder/decoder inside Lightroom.

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.adapters.lightroom.bridge_file import BridgeFile
 from darkroom_ai.adapters.lightroom.models import (
+    CommandList,
     ExportedTiff,
     PhotoInfo,
     PingInfo,
@@ -260,6 +261,10 @@ class LightroomClient:
     def selftest(self, value: Any) -> Any:
         """Round-trip a value through the plug-in's JSON decoder and encoder."""
         return self.call("selftest", {"value": value}).get("echo")
+
+    def list_commands(self) -> CommandList:
+        """Commands registered in the plug-in build that is running inside Lightroom."""
+        return self._typed(CommandList, "list_commands", self.call("list_commands"))
 
     def probe(self) -> dict[str, Any]:
         return self.call("probe")

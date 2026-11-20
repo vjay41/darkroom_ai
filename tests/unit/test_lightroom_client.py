@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
+from darkroom_ai.adapters.lightroom import plugin_dir
 from darkroom_ai.adapters.lightroom.client import LightroomClient
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.interfaces import LightroomAdapter
@@ -91,6 +93,18 @@ def test_full_edit_flow_addresses_photos_by_id(
     assert client.get_develop_settings(copy.id, ["Exposure"]) == {"Exposure": 0.0}
     assert [s.name for s in client.list_snapshots(copy.id)] == ["darkroom-before"]
     assert client.get_photo(copy.id).snapshots[0].name == "darkroom-before"
+
+
+def test_list_commands_matches_the_plugin_source(client: LightroomClient) -> None:
+    commands = client.list_commands()
+    assert "export_tiff" in commands.write
+    assert "list_commands" in commands.read
+    assert not set(commands.read) & set(commands.write)
+    # The fake and the Lua plug-in register the same command names.
+    code = (plugin_dir() / "Commands.lua").read_text(encoding="utf-8")
+    assert set(commands.write) == set(re.findall(r"function Commands\.write\.(\w+)", code))
+    lua_reads = set(re.findall(r"function Commands\.read\.(\w+)", code))
+    assert set(commands.read) == lua_reads - {"probe"}
 
 
 def test_find_photo_by_path(client: LightroomClient) -> None:
