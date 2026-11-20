@@ -245,45 +245,75 @@ function Commands.write.create_virtual_copy(params, ctx)
 		return false
 	end
 
-	-- Try the plain call first, then inside a write gate (which of the two Lightroom needs is
-	-- not documented). The attempt that worked is reported in the result.
-	local method = "direct"
-	local directOk, directError = LrTasks.pcall(function()
-		catalog:setSelectedPhotos(photo, {})
-	end)
-	local selected = directOk and onlyTargetSelected(1.5)
-	local gateError
-	if not selected then
-		method = "write-gate"
-		local gateOk
-		gateOk, gateError = LrTasks.pcall(function()
+	-- Selects only the target photo: plain call first, then inside a write gate (which of the
+	-- two Lightroom needs is not documented). Returns the method that worked, or nil.
+	local lastError
+	local function selectTarget()
+		local ok, err = LrTasks.pcall(function()
+			catalog:setSelectedPhotos(photo, {})
+		end)
+		if ok and onlyTargetSelected(1.5) then
+			return "direct"
+		end
+		lastError = err or lastError
+		ok, err = LrTasks.pcall(function()
 			withWrite(ctx, "darkroom_ai: select photo", function()
 				catalog:setSelectedPhotos(photo, {})
 			end)
 		end)
-		selected = gateOk and onlyTargetSelected(1.5)
+		if ok and onlyTargetSelected(1.5) then
+			return "write-gate"
+		end
+		lastError = (type(err) == "table" and err.message) or err or lastError
+		return nil
 	end
-	if not selected then
+
+	-- Observed on Lightroom 15.2.1: a photo that is not in the grid's current source (folder,
+	-- collection, "Previous Import", ...) cannot be selected. In that case the source is switched
+	-- to "All Photographs" for the duration of the call and put back afterwards.
+	local savedSources
+	local function restoreSources()
+		if savedSources then
+			if #savedSources == 1 and type(savedSources[1]) == "string" then
+				catalog:setActiveSources(savedSources[1])
+			else
+				catalog:setActiveSources(savedSources)
+			end
+			LrTasks.sleep(0.3)
+		end
+	end
+	local function restoreView()
+		pcall(restoreSources)
 		pcall(restoreSelection)
+	end
+
+	local method = selectTarget()
+	if not method then
+		savedSources = catalog:getActiveSources()
+		catalog:setActiveSources(catalog.kAllPhotos)
+		LrTasks.sleep(0.5)
+		method = selectTarget()
+	end
+	if not method then
+		restoreView()
 		fail(
 			"SELECTION_FAILED",
-			"Could not select only the requested photo. No virtual copy was created. Details: target local id "
+			"Could not select only the requested photo, even in All Photographs (a Library filter may hide it). "
+				.. "No virtual copy was created. Details: target local id "
 				.. tostring(targetId)
 				.. ", active local id "
 				.. tostring(nowActive and nowActive.localIdentifier)
 				.. ", selected count "
 				.. tostring(nowSelected and #nowSelected)
-				.. ", direct call error "
-				.. tostring(directError)
-				.. ", write-gate error "
-				.. tostring(type(gateError) == "table" and gateError.message or gateError)
+				.. ", last error "
+				.. tostring(lastError)
 		)
 	end
 
 	local ok, copies = LrTasks.pcall(function()
 		return catalog:createVirtualCopies(params.copy_name)
 	end)
-	pcall(restoreSelection)
+	restoreView()
 	if not ok then
 		fail("VIRTUAL_COPY_FAILED", tostring(copies))
 	end
@@ -292,6 +322,7 @@ function Commands.write.create_virtual_copy(params, ctx)
 	end
 	local result = summary(copies[1])
 	result.selection_method = method
+	result.switched_source = savedSources ~= nil
 	return result
 end
 
