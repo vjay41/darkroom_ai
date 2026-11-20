@@ -193,4 +193,32 @@ Left in the test catalog: one virtual copy `darkroom 20261120-233520` (settings 
 - The plug-in changes above need "Reload Plug-in" once (not yet reloaded or re-tested in Lightroom).
 
 ### Next step
-Phase 3 — Photoshop spike: show the exact Photoshop actions, wait for the user's go.
+Phase 3 (below).
+
+## Phase 3 — Photoshop spike (2026-11-20/21) — main run PASSED; modal-dialog test pending
+
+### Done
+- Adapter `src/darkroom_ai/adapters/photoshop`: COM via raw pywin32 in a child process per operation with a hard deadline
+  (missed deadline -> child killed -> `PS_NOT_REACHABLE`; Photoshop is never killed), `photoshop.auto_start` (user decision: ON,
+  `start_timeout_s = 120`), version check (`ADOBE_VERSION_UNSUPPORTED`, tested: 27.8), ExtendScript + Action Manager scripts in
+  `jsx/`, `PhotoshopAdapter` Protocol, new code `PS_COMMAND_FAILED`.
+- Safety in code: only files inside `outputs/photoshop` are opened (`prepare_copy` puts a copy there); output is always a new
+  file (`name-2`, `name-3`, ... on collision); documents are closed without saving; Photoshop's own dialogs are suppressed
+  during our calls and the user's setting restored.
+- Spike on Photoshop 27.8.0 with a copy of `D:\darkroom_test\DSC_2457-37.jpg` (all checks passed):
+  - Not running + auto-start off -> `PS_NOT_REACHABLE` ("Photoshop is not running").
+  - Auto-start: COM launched Photoshop and answered in 6.1 s.
+  - Opened the copy; ExtendScript returned name/size/bits/mode/layers (5568 x 3712, 8 bit, RGB, 1 layer).
+  - Action Manager `executeActionGet` returned the same document (title, id, `hasBackgroundLayer`; `numberOfLayers` is 0 for a
+    background-only document).
+  - Added a layer (2 layers), saved a NEW layered PSD beside the copy (starts with `8BPS`); a second save got a new name.
+  - Closed without saving; working copy and test photo are byte-identical (SHA-256) afterwards.
+  - Timeout: a 20 s script with a 3 s deadline -> `PS_NOT_REACHABLE` after 3.0 s; Photoshop answered again afterwards.
+- Library comparison: both attach to 27.8 (pywin32 0.01 s, photoshop-python-api 0.36 s). Recommendation: raw pywin32
+  (already required by `mcp`, no extra packages, we need our own child-process deadline anyway); photoshop-python-api adds
+  comtypes and a pinned `wheel`, and lists support only up to 2025.
+
+### Open threads
+- Modal-dialog test (user opens a dialog, then one call) not run yet.
+- If the recommendation is accepted: remove `photoshop-python-api` and `comtypes` from the dependencies.
+- Unverified: 16-bit TIFF hand-off, masks/background layers, behavior on Photoshop's start/sign-in screen, UXP/batchPlay route.
