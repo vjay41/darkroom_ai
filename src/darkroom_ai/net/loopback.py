@@ -12,6 +12,9 @@ from urllib.parse import urlsplit
 
 from darkroom_ai.errors import DarkroomError, ErrorCode
 
+# Type of an open connection, so other modules can annotate it without importing socket.
+Connection = socket.socket
+
 ALLOWED_SCHEMES = ("http", "https")
 _LOCAL_NAMES = frozenset({"localhost"})
 _SUSPICIOUS_CHARS = frozenset("\\ \t\r\n")

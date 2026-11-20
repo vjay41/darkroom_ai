@@ -27,3 +27,6 @@ test_catalog/
 *.lrcat*
 *.lrdata/
 darkroom.local.toml
+
+# Lightroom bridge token file (written by `darkroom lightroom setup`)
+bridge.json

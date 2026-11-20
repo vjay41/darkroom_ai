@@ -17,6 +17,9 @@ class ErrorCode(StrEnum):
     PS_NOT_REACHABLE = "PS_NOT_REACHABLE"
     ADOBE_FEATURE_UNAVAILABLE = "ADOBE_FEATURE_UNAVAILABLE"
     ADOBE_VERSION_UNSUPPORTED = "ADOBE_VERSION_UNSUPPORTED"
+    # Lightroom bridge plug-in
+    LR_WRONG_CATALOG = "LR_WRONG_CATALOG"
+    LR_COMMAND_FAILED = "LR_COMMAND_FAILED"
     # Local model server (PRD s8)
     LLM_NOT_REACHABLE = "LLM_NOT_REACHABLE"
     LLM_NO_VISION = "LLM_NO_VISION"
@@ -52,6 +55,16 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "The detected Adobe app version has not been tested with darkroom_ai.",
         "Compare the detected version with the tested versions in the README and use a tested "
         "version.",
+    ),
+    ErrorCode.LR_WRONG_CATALOG: (
+        "Lightroom has a different catalog open than the one darkroom_ai is configured for.",
+        "Open the configured catalog in Lightroom, or change lightroom.test_catalog and run "
+        "`darkroom lightroom setup` again. Nothing was changed.",
+    ),
+    ErrorCode.LR_COMMAND_FAILED: (
+        "Lightroom could not carry out the command.",
+        "Read the message above; if it mentions the token, run `darkroom lightroom setup` and "
+        "reload the plug-in in the Plug-in Manager.",
     ),
     ErrorCode.LLM_NOT_REACHABLE: (
         "The local model server did not answer.",

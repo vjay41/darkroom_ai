@@ -67,7 +67,7 @@ src = ["src", "tests", "scripts"]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["darkroom_ai", "conftest", "fakes"]
+known-first-party = ["darkroom_ai", "conftest", "fakes", "fake_lightroom"]
 
 [tool.mypy]
 python_version = "3.13"

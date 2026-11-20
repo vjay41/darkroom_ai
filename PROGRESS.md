@@ -85,5 +85,37 @@ Approved: write our OWN Lightroom plugin; lightroom-cli is not installed. PRD 5.
 - Find out which Develop operations work without the Develop module (`photo:applyDevelopSettings` vs `LrDevelopController`).
 
 ### Next step
-Phase 2 plan (exact Lightroom actions + the manual steps for the user), after the user says "proceed". Needs: TEST catalog path and a
-folder of test-photo copies.
+Phase 2 (below).
+
+## Phase 2 — Lightroom spike (2026-11-20) — plug-in and client BUILT; Lightroom NOT touched yet
+
+### Done (no Lightroom interaction)
+- SDK reference: user-provided Lightroom Classic 15.2 SDK at `D:\darkroom_test\lr_sdk` (API Reference HTML + SDK Guide PDF). Read for
+  every call used. Confirmed there: snapshots exist (`createDevelopSnapshot`, `getDevelopSnapshots`, `applyDevelopSnapshot`);
+  `LrSocket.bind` listens on localhost only (no address parameter); `catalog:createVirtualCopies` works on the selection only;
+  `catalog:findPhotoByUuid` is the documented lookup (`getPhotoByLocalId` is not documented).
+- Plug-in `src/darkroom_ai/adapters/lightroom/plugin/darkroom.lrplugin` (Info, Init, Stop, Shutdown, Bridge, Commands, Json):
+  per-request token, write refusal unless the open catalog equals `catalog_path` in `bridge.json`, photos addressed by UUID,
+  LrPhoto settings calls, previews exported to files in the configured preview folder only, one request at a time, no
+  parameters or token in the log. All files pass the SDK's `luac -p` syntax check (Lua 5.1.5).
+- Python: `LightroomClient` (deadline on every call -> `LR_NOT_REACHABLE`), `bridge_file.py`, result models, `LightroomAdapter`
+  Protocol, `darkroom lightroom setup|ping`, error codes `LR_WRONG_CATALOG` and `LR_COMMAND_FAILED`.
+- Tests: fake plug-in server speaking the same protocol; 160 tests pass; `make quality` clean.
+- `scripts/lightroom_spike.py`: read-only by default, edit steps only with `--write`.
+
+### Decisions
+- Photo ID = the photo's UUID (documented lookup). The catalog's numeric local ID is reported but not used for addressing.
+- Virtual copy: the plug-in saves the selection, selects only the target photo, verifies that, creates the copy, restores the
+  selection; if it cannot select exactly the target it refuses and creates nothing.
+- `bridge.json` lives in the plug-in folder (git-ignored) and is re-read whenever a client connects.
+- Preview export counts as a write (refused on the wrong catalog) and never overwrites: Lightroom renames on collision.
+
+### Open threads
+- BLOCKER: `D:\darkroom_test\catalog\DarkroomTest.lrcat` does not exist; `D:\darkroom_test\photos` has no images (five JPGs are in
+  `D:\darkroom_test`, and a catalog named `D7500UMNSG_NSGTH(En)07.pdf.lrcat` sits under `photos\`). Waiting for the user.
+- Unverified until run in Lightroom: everything in the plug-in at runtime (socket message framing, `withWriteAccessDo` behavior,
+  export via `renditions()`/`waitForRender()`, selection restore, snapshot ID semantics, loopback-only listening).
+- `test_lua_syntax` runs only when `DARKROOM_LUAC` points at the SDK's `luac.exe`.
+
+### Next step
+User fixes the catalog/photo paths, adds the plug-in in Lightroom and says "proceed"; then run the spike (read-only first, then `--write`).

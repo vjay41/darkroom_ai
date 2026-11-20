@@ -64,8 +64,12 @@ class LlmSettings(_Section):
 
 class LightroomSettings(_Section):
     host: str = "127.0.0.1"
+    # The plug-in listens on these two localhost ports (requests in, responses out).
+    request_port: int = Field(default=58763, ge=1024, le=65535)
+    response_port: int = Field(default=58764, ge=1024, le=65535)
     timeout_s: float = Field(default=10.0, gt=0.0, le=600.0)
-    # Development and tests refuse to write to any catalog other than this one.
+    export_timeout_s: float = Field(default=120.0, gt=0.0, le=1800.0)
+    # The plug-in refuses every write unless Lightroom has exactly this catalog open.
     test_catalog: Path | None = None
 
     @field_validator("host")
