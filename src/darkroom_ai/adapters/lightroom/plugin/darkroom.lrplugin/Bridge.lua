@@ -146,7 +146,7 @@ local function handleRequest(request, config)
 end
 
 -- One listening session: bind both sockets, serve until a socket closes or the plug-in stops.
-local function runSession(config)
+local function runSession(config, active)
 	LrFunctionContext.callWithContext("darkroom_ai_bridge_session", function(context)
 		local session = { closed = false, buffer = "", queue = {}, working = false }
 		local sender
@@ -241,7 +241,7 @@ local function runSession(config)
 
 		logger:info("listening on localhost ports " .. config.request_port .. " (requests) and " .. config.response_port .. " (responses)")
 
-		while not state().stop and not session.closed do
+		while active() and not session.closed do
 			LrTasks.sleep(0.2)
 		end
 
@@ -255,21 +255,31 @@ local function runSession(config)
 	end)
 end
 
+-- Each start claims a new generation. A run loop ends when it is told to stop or when a newer
+-- generation exists, so "Reload Plug-in" (old shutdown + new init, in either order) leaves
+-- exactly one loop running.
 function Bridge.start()
 	local bridge = state()
-	if bridge.running then
-		return
-	end
-	bridge.running = true
-	bridge.stop = false
 
 	LrTasks.startAsyncTask(function()
-		while not bridge.stop do
+		-- On a reload, give the previous instance's shutdown time to finish first.
+		LrTasks.sleep(1.5)
+		bridge.generation = (bridge.generation or 0) + 1
+		local generation = bridge.generation
+		bridge.stop = false
+		bridge.running = true
+		logger:info("bridge starting (generation " .. generation .. ")")
+
+		local function active()
+			return not bridge.stop and bridge.generation == generation
+		end
+
+		while active() do
 			-- bridge.json is re-read for every session so a new token or catalog takes effect
 			-- as soon as the client reconnects.
 			local config, reason = loadConfig()
 			if config then
-				local ok, err = LrTasks.pcall(runSession, config)
+				local ok, err = LrTasks.pcall(runSession, config, active)
 				if not ok then
 					logger:error("session ended with an error: " .. tostring(err))
 					LrTasks.sleep(2)
@@ -280,8 +290,10 @@ function Bridge.start()
 			end
 			LrTasks.sleep(0.3)
 		end
-		bridge.running = false
-		logger:info("bridge stopped")
+		if bridge.generation == generation then
+			bridge.running = false
+		end
+		logger:info("bridge stopped (generation " .. generation .. ")")
 	end, "darkroom_ai bridge")
 end
 
