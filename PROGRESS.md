@@ -195,7 +195,7 @@ Left in the test catalog: one virtual copy `darkroom 20261120-233520` (settings 
 ### Next step
 Phase 3 (below).
 
-## Phase 3 — Photoshop spike (2026-11-20/21) — main run PASSED; modal-dialog test pending
+## Phase 3 — Photoshop spike (2026-11-20/21) — DONE, waiting at GATE
 
 ### Done
 - Adapter `src/darkroom_ai/adapters/photoshop`: COM via raw pywin32 in a child process per operation with a hard deadline
@@ -219,6 +219,7 @@ Phase 3 (below).
   comtypes and a pinned `wheel`, and lists support only up to 2025.
 
 ### Open threads
-- Modal-dialog test (user opens a dialog, then one call) not run yet.
+- Modal-dialog test DONE: with a Photoshop dialog open, the call failed after 0.2 s with `PS_NOT_REACHABLE`
+  ("busy ... likely a dialog is open", COM result 0x8001010A). No hang.
 - If the recommendation is accepted: remove `photoshop-python-api` and `comtypes` from the dependencies.
 - Unverified: 16-bit TIFF hand-off, masks/background layers, behavior on Photoshop's start/sign-in screen, UXP/batchPlay route.
