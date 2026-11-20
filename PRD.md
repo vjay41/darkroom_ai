@@ -45,10 +45,15 @@ User ──► CLI chat / MCP client ──► agent loop ──► local VLM (L
 ```
 
 ### 5.1 Lightroom connection
-Lua plugin (.lrplugin) runs inside Lightroom and exposes JSON-RPC over a localhost TCP socket. Python sends commands
-(set Develop settings, create virtual copy, snapshot, export preview, read selection). Base: review and adapt `lightroom-cli`;
-fallback: write Develop settings via XMP/preset files. Windows support in lightroom-cli is reported untested -> spike verifies.
-Some Develop controls may require the Develop module to be active -> spike verifies.
+Our OWN Lua plugin (.lrplugin, in this repository) runs inside Lightroom and exposes JSON commands over localhost TCP sockets
+(LrSocket). Python sends commands (read photo, get/apply Develop settings, create virtual copy, snapshot, export preview to a file).
+Rules for the plugin: loopback only; a per-request token; photos are addressed by catalog ID, not by selection; ANY write is refused
+unless the open catalog's path equals the configured catalog (the TEST catalog during development); Develop edits use the LrPhoto
+settings calls so JPG works; no network or process calls.
+Decision (Phase 1, 2026-11-20): `lightroom-cli` 1.2.2 was reviewed and is NOT installed or adopted (no authentication, no catalog
+check, no snapshot revert, refuses plain JPG, hand-written JSON that breaks on Windows paths, heavy dependency, untested on Windows).
+Its two-socket LrSocket pattern is used as a reference only (MIT, with attribution). Fallback if the plugin route fails: write
+Develop settings via XMP/preset files. Some Develop controls may require the Develop module to be active -> spike verifies.
 
 ### 5.2 Photoshop connection
 Python attaches via COM (pywin32 / photoshop-python-api) to Photoshop 2026. Uses ExtendScript and Action Manager for full coverage.
@@ -98,7 +103,7 @@ Our code talks to 127.0.0.1 only; no non-loopback traffic at runtime. All networ
 allows Claude Code to view real test photos (images viewed by Claude Code are sent to Anthropic's API); numeric-only tests send nothing.
 
 ## 11. Plan
-1. Review `lightroom-cli` source for network calls/unexpected behavior; report before installing.
+1. Review `lightroom-cli` source for network calls/unexpected behavior; report before installing. (Done: not adopted, own plugin.)
 2. Spike 1 — Lightroom on test catalog: plugin loads, ping, set one Develop value on a virtual copy, export preview.
 3. Spike 2 — Photoshop COM on 2026: hello world, one layered edit on a copy.
 4. Imaging toolkit + local mask model (ONNX, RTX 3090).
@@ -111,4 +116,4 @@ allows Claude Code to view real test photos (images viewed by Claude Code are se
 - Does qwen/qwen3.8-27b have its vision projector? (user running image test)
 - Which Lightroom controls does the SDK expose (AI masks, Denoise)? Fallback: UI automation.
 - Does COM work as expected on Photoshop 2026?
-- Is lightroom-cli sound on Windows, or do we write our own plugin?
+- ~~Is lightroom-cli sound on Windows, or do we write our own plugin?~~ ANSWERED 2026-11-20: we write our own plugin (see 5.1).

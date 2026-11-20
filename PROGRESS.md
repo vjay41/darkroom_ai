@@ -76,6 +76,9 @@ Read-only review; nothing from it was imported, run, built or installed. Files l
 Write our own small plugin (ping, catalog info, selected photo, virtual copy, snapshot create/apply, set/get Develop settings, export
 preview to file), reusing lightroom-cli's two-socket `LrSocket` pattern as reference with MIT attribution. Do not install lightroom-cli.
 
+### Decision (user, 2026-11-20)
+Approved: write our OWN Lightroom plugin; lightroom-cli is not installed. PRD 5.1 and the matching open question in PRD 12 updated.
+
 ### Open threads for Phase 2
 - Confirm with `Get-NetTCPConnection` that `LrSocket.bind` listens on loopback only.
 - Add what lightroom-cli lacks: catalog-path check before any write, a shared token per request, proper JSON escaping.
