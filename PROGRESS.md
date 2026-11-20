@@ -231,7 +231,7 @@ Phase 3 (below).
   the 30 s path is covered by unit tests only.
 - Unverified: 16-bit TIFF hand-off, masks/background layers, behavior on Photoshop's start/sign-in screen, UXP/batchPlay route.
 
-## Phase 4 (start) — hand-off spike (2026-11-21) — BUILT, not yet run in Lightroom or Photoshop
+## Phase 4 (start) — hand-off spike (2026-11-21) — Photoshop half PASSED; Lightroom export NOT tested
 
 ### Done (no app contact)
 - Lightroom plug-in command `export_tiff`: full-size 16-bit TIFF of a VIRTUAL COPY. It is a write command, so it goes through
@@ -244,9 +244,20 @@ Phase 3 (below).
   (TIFF header bit depth, layer/mask report, centre unchanged vs. a reference JPG, corner == fill colour, file hashes).
 - 187 tests pass with the Lua syntax check; `make quality` clean. `bridge.json` rewritten with `handoff_dir` and `photos_root`.
 
+### Run on 2026-11-21 00:12 (Photoshop half only)
+- Plug-in reloaded; `ping` now reports `photos_root = D:\darkroom_test`.
+- Folder rule verified LIVE in Lightroom: a preview export for a gallery photo was refused with `PHOTO_OUTSIDE_ROOT`
+  (`GUARDRAIL_REJECTED`) and no file was written.
+- Photoshop half PASSED on Photoshop 27.8.0 (auto-started), using a 16-bit TIFF converted locally from
+  `D:\darkroom_test\DSC_2457-37.jpg` with OpenCV as a stand-in for the Lightroom export:
+  - TIFF header 16/16/16 bit; Photoshop opened a COPY of it and reports 16 bit, 5568 x 3712.
+  - Layer mask from the PNG (Action Manager, no clipboard); layers top to bottom: `subject` (mask) / `background`.
+  - New layered PSD and flattened JPG saved beside the copy (JPG save from a 16-bit document works); closed without saving.
+  - Numeric: centre region identical before/after the mask (85.9/130.1/123.4); corner = fill colour (200/30/31 vs 200/30/30).
+  - TIFF and test photo byte-identical afterwards.
+
 ### Open threads
-- The user reported the five test copies as imported, but `find_photo` still returns nothing for all five paths in the open
-  catalog (2026-11-21 00:05). Needs checking in Lightroom before the Lightroom half can run.
-- The plug-in in Lightroom is still the old build (ping shows no `photos_root`): needs "Reload Plug-in".
-- Unverified until run: 16-bit TIFF from a JPG source, the TIFF compression key spelling, the mask script, JPG save from a
-  16-bit document.
+- NOT TESTED: the Lightroom half (`export_tiff` from a virtual copy, 16-bit from a JPG source, the TIFF compression key
+  spelling, refusal for masters, refusal of an existing name). Reason: `find_photo` still returns nothing for all five test
+  files in the open catalog (checked 00:05 and 00:11), although the user reported the import as done.
+- Still due before Phase 5: live wrong-catalog refusal test.
