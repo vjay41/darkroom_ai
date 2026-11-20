@@ -20,6 +20,8 @@ class ErrorCode(StrEnum):
     # Lightroom bridge plug-in
     LR_WRONG_CATALOG = "LR_WRONG_CATALOG"
     LR_COMMAND_FAILED = "LR_COMMAND_FAILED"
+    # Photoshop adapter
+    PS_COMMAND_FAILED = "PS_COMMAND_FAILED"
     # Local model server (PRD s8)
     LLM_NOT_REACHABLE = "LLM_NOT_REACHABLE"
     LLM_NO_VISION = "LLM_NO_VISION"
@@ -65,6 +67,10 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "Lightroom could not carry out the command.",
         "Read the message above; if it mentions the token, run `darkroom lightroom setup` and "
         "reload the plug-in in the Plug-in Manager.",
+    ),
+    ErrorCode.PS_COMMAND_FAILED: (
+        "Photoshop could not carry out the command.",
+        "Read the message above, check the document in Photoshop, then retry.",
     ),
     ErrorCode.LLM_NOT_REACHABLE: (
         "The local model server did not answer.",

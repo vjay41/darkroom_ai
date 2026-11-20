@@ -83,6 +83,9 @@ class LightroomSettings(_Section):
 class PhotoshopSettings(_Section):
     prog_id: str = "Photoshop.Application"
     timeout_s: float = Field(default=30.0, gt=0.0, le=600.0)
+    # Launch Photoshop through COM when it is not running (it can take a while to start).
+    auto_start: bool = True
+    start_timeout_s: float = Field(default=120.0, gt=0.0, le=900.0)
 
 
 class GuardrailSettings(_Section):

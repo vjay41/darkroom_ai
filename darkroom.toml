@@ -44,6 +44,8 @@ timeout_s = 10
 [photoshop]
 prog_id = "Photoshop.Application"
 timeout_s = 30
+auto_start = true           # launch Photoshop when it is not running
+start_timeout_s = 120
 
 [guardrails]
 max_passes = 3

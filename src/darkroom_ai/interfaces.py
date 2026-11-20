@@ -11,6 +11,7 @@ Interfaces are added in the phase that first verifies their real behavior
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any, Protocol
 
 from darkroom_ai.adapters.lightroom.models import (
@@ -22,6 +23,7 @@ from darkroom_ai.adapters.lightroom.models import (
     Snapshot,
     SnapshotResult,
 )
+from darkroom_ai.adapters.photoshop.models import DocumentInfo, PhotoshopInfo
 from darkroom_ai.safety.journal import JournalEntry, JournalStatus
 
 
@@ -53,6 +55,32 @@ class LightroomAdapter(Protocol):
     ) -> SettingsChange: ...
 
     def export_preview(self, photo_id: str, name: str, long_edge: int = ...) -> PreviewFile: ...
+
+
+class PhotoshopAdapter(Protocol):
+    """What the tools need from Photoshop. Works only on copies inside its work folder."""
+
+    def connect(self) -> PhotoshopInfo: ...
+
+    def info(self) -> PhotoshopInfo: ...
+
+    def check_version(self) -> PhotoshopInfo: ...
+
+    def prepare_copy(self, source: Path) -> Path: ...
+
+    def open_document(self, path: Path) -> DocumentInfo: ...
+
+    def run_script(
+        self, code: str, *, document: Path | None = None, timeout_s: float | None = None
+    ) -> str: ...
+
+    def document_info(self, path: Path) -> DocumentInfo: ...
+
+    def add_layer(self, path: Path, name: str) -> int: ...
+
+    def save_psd(self, path: Path, out_path: Path | None = None) -> Path: ...
+
+    def close_document(self, path: Path) -> None: ...
 
 
 class ActionJournal(Protocol):

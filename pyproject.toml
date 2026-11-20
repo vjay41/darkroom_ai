@@ -74,3 +74,7 @@ python_version = "3.13"
 strict = true
 files = ["src", "scripts"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["win32com.*", "win32gui", "pythoncom", "pywintypes", "photoshop.*"]
+ignore_missing_imports = true
