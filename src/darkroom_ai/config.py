@@ -71,6 +71,8 @@ class LightroomSettings(_Section):
     export_timeout_s: float = Field(default=120.0, gt=0.0, le=1800.0)
     # The plug-in refuses every write unless Lightroom has exactly this catalog open.
     test_catalog: Path | None = None
+    # Development edits are only made to photos whose files are under this folder (test copies).
+    test_photos_dir: Path | None = None
 
     @field_validator("host")
     @classmethod

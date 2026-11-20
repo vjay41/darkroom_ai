@@ -258,6 +258,13 @@ class LightroomClient:
     def get_selection(self) -> Selection:
         return self._typed(Selection, "get_selection", self.call("get_selection"))
 
+    def find_photo(self, path: str) -> PhotoInfo | None:
+        """Look a photo up by its file path; None when it is not in the open catalog."""
+        data = self.call("find_photo", {"path": path})
+        if not data.get("found"):
+            return None
+        return self._typed(PhotoInfo, "find_photo", data.get("photo"))
+
     def get_photo(self, photo_id: str) -> PhotoInfo:
         return self._typed(PhotoInfo, "get_photo", self.call("get_photo", {"photo_id": photo_id}))
 

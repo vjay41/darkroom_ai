@@ -93,6 +93,13 @@ def test_full_edit_flow_addresses_photos_by_id(
     assert client.get_photo(copy.id).snapshots[0].name == "darkroom-before"
 
 
+def test_find_photo_by_path(client: LightroomClient) -> None:
+    found = client.find_photo("D:\\photos\\DSC_0001.jpg")
+    assert found is not None
+    assert found.id == "uuid-1"
+    assert client.find_photo("D:\\photos\\missing.jpg") is None
+
+
 def test_second_snapshot_with_same_name_is_not_created(client: LightroomClient) -> None:
     assert client.create_snapshot("uuid-1", "s").created is True
     assert client.create_snapshot("uuid-1", "s").created is False

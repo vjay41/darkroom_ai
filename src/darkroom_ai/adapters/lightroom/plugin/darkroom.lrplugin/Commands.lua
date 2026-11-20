@@ -176,6 +176,19 @@ function Commands.read.get_selection(_, ctx)
 	return { active = summary(active), photos = list(photos) }
 end
 
+-- Looks a photo up by its file path, so the client can get an ID without using the selection.
+-- Returns { found = false } when the file is not in the open catalog.
+function Commands.read.find_photo(params, ctx)
+	if type(params.path) ~= "string" or params.path == "" then
+		fail("INVALID_PARAMS", "path (absolute file path) is required")
+	end
+	local photo = ctx.catalog:findPhotoByPath(params.path)
+	if not photo then
+		return { found = false }
+	end
+	return { found = true, photo = summary(photo) }
+end
+
 function Commands.read.get_photo(params, ctx)
 	local photo = findPhoto(ctx, params.photo_id)
 	local result = summary(photo)

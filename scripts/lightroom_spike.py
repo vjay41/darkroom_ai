@@ -42,7 +42,9 @@ def report(label: str, value: object) -> None:
     print(f"{label}: {value}")
 
 
-def run(client: LightroomClient, *, write: bool) -> int:
+def run(
+    client: LightroomClient, *, write: bool, photo_path: Path | None, allowed_dir: Path | None
+) -> int:
     failures: list[str] = []
 
     def check(name: str, passed: bool) -> None:
@@ -80,12 +82,31 @@ def run(client: LightroomClient, *, write: bool) -> int:
         time.sleep(1.5)
 
     selection = client.get_selection()
-    if selection.active is None:
-        print("No photo is selected in Lightroom; select one JPG and run again.")
+    selected_before = selection.active.id if selection.active else None
+    if photo_path is not None:
+        # Address the photo by file path -> catalog ID; the selection is not used.
+        found = client.find_photo(str(photo_path))
+        if found is None:
+            print(f"{photo_path} is not in the open catalog; import it with 'Add' and run again.")
+            return 1
+        original = found
+    elif selection.active is not None:
+        original = selection.active
+    else:
+        print("No photo is selected in Lightroom; select one JPG or pass --photo PATH.")
         return 1
-    original = selection.active
-    report("selected photo", f"{original.file_name} ({original.file_format}) id={original.id}")
-    check("selected photo is a JPG", original.file_format == "JPG")
+    report("target photo", f"{original.file_name} ({original.file_format}) id={original.id}")
+    report("target path", original.path)
+    check("target photo is a JPG", original.file_format == "JPG")
+    in_test_folder = (
+        allowed_dir is not None
+        and original.path is not None
+        and Path(original.path).resolve().is_relative_to(allowed_dir.resolve())
+    )
+    check(f"target photo is a test copy under {allowed_dir}", in_test_folder)
+    if write and not in_test_folder:
+        print("\nRefusing the edit steps: the target photo is not in the test-photo folder.")
+        return 1
     original_exposure = client.get_develop_settings(original.id, ["Exposure"])
     report("original Exposure", original_exposure)
     report("existing snapshots", [s.name for s in client.list_snapshots(original.id)])
@@ -104,7 +125,7 @@ def run(client: LightroomClient, *, write: bool) -> int:
     after_copy = client.get_selection()
     check(
         "selection restored after creating the copy",
-        after_copy.active is not None and after_copy.active.id == original.id,
+        (after_copy.active.id if after_copy.active else None) == selected_before,
     )
 
     snapshot = client.create_snapshot(copy.id, SNAPSHOT_NAME)
@@ -164,11 +185,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--write", action="store_true", help="also run the edit steps")
     parser.add_argument("--config", type=Path, default=None)
+    parser.add_argument("--photo", type=Path, default=None, help="file path of the photo to use")
     args = parser.parse_args()
     try:
         settings = load_config(args.config)
         with LightroomClient.from_settings(settings, load_bridge_file()) as client:
-            return run(client, write=args.write)
+            return run(
+                client,
+                write=args.write,
+                photo_path=args.photo,
+                allowed_dir=settings.lightroom.test_photos_dir,
+            )
     except DarkroomError as exc:
         print(f"[{exc.code.value}] {exc.message}\nNext step: {exc.next_step}", file=sys.stderr)
         return 2

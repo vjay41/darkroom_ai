@@ -203,6 +203,13 @@ class FakeLightroomPlugin:
         photos = [self.photos[i].summary() for i in self.selected]
         return {"active": photos[0], "photos": photos} if photos else {"photos": []}
 
+    def _cmd_find_photo(self, params: dict[str, Any]) -> dict[str, Any]:
+        wanted = str(params.get("path", "")).lower()
+        for photo in self.photos.values():
+            if photo.summary()["path"].lower() == wanted and not photo.is_virtual_copy:
+                return {"found": True, "photo": photo.summary()}
+        return {"found": False}
+
     def _cmd_get_photo(self, params: dict[str, Any]) -> dict[str, Any]:
         photo = self._photo(params)
         result = photo.summary()
