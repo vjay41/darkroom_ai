@@ -190,16 +190,18 @@ def run(
     # needs a write gate; try the variants and report the one that actually reverts.
     revert_method = None
     if snapshot.snapshot is not None:
-        for id_kind, gate in (("local", True), ("local", False), ("global", True), ("global", False)):
+        variants = (("local", True), ("local", False), ("global", True), ("global", False))
+        for id_kind, gate in variants:
+            label = f"snapshot ({id_kind} id, gate={gate})"
             try:
                 client.apply_snapshot(copy.id, snapshot.snapshot.id, id_kind=id_kind, gate=gate)
             except DarkroomError as exc:
-                report(f"snapshot apply ({id_kind} id, gate={gate})", f"error: {exc.message}")
+                report(label, f"error: {exc.message}")
                 continue
             worked = exposure_is_back()
-            report(f"snapshot apply ({id_kind} id, gate={gate})", "reverted" if worked else "no effect")
+            report(label, "reverted" if worked else "no effect")
             if worked:
-                revert_method = f"snapshot ({id_kind} id, gate={gate})"
+                revert_method = label
                 break
     check("revert via snapshot restores Exposure", revert_method is not None)
     if revert_method is None:
