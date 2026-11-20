@@ -3,6 +3,46 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
+## CURRENT STATE — PAUSED by the user (2026-11-21, about 00:30)
+
+Do not touch Lightroom or Photoshop until the user says go. Do not push `dev`.
+
+### Phase status
+| Phase | Status |
+|---|---|
+| 0 Scaffold | Done |
+| 1 lightroom-cli review | Done (not adopted; own plug-in) |
+| 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
+| 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
+| 4 Imaging toolkit | Started with the hand-off spike only: Photoshop half PASSED; Lightroom `export_tiff` NOT tested. The imaging toolkit and the mask model have not been started. |
+| 5-8 | Not started |
+
+### Next step when the user resumes (their words)
+1. The user imports the five test copies by hand (Import > "Add", source `D:\darkroom_test`) and reloads the plug-in.
+2. Run a selftest that lists the registered plug-in commands (`list_commands`; `export_tiff` must be in the write list; the
+   build should report version 0.2.0).
+3. Run the Lightroom half of the hand-off spike on copies only:
+   `poetry run python scripts/handoff_spike.py --photo D:\darkroom_test\DSC_2457-37.jpg`
+   and report: bit depth in the TIFF header, colour profile, export time, and that the original JPG is byte-identical.
+- Do NOT build an add-photos command (user decision).
+
+### Open threads
+- Import: as of 00:20 the test catalog holds 67 files, all under `D:\Photos\Gallery\101D7500_Processed`, and none under
+  `D:\darkroom_test` (checked by path through the plug-in and by reading the catalog database read-only). Verify by path
+  before running anything.
+- Plug-in in Lightroom: last start logged at 00:11:29, so it does not yet have `list_commands` (added afterwards). It does have
+  `export_tiff` and the guards (`photos_root` shows in `ping`). Needs one "Reload Plug-in".
+- Rules in force: edits only on virtual copies of photos under `D:\darkroom_test`; gallery photos are off limits (the one-off
+  approval for `DSC_3533_final.jpg` is revoked); Photoshop works only on copies inside `outputs\photoshop`.
+- Due before Phase 5: live wrong-catalog refusal test (dummy path in `bridge.json`, then restore it).
+- Not tested in Lightroom: `export_tiff` (16-bit from a JPG source, colour profile, refusal for masters, refusal of an existing
+  name), selection restore when nothing was selected, RAW files.
+- Not tested in Photoshop: a real start/sign-in screen (the 30 s early error is covered by unit tests only).
+- Left behind: test catalog has one virtual copy `darkroom 20261120-233520` of a gallery photo with snapshot `darkroom-before`
+  (from the Phase 2 spike, settings back to original). `outputs\` holds about 465 MB of spike files and `previews\` ten JPEGs
+  (both git-ignored). Photoshop and Lightroom were left running.
+- Last commit before this note: 77b4e82. `make quality` passes (188 tests with `DARKROOM_LUAC` set to the SDK's `luac.exe`).
+
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 
 ### Done
