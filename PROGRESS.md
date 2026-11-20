@@ -115,8 +115,20 @@ Phase 2 (below).
   `D:\darkroom_test\photos\D7500UMNSG_NSGTH(En)07.pdf\D7500UMNSG_NSGTH(En)07.pdf.lrcat` (the earlier `catalog\DarkroomTest.lrcat`
   path does not exist). The five JPGs in `D:\darkroom_test` are copies and are imported. `darkroom.local.toml` and `bridge.json`
   are written (both git-ignored).
-- WAITING: the plug-in is not loaded in Lightroom yet (no listener on 58763/58764, no `darkroom_ai.log`). The user has to add it
-  in the Plug-in Manager.
+- Read-only spike run in Lightroom 15.2.1 (2026-11-20 23:0x) — PASSED:
+  - Loopback only: `Get-NetTCPConnection` shows both ports on `127.0.0.1`, owned by `Lightroom` (no other address).
+  - `ping` (catalog path = configured path, writes allowed), JSON round trip inside Lightroom (backslashes, quotes, unicode,
+    nested arrays), wrong token rejected (`UNAUTHORIZED`), selection read by UUID, Develop settings read on a JPG.
+  - `probe`: every planned LrPhoto/LrCatalog method exists (snapshots create/list/apply/delete, `applyDevelopSettings`,
+    `createVirtualCopies`, `findPhotoByUuid`; the undocumented `getPhotoByLocalId` exists too but is not used).
+- Three bugs found and fixed while getting there:
+  1. Lightroom's Lua raises an error on reading an undefined global -> the plug-in never started. Globals are read under `pcall`.
+  2. "Reload Plug-in": the old instance's shutdown stopped the new run loop. Run loops are now generation-based.
+  3. Reconnecting within ~0.3 s of a disconnect hits sockets the plug-in is still closing (measured: 1 s is reliable).
+     The client now waits 1 s after a disconnect and proves the link with a `ping` before sending a real command.
+- WAITING (edit steps NOT run): the selected photo is `D:\Photos\Gallery\101D7500_Processed\DSC_3533_final.jpg`, which is not one
+  of the five test copies in `D:\darkroom_test`. Need the user's decision before any write.
+- Plug-in log location on this machine: `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\darkroom_ai.log`.
 - Unverified until run in Lightroom: everything in the plug-in at runtime (socket message framing, `withWriteAccessDo` behavior,
   export via `renditions()`/`waitForRender()`, selection restore, snapshot ID semantics, loopback-only listening).
 - `test_lua_syntax` runs only when `DARKROOM_LUAC` points at the SDK's `luac.exe`.

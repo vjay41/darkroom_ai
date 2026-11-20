@@ -60,18 +60,24 @@ def run(client: LightroomClient, *, write: bool) -> int:
     check("JSON round trip inside Lightroom", client.selftest(SELFTEST_VALUE) == SELFTEST_VALUE)
     report("probe", json.dumps(client.probe(), sort_keys=True))
 
+    # The plug-in serves one client at a time: disconnect, try a wrong token, reconnect.
+    client.close()
+    time.sleep(1.5)
+    intruder = LightroomClient(
+        host="127.0.0.1",
+        request_port=client._request_port,
+        response_port=client._response_port,
+        token="0" * 64,
+        timeout_s=15,
+    )
     try:
-        LightroomClient(
-            host="127.0.0.1",
-            request_port=client._request_port,
-            response_port=client._response_port,
-            token="0" * 64,
-            timeout_s=10,
-        ).ping()
+        intruder.get_selection()
         check("wrong token is rejected", False)
     except DarkroomError as exc:
         check("wrong token is rejected", exc.details.get("plugin_code") == "UNAUTHORIZED")
-    client.close()  # the plug-in serves one client at a time; reconnect with the real token
+    finally:
+        intruder.close()
+        time.sleep(1.5)
 
     selection = client.get_selection()
     if selection.active is None:

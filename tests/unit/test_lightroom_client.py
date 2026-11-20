@@ -20,6 +20,7 @@ def _client(plugin: FakeLightroomPlugin, *, token: str | None = None, timeout_s:
         token=token or plugin.token,
         timeout_s=timeout_s,
         export_timeout_s=timeout_s,
+        reconnect_delay_s=0.05,
     )
 
 

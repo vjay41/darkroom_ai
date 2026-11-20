@@ -34,6 +34,7 @@ Connector = Callable[..., Connection]
 
 _RECV_BYTES = 65536
 _CONNECT_RETRY_S = 0.25
+_HANDSHAKE_S = 2.0
 
 
 class LightroomClient:
@@ -46,8 +47,11 @@ class LightroomClient:
         token: str,
         timeout_s: float = 10.0,
         export_timeout_s: float = 120.0,
+        reconnect_delay_s: float = 1.0,
         connect: Connector = open_tcp,
     ) -> None:
+        self._reconnect_delay_s = reconnect_delay_s
+        self._closed_at: float | None = None
         self._host = host
         self._request_port = request_port
         self._response_port = response_port
@@ -75,6 +79,7 @@ class LightroomClient:
     def close(self) -> None:
         for connection in (self._requests, self._responses):
             if connection is not None:
+                self._closed_at = time.monotonic()
                 with contextlib.suppress(OSError):
                     connection.close()
         self._requests = None
@@ -104,13 +109,55 @@ class LightroomClient:
                 time.sleep(min(_CONNECT_RETRY_S, max(0.0, deadline - time.monotonic())))
 
     def _ensure_connected(self, deadline: float) -> tuple[Connection, Connection]:
-        if self._requests is None or self._responses is None:
+        """Connect both sockets and prove the plug-in answers before any real command is sent.
+
+        After a client disconnects, the plug-in closes and re-opens its sockets. A connection made
+        in that window is dropped or never served, so a harmless `ping` is exchanged first and the
+        connection is retried until it answers. Real commands are therefore never re-sent.
+        """
+        while self._requests is None or self._responses is None:
             self.close()
-            self._responses = self._open(self._response_port, deadline)
-            self._requests = self._open(self._request_port, deadline)
+            # Measured on Lightroom 15.2.1: reconnecting 1 s after a disconnect always works,
+            # reconnecting within ~0.3 s hits the sockets the plug-in is still closing.
+            if self._closed_at is not None:
+                wait = self._closed_at + self._reconnect_delay_s - time.monotonic()
+                if wait > 0:
+                    time.sleep(min(wait, max(0.0, deadline - time.monotonic())))
+            if time.monotonic() >= deadline:
+                raise TimeoutError("no time left to connect")
+            attempt_deadline = min(deadline, time.monotonic() + _HANDSHAKE_S)
+            try:
+                self._responses = self._open(self._response_port, attempt_deadline)
+                self._requests = self._open(self._request_port, attempt_deadline)
+                self._exchange(self._requests, self._responses, "ping", {}, attempt_deadline)
+            except DarkroomError:
+                raise
+            except OSError:
+                self.close()
+                if time.monotonic() >= deadline:
+                    raise
         return self._requests, self._responses
 
     # -- protocol -----------------------------------------------------------------------------
+
+    def _exchange(
+        self,
+        requests: Connection,
+        responses: Connection,
+        command: str,
+        params: Mapping[str, Any],
+        deadline: float,
+    ) -> Any:
+        request_id = uuid.uuid4().hex
+        request = {
+            "id": request_id,
+            "token": self._token,
+            "command": command,
+            "params": dict(params),
+        }
+        requests.settimeout(max(0.01, deadline - time.monotonic()))
+        requests.sendall((json.dumps(request, ensure_ascii=True) + "\n").encode("ascii"))
+        return self._read_response(responses, request_id, deadline)
 
     def _read_response(self, responses: Connection, request_id: str, deadline: float) -> Any:
         while True:
@@ -146,19 +193,9 @@ class LightroomClient:
         """Send one command and return its result. Raises DarkroomError on any failure."""
         timeout = self._timeout_s if timeout_s is None else timeout_s
         deadline = time.monotonic() + timeout
-        request_id = uuid.uuid4().hex
-        request = {
-            "id": request_id,
-            "token": self._token,
-            "command": command,
-            "params": dict(params or {}),
-        }
-        line = (json.dumps(request, ensure_ascii=True) + "\n").encode("ascii")
         try:
             requests, responses = self._ensure_connected(deadline)
-            requests.settimeout(max(0.01, deadline - time.monotonic()))
-            requests.sendall(line)
-            message = self._read_response(responses, request_id, deadline)
+            message = self._exchange(requests, responses, command, params or {}, deadline)
         except DarkroomError:
             self.close()
             raise
