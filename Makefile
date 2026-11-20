@@ -13,7 +13,7 @@ help: ## List the available targets
 install: ## Install core + dev dependencies into .venv (removes the ml extra if it was installed)
 	poetry install --with dev
 
-install-ml: ## Install core + dev + the ml extra (onnxruntime-gpu, rembg; large download)
+install-ml: ## Install core + dev + the ml extra (onnxruntime-gpu + CUDA libraries; large download)
 	poetry install --with dev --extras ml
 
 update: ## Update dependencies within the pins in pyproject.toml and rewrite poetry.lock

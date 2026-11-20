@@ -22,7 +22,6 @@ dependencies = [
 # Local mask/segmentation models (RTX 3090). Install with `make install-ml`.
 ml = [
     "onnxruntime-gpu[cuda,cudnn]==1.32.0",
-    "rembg==2.0.87",
 ]
 
 [project.scripts]
@@ -35,6 +34,7 @@ packages = [{ include = "darkroom_ai", from = "src" }]
 ruff = "0.17.6"
 pytest = "9.2.0"
 pytest-cov = "7.1.0"
+pytest-timeout = "2.4.0"
 mypy = "2.4.1"
 pip-audit = "2.10.1"
 
@@ -45,6 +45,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+timeout = 60
 markers = [
     "integration: needs a real app, model or GPU; skipped unless the matching DARKROOM_IT_* env var is set",
     "lightroom: needs Lightroom Classic on the TEST catalog (DARKROOM_IT_LIGHTROOM=1)",

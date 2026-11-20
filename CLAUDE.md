@@ -10,10 +10,19 @@ Photoshop 2026 (27.8) on Windows 11. Read PRD.md for scope, architecture, and th
   ADOBE_FEATURE_UNAVAILABLE, ADOBE_VERSION_UNSUPPORTED) with a plain next step. Every Adobe call has a timeout.
 - Develop and test against the dedicated TEST catalog only, never the user's main catalog.
 - Ask before destructive or bulk operations; show the plan first and wait for an explicit go-ahead.
-- Python 3.13 in a venv (not 3.14 or 3.15). Pin all dependencies. Checked 2026-11-20: all key packages have Windows wheels for 3.12-3.14;
-  3.15 is NOT usable yet (onnxruntime, onnxruntime-gpu and scikit-image lack 3.15 wheels) - revisit and migrate straight to 3.15 when they ship.
-  Write code that runs on 3.13 through 3.15. First dev step: install pinned requirements in the venv and run `pip check`.
-  Read third-party source (e.g. lightroom-cli) for network calls
+- Python: requires-python is ">=3.13,<3.15"; develop on 3.13 in the in-project .venv. 3.15 is blocked (onnxruntime, onnxruntime-gpu
+  and scikit-image have no 3.15 wheels as of 2026-11-20) - revisit when they ship.
+- Packaging: Poetry 2.x (pyproject.toml, PEP 621, src layout). Pin direct dependencies exactly; poetry.lock is committed.
+  Never install Poetry into .venv or create a second venv. Groups: main, win32-marked (pywin32, comtypes, photoshop-python-api),
+  extra `ml` (onnxruntime-gpu), dev. First dev step: `make install`, then `poetry run pip check`.
+- Use the Makefile; `make quality` (lint + format-check + typecheck + test) must pass at the end of every phase.
+- Dependency injection: adapters, LLM client, imaging and journal are passed through constructors against Protocols
+  (src/darkroom_ai/interfaces.py), with fakes for tests.
+- Git: commit only to `dev`; never commit to master, force-push or rewrite history; push only when told. Never commit photos,
+  catalogs, previews, model weights, logs, .env files or credentials; check `git status` and `git diff --stat` before every commit.
+  Stage only our own files (not .github/prompts/*, .idea changes or other unrelated IDE files).
+- Mask models: onnxruntime directly on user-provided ONNX files (no rembg). Never download model files automatically.
+- Read third-party source (e.g. lightroom-cli) for network calls
   before using it. Do not add cloud SDKs or telemetry.
 - The LLM is a swappable profile (OpenAI-compatible, localhost only). Never hard-code a model name; the config validator
   must reject non-local base_url values.
@@ -29,5 +38,6 @@ Photoshop 2026 (27.8) on Windows 11. Read PRD.md for scope, architecture, and th
 
 ## Working style
 - Show a plan before building each spike; report what worked, what failed, and what is unverified.
-- Flag contradictions and risks instead of silently choosing. Keep notes of decisions and open threads in PRD.md section 12.
+- Flag contradictions and risks instead of silently choosing. Keep decisions and open threads in PROGRESS.md (updated every phase);
+  edit PRD.md section 12 only when one of its open questions is answered.
 - Images you view are sent to Anthropic's API. Prefer numeric checks; view real photos only when needed for visual review.

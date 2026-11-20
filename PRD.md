@@ -26,10 +26,11 @@ Out: cloud/generative features (e.g. Generative Fill), GUI, video, license handl
 - Windows 11; AMD Ryzen 9 9950X3D (16C/32T); 61 GB RAM
 - GPUs: RTX 5090 32 GB (index 0), RTX 3090 24 GB (index 1)
 - Lightroom Classic 15.2.1; Photoshop 2026 v27.8 (COM `Photoshop.Application.200` registered)
-- Python: 3.14 and 3.13 installed -> use **3.13 in a dedicated venv**
+- Python: 3.14 and 3.13 installed -> requires-python ">=3.13,<3.15"; develop on **3.13 in the in-project .venv**, managed by Poetry 2.x
 - LM Studio at D:\LM Studio; server http://127.0.0.1:1234/v1
 - Installed models: qwen/qwen3.8-27b (17.7 GB), meta/muse-glimmer (28B, 18.2 GB), google/gemma-4-e4b (6.3 GB)
-- Windows wheels exist for pywin32, photoshop-python-api, numpy, opencv, rawpy, onnxruntime-gpu, scikit-image, pillow, mcp (3.13 and 3.14).
+- Windows wheels exist for pywin32, photoshop-python-api, numpy, opencv, rawpy, onnxruntime-gpu, pillow, mcp (3.13 and 3.14).
+  scikit-image is not a dependency. No 3.15 wheels yet for onnxruntime(-gpu), scikit-image.
   NOT yet checked: PyTorch + CUDA for the RTX 5090 (prefer ONNX models).
 
 ## 5. Architecture
@@ -92,8 +93,8 @@ Dedicated TEST catalog during development. Virtual copies + snapshots. Clamped e
 max 3 passes. Action journal. Confirmation before destructive or bulk actions.
 
 ## 10. Offline & privacy
-Our code binds to 127.0.0.1 only; no network libraries at runtime; dependencies pinned and reviewed; automated test fails on
-non-loopback connections. Adobe apps keep their own network/license behavior (user's responsibility). During development the user
+Our code talks to 127.0.0.1 only; no non-loopback traffic at runtime. All network access goes through one loopback-only module
+(httpx2 for the local model server; MCP over stdio). Dependencies pinned and reviewed; automated test fails on non-loopback connections. Adobe apps keep their own network/license behavior (user's responsibility). During development the user
 allows Claude Code to view real test photos (images viewed by Claude Code are sent to Anthropic's API); numeric-only tests send nothing.
 
 ## 11. Plan
