@@ -25,10 +25,11 @@ YEAR = re.compile(r"(?<!\d)((?:19|20)\d\d)(?!\d)")
 
 
 def _iso_band(iso: str | None) -> str:
-    try:
-        value = int(float(str(iso).split()[0]))
-    except (ValueError, IndexError):
+    # Lightroom formats ISO as text such as "ISO 200", so take the first number in it.
+    found = re.search(r"\d+(?:\.\d+)?", str(iso or ""))
+    if not found:
         return "unknown"
+    value = int(float(found.group()))
     for limit, label in ISO_BANDS:
         if value <= limit:
             return label

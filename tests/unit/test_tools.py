@@ -1048,3 +1048,16 @@ def test_import_folder_needs_the_go_ahead(tmp_path: Path) -> None:
     got = allowed.call("import_folder", folder="D:\\darkroom_test\\photos", max_files=2)
     assert got["imported"]["added"] == 2
     assert "3 photos" not in confirmer.asked[0] and "2 photos" in confirmer.asked[0]
+
+
+def test_iso_band_reads_lightroom_text() -> None:
+    from darkroom_ai.tools.catalog_tools import _iso_band
+
+    assert [_iso_band(v) for v in ("ISO 200", "200", "ISO 1600", "ISO 12800", None, "n/a")] == [
+        "up to 400",
+        "up to 400",
+        "401-1600",
+        "above 6400",
+        "unknown",
+        "unknown",
+    ]

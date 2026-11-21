@@ -1534,3 +1534,6 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   scan_folder (read; what an import would add), import_folder (bulk write; CONFIRMATION required with the photo count; uses
   catalog:addPhoto = "add without moving", nothing on disk is moved/copied; only under photos_root; max 500 per call; not undoable by
   the undo tool). UNVERIFIED live: all three, addPhoto behaviour, capture_time year parsing on this locale's date format.
+- Live: catalog_summary and scan_folder OK (120 photos; 118 Nikon D7500 + 2 Sony ILCE-7M5; years 2023/2026; scan found 0 new). Bug found:
+  ISO bands all "unknown" because Lightroom's ISO text is "ISO 200" -> parser now takes the first number. import_folder still unverified
+  live (needs new files): test file D:\darkroom_test\import_test\IMPORT_TEST_1.jpg (a copy of DSC_2416-4.jpg) staged for it.
