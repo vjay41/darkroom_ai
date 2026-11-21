@@ -75,12 +75,19 @@ def _doctor(settings: Settings) -> int:
     try:
         with LightroomClient.from_settings(settings, load_bridge_file()) as lightroom:
             info = lightroom.ping()
-        writes = "writes allowed" if info.writes_allowed else "WRITES REFUSED (other catalog open)"
-        _line(
-            "ok" if info.writes_allowed else "warn",
-            f"Lightroom {info.lightroom_version}, plug-in {info.plugin_version}, {writes}",
-        )
-        problems += 0 if info.writes_allowed else 1
+        version = f"Lightroom {info.lightroom_version}, plug-in {info.plugin_version}"
+        if info.writes_allowed:
+            _line("ok", f"{version}, writes allowed")
+        else:
+            problems += 1
+            _line(
+                "FAIL",
+                f"{version}: [LR_WRONG_CATALOG] edits are refused because the open catalog is "
+                f"not the configured one.\n       open:       {info.catalog_path}\n"
+                f"       configured: {info.configured_catalog}\n"
+                "       Open the configured catalog in Lightroom, or change lightroom.test_catalog "
+                "and run `darkroom lightroom setup` again.",
+            )
     except DarkroomError as exc:
         problems += 1
         _line("FAIL", f"Lightroom: [{exc.code.value}] {exc.message}\n       {exc.next_step}")
