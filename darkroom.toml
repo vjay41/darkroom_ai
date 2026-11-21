@@ -52,6 +52,18 @@ ready_grace_s = 30          # on screen but silent this long -> error (start/sig
 max_passes = 3
 exposure_ev_per_pass = 1.5
 
+[masks]
+backend = "photoshop"       # photoshop (Select Subject on the device) | onnx | synthetic (tests only)
+# onnx_model = "D:/models/your_mask_model.onnx"   # only for backend = "onnx"; never downloaded
+gpu_index = 1               # GPU for the ONNX model (the RTX 3090)
+allow_cpu = false           # false: fail instead of silently running on the CPU
+onnx_input_width = 1024
+onnx_input_height = 1024
+
+[faces]
+# model = "D:/models/face_detection_yunet.onnx"   # without it face analysis returns FACE_MODEL_MISSING
+score_threshold = 0.7
+
 [paths]
 logs_dir = "logs"
 outputs_dir = "outputs"

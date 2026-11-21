@@ -14,7 +14,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 1 lightroom-cli review | Done (not adopted; own plug-in) |
 | 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
-| 4 Imaging toolkit | Hand-off spike DONE (Lightroom 16-bit TIFF -> Photoshop mask -> PSD + JPG). The imaging toolkit (analysis, ONNX mask model on GPU 1) has not been started. |
+| 4 Imaging toolkit | Hand-off spike DONE. Toolkit BUILT and unit-tested: analysis, face interface, mask interface with synthetic + ONNX backends, mask metrics. NOT built yet: the Photoshop Select Subject backend (needs Photoshop contact). NOT run: ONNX inference on GPU 1 (no model file yet). |
 | 5-8 | Not started |
 
 ### Catalog facts (corrects earlier counts in this file)
@@ -63,10 +63,31 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
   original) and `darkroom 20261120-233520` (of a gallery photo, from the Phase 2 spike) with snapshot `darkroom-before`.
   `outputs\` holds the spike files (git-ignored). Lightroom and Photoshop were left running.
 
-### Next step
-Phase 4 proper: imaging toolkit (preview analysis: histogram, clipping, colour cast, face/skin-tone level) and the local mask
-model via ONNX on GPU 1. Needs from the user: the path of the mask ONNX model file (nothing is downloaded). Start with a short
-plan and wait for the go.
+### Imaging toolkit (built 2026-11-21, no app contact)
+- `imaging/io.py`: JPG/PNG/8- and 16-bit TIFF via OpenCV, RAW via rawpy; mask PNG save (never overwrites) and load.
+- `imaging/analysis.py`: luma percentiles + 32-bin histogram, highlight/shadow clipping (overall and per channel), colour cast
+  from near-neutral mid-tone pixels (blue-yellow and green-magenta axes) with "low" confidence when under 1% of the pixels
+  are near-neutral.
+- `imaging/faces.py`: `FaceDetector` Protocol, `YuNetFaceDetector` (OpenCV `FaceDetectorYN`, user-provided model file). Without
+  a model: `FACE_MODEL_MISSING`; there is NO colour-based fallback (user decision). OpenCV 5.1 has no bundled Haar detector.
+- `imaging/masks.py`: `MaskProvider` Protocol (image file -> same-size grayscale PNG + metrics). Backends: `SyntheticMaskProvider`
+  (ellipse, tests/dry runs) and `OnnxMaskProvider` (user-provided model, GPU 1, no silent CPU fall-back, `MASK_MODEL_MISSING`
+  without a model or without onnxruntime). `mask_metrics`: coverage %, soft-edge %, region count, speck count, largest region,
+  and edge raggedness (compactness, hull-perimeter ratio, solidity).
+- `imaging/providers.py` + `[masks]` / `[faces]` settings: `masks.backend = photoshop | onnx | synthetic` (default photoshop).
+- New error codes: `MASK_FAILED`, `FACE_MODEL_MISSING`, `IMAGE_UNREADABLE`.
+- Tests on synthetic images with known answers; 220 tests pass with the Lua syntax check.
+- Unverified: the YuNet wrapper and real ONNX inference (no model files yet); CUDA 13 loading and GPU placement on the 3090
+  (`make install-ml` has not been run - large download, ask first).
+
+### Next step (stopped here; needs the user's go)
+Photoshop Select Subject backend, on a copy of `TEST_2457-37.jpg` inside `outputs\photoshop`:
+1. Read-only first: find how Photoshop 27.8 exposes the Select Subject mode (Device vs Cloud) to scripts, and which key forces
+   device mode. If on-device cannot be proven, report the backend as blocked. Cloud mode must never be used.
+2. Open the copy, run Select Subject (device), write the selection as a mask PNG, close without saving.
+3. Report mask metrics (coverage %, region count, edge raggedness). The user allowed viewing the MASK PNG only (grayscale
+   silhouette) - never the original photo, an overlay or a composite; the user compares those.
+Then: ONNX backend run once the user provides a model path (and approves `make install-ml`).
 
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 

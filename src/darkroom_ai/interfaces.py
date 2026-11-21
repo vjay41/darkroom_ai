@@ -25,7 +25,18 @@ from darkroom_ai.adapters.lightroom.models import (
     SnapshotResult,
 )
 from darkroom_ai.adapters.photoshop.models import DocumentInfo, LayerInfo, PhotoshopInfo
+from darkroom_ai.imaging.faces import FaceDetector
+from darkroom_ai.imaging.masks import MaskProvider
 from darkroom_ai.safety.journal import JournalEntry, JournalStatus
+
+# Imaging interfaces are defined next to their implementations and re-exported here.
+__all__ = [
+    "ActionJournal",
+    "FaceDetector",
+    "LightroomAdapter",
+    "MaskProvider",
+    "PhotoshopAdapter",
+]
 
 
 class LightroomAdapter(Protocol):

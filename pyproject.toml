@@ -74,5 +74,14 @@ files = ["src", "scripts"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["win32com.*", "win32gui", "win32api", "win32con", "win32process", "pythoncom", "pywintypes"]
+module = [
+    "win32com.*",
+    "win32gui",
+    "win32api",
+    "win32con",
+    "win32process",
+    "pythoncom",
+    "pywintypes",
+    "onnxruntime",
+]
 ignore_missing_imports = true

@@ -98,6 +98,30 @@ class GuardrailSettings(_Section):
     exposure_ev_per_pass: float = Field(default=1.5, gt=0.0, le=5.0)
 
 
+MaskBackend = Literal["photoshop", "onnx", "synthetic"]
+
+
+class MaskSettings(_Section):
+    """Subject masks. One interface, three backends (see imaging/providers.py)."""
+
+    backend: MaskBackend = "photoshop"
+    # ONNX backend: a model file the user provides. Nothing is downloaded.
+    onnx_model: Path | None = None
+    gpu_index: int = Field(default=1, ge=0, le=15)
+    allow_cpu: bool = False
+    onnx_input_width: int = Field(default=1024, ge=32, le=4096)
+    onnx_input_height: int = Field(default=1024, ge=32, le=4096)
+    onnx_mean: tuple[float, float, float] = (0.485, 0.456, 0.406)
+    onnx_std: tuple[float, float, float] = (0.229, 0.224, 0.225)
+
+
+class FaceSettings(_Section):
+    """Face detection needs a user-provided YuNet ONNX file; without it face analysis is off."""
+
+    model: Path | None = None
+    score_threshold: float = Field(default=0.7, gt=0.0, lt=1.0)
+
+
 class PathSettings(_Section):
     logs_dir: Path = Path("logs")
     outputs_dir: Path = Path("outputs")
@@ -110,6 +134,8 @@ class Settings(_Section):
     lightroom: LightroomSettings = LightroomSettings()
     photoshop: PhotoshopSettings = PhotoshopSettings()
     guardrails: GuardrailSettings = GuardrailSettings()
+    masks: MaskSettings = MaskSettings()
+    faces: FaceSettings = FaceSettings()
     paths: PathSettings = PathSettings()
 
 

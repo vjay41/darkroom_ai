@@ -32,6 +32,9 @@ class ErrorCode(StrEnum):
     GUARDRAIL_REJECTED = "GUARDRAIL_REJECTED"
     CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
     MASK_MODEL_MISSING = "MASK_MODEL_MISSING"
+    MASK_FAILED = "MASK_FAILED"
+    FACE_MODEL_MISSING = "FACE_MODEL_MISSING"
+    IMAGE_UNREADABLE = "IMAGE_UNREADABLE"
     TOOL_TIMEOUT = "TOOL_TIMEOUT"
 
 
@@ -108,6 +111,20 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "The local mask model is not available.",
         "Install the ml extra (`make install-ml`) and set the path of your ONNX model file in "
         "darkroom.toml.",
+    ),
+    ErrorCode.MASK_FAILED: (
+        "The subject mask could not be created.",
+        "Read the message above; try another mask backend (masks.backend in darkroom.toml) or "
+        "another photo.",
+    ),
+    ErrorCode.FACE_MODEL_MISSING: (
+        "No face-detection model is available, so face and skin-tone analysis is switched off.",
+        "Put a YuNet face-detection ONNX file on this computer and set its path as "
+        "faces.model in darkroom.toml. Nothing is downloaded automatically.",
+    ),
+    ErrorCode.IMAGE_UNREADABLE: (
+        "The image file could not be read.",
+        "Check that the file exists and is a JPG, PNG, TIFF or supported RAW file.",
     ),
     ErrorCode.TOOL_TIMEOUT: (
         "The operation did not finish in time.",
