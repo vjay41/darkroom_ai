@@ -4,6 +4,7 @@
 
 [llm]
 active_profile = "primary"
+require_loaded = true       # never let a request load a model: refuse if it is not loaded already
 
 # vision / tool_mode below are starting values and are UNVERIFIED until `darkroom models test` (phase 6).
 [llm.profiles.primary]

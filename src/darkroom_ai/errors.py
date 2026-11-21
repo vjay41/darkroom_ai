@@ -27,6 +27,7 @@ class ErrorCode(StrEnum):
     LLM_NO_VISION = "LLM_NO_VISION"
     LLM_BAD_TOOL_CALL = "LLM_BAD_TOOL_CALL"
     LLM_REQUEST_FAILED = "LLM_REQUEST_FAILED"
+    LLM_MODEL_NOT_LOADED = "LLM_MODEL_NOT_LOADED"
     # darkroom_ai itself
     CONFIG_INVALID = "CONFIG_INVALID"
     NON_LOCAL_ENDPOINT = "NON_LOCAL_ENDPOINT"
@@ -95,6 +96,12 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "The local model server answered with an error.",
         "Read the message above. Check that the model named in the profile is downloaded and can "
         "be loaded in the local model server, then retry.",
+    ),
+    ErrorCode.LLM_MODEL_NOT_LOADED: (
+        "The model of the active profile is not loaded in the local model server.",
+        "Load the model in the local model server (for example in LM Studio), then retry. "
+        "darkroom_ai does not ask the server to load models by itself; to allow that, set "
+        "require_loaded = false under [llm] in darkroom.toml.",
     ),
     ErrorCode.CONFIG_INVALID: (
         "The configuration is not valid.",

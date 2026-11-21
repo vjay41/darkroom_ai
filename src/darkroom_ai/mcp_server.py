@@ -18,7 +18,7 @@ from mcp.server.stdio import stdio_server
 
 from darkroom_ai import __version__
 from darkroom_ai.config import Settings
-from darkroom_ai.errors import DarkroomError
+from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.tools.factory import build_tool_registry
 from darkroom_ai.tools.registry import ToolRegistry
 
@@ -27,6 +27,10 @@ INSTRUCTIONS = (
     "Local photo-editing tools for Lightroom Classic and Photoshop on this computer. Edits go to "
     "virtual copies and are clamped to configured limits. Requests that need the user's "
     "confirmation are refused through this interface; use `darkroom chat` for those."
+)
+NO_CONFIRMATION_HERE = (
+    "This interface cannot ask you for a confirmation, so the request was refused and nothing "
+    "was changed. Use `darkroom chat` on this computer for requests that need your go-ahead."
 )
 
 
@@ -46,7 +50,10 @@ def call_tool(registry: ToolRegistry, name: str, arguments: dict[str, Any]) -> t
     try:
         result = registry.call(name, arguments)
     except DarkroomError as exc:
-        text = f"[{exc.code.value}] {exc.message}\nNext step: {exc.next_step}"
+        next_step = exc.next_step
+        if exc.code is ErrorCode.CONFIRMATION_REQUIRED:
+            next_step = NO_CONFIRMATION_HERE
+        text = f"[{exc.code.value}] {exc.message}\nNext step: {next_step}"
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=text)], is_error=True
         )

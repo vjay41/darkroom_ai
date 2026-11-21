@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6 gate ACCEPTED; Phase 7 in progress: parts without Adobe contact done; waiting for the user's go on the parts that touch Lightroom / Photoshop and on the pip-audit command
+## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1 and 4 done; `clean-outputs` list shown, waiting for the user to run it; then the live error cases (one at a time), pip-audit, firewall run
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -306,7 +306,34 @@ Done WITHOUT Adobe contact:
   PROGRESS.md (test folder, catalog file name).
 - 310 tests pass, `make quality` clean.
 
-Waiting for the user's go: offline proof with Lightroom / Photoshop and under the firewall block; the five live error
+User go (2026-11-21), order: 1 and 4, then 5 (clean-outputs), 3 (error cases one at a time), 6 (pip-audit, firewall off,
+flags checked with --help first), 2 (firewall run last). Also asked for and built:
+- `llm.require_loaded` (default true): `LocalLlmClient` asks the server's state list (LM Studio `/api/v0/models`) before
+  every chat request and refuses with the new code `LLM_MODEL_NOT_LOADED` ("No request was sent") unless the model is
+  reported as loaded; also when the state cannot be read or the model is not listed. So a request never makes the server
+  load or swap a model. Used by `darkroom chat`, `darkroom models test` and `scripts/agent_run.py`.
+- `doctor`: "model ... is loaded" / FAIL "listed but NOT loaded (state: ...)" / warn when the server reports no state.
+- MCP: a `CONFIRMATION_REQUIRED` refusal now says that this interface cannot ask and points to `darkroom chat`.
+- Human-run confirmations (`revert`, `clean-outputs`) say "This will: ..." instead of "The assistant wants to: ...".
+- 314 tests pass, `make quality` clean.
+
+Item 1 DONE (offline proof with Lightroom, `scripts/offline_proof.py --with-adobe --photo TEST_2459-39.jpg`): third-party
+imports, model list, text model tests (4/4, 2/2), MCP server object, `darkroom doctor` (all ok), `get_photo_info` and
+`analyze_photo` on the test photo: audit hook saw only 127.0.0.1 (8 connects, 12 lookups). PASS. Not covered by the hook:
+child processes (the Photoshop worker); Photoshop was only checked through its window list here.
+
+Item 4 DONE (MCP against the real Lightroom, `scripts/mcp_live.py`, real stdio client starting `darkroom mcp`): server
+`darkroom_ai 0.1.0`; 8 tools listed (no `revert`, no `apply_preset`, no script runner); `get_photo_info` on
+`TEST_2459-39.jpg` returned its working copy and all-zero sliders; a gated `adjust_lighting` (`allow_beyond_total`) was
+refused with `[CONFIRMATION_REQUIRED]`; `revert` answered "There is no tool named 'revert'"; master settings unchanged.
+
+Item 5 list shown (nothing removed; the user answers the y/N): 44 files, 807 MB would be removed (25 previews 11 MB,
+4 hand-off TIFFs 390 MB, 3 masks 1 MB, 12 Photoshop working copies / masks 405 MB); 10 final PSD/JPG results kept.
+Flagged: the 3 masks include `TEST_2457-37_subject.png`, the Select Subject mask whose visual check by the user is
+still pending from the Phase 4 gate.
+
+Still waiting: the user's y/N for `clean-outputs`; the five live error cases; pip-audit; the firewall run. Earlier list:
+offline proof with Lightroom / Photoshop and under the firewall block; the five live error
 cases; MCP against the real Lightroom; `clean-outputs` on the real folder; pip-audit (command shown first). Then: review
 of every error message, README, gate.
 

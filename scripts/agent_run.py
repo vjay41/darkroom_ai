@@ -158,7 +158,7 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
     print(f"request: {args.request}")
     print(f"tools offered: {', '.join(tools)}")
 
-    llm = LocalLlmClient(profile)
+    llm = LocalLlmClient(profile, require_loaded=settings.llm.require_loaded)
     report = None
     started = time.monotonic()
     try:

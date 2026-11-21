@@ -52,6 +52,9 @@ class ModelProfile(_Section):
 
 class LlmSettings(_Section):
     active_profile: str
+    # True: send a request only when the server reports the model as already loaded, so a
+    # request never makes the server load (or swap) a model on demand.
+    require_loaded: bool = True
     profiles: dict[str, ModelProfile] = Field(min_length=1)
 
     @model_validator(mode="after")

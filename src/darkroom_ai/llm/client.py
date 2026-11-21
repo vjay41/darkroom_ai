@@ -54,8 +54,15 @@ class LlmClient(Protocol):
 
 
 class LocalLlmClient:
-    def __init__(self, profile: ModelProfile, http: LocalHttp | None = None) -> None:
+    def __init__(
+        self,
+        profile: ModelProfile,
+        http: LocalHttp | None = None,
+        *,
+        require_loaded: bool = False,
+    ) -> None:
         self._profile = profile
+        self._require_loaded = require_loaded
         self._http = http or LocalHttp(profile.base_url, timeout_s=profile.timeout_s)
 
     def close(self) -> None:
@@ -86,6 +93,53 @@ class LocalLlmClient:
             )
         return data
 
+    def model_state(self) -> str:
+        """What the server says about this profile's model, without making it load anything.
+
+        "loaded", "not-loaded" (or another state word of the server), "missing" (not listed), or
+        "unknown" (the server has no state list; LM Studio has one at /api/v0/models).
+        """
+        base = self._profile.base_url.rstrip("/")
+        root = base[: -len("/v1")] if base.endswith("/v1") else base
+        http = LocalHttp(root, timeout_s=min(self._profile.timeout_s, 20.0))
+        try:
+            status, data = http.request_json("GET", "api/v0/models")
+        except LocalHttpError as exc:
+            raise DarkroomError(
+                ErrorCode.LLM_NOT_REACHABLE,
+                f"The local model server at {self._profile.base_url} did not answer ({exc}).",
+            ) from exc
+        finally:
+            http.close()
+        items = data.get("data") if status == 200 and isinstance(data, dict) else None
+        if not isinstance(items, list):
+            return "unknown"
+        for item in items:
+            if isinstance(item, dict) and item.get("id") == self._profile.model:
+                state = item.get("state")
+                return state if isinstance(state, str) and state else "unknown"
+        return "missing"
+
+    def ensure_loaded(self) -> None:
+        """Refuse (LLM_MODEL_NOT_LOADED) unless the server reports the model as loaded."""
+        state = self.model_state()
+        if state == "loaded":
+            return
+        if state == "unknown":
+            detail = (
+                f"The local model server does not report whether '{self._profile.model}' is "
+                "loaded, so it cannot be checked."
+            )
+        elif state == "missing":
+            detail = f"The local model server does not list '{self._profile.model}'."
+        else:
+            detail = f"'{self._profile.model}' is listed but not loaded (state: {state})."
+        raise DarkroomError(
+            ErrorCode.LLM_MODEL_NOT_LOADED,
+            detail + " No request was sent.",
+            details={"state": state, "model": self._profile.model},
+        )
+
     def models(self) -> list[str]:
         data = self._request("GET", "models")
         items = data.get("data", []) if isinstance(data, dict) else []
@@ -115,6 +169,8 @@ class LocalLlmClient:
         if reasoning_effort:
             payload["reasoning_effort"] = reasoning_effort
 
+        if self._require_loaded:
+            self.ensure_loaded()
         started = time.monotonic()
         data = self._request("POST", "chat/completions", payload)
         seconds = time.monotonic() - started

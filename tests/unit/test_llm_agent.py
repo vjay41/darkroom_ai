@@ -64,6 +64,7 @@ def profile(mode: str = "native", vision: bool = False, **extra: Any) -> ModelPr
 class FakeModelServer:
     def __init__(self) -> None:
         self.requests: list[dict[str, Any]] = []
+        self.models: list[dict[str, Any]] = [{"id": "local-model"}, {"id": "other"}]
         self.reply: tuple[int, Any] = (200, {"choices": [{"message": {"content": "hello"}}]})
         owner = self
 
@@ -85,7 +86,7 @@ class FakeModelServer:
                 if self.path.endswith("/redirect"):
                     self._send(302, {"moved": True}, {"Location": "http://example.com/elsewhere"})
                 else:
-                    self._send(200, {"data": [{"id": "local-model"}, {"id": "other"}]})
+                    self._send(200, {"data": owner.models})
 
             def do_POST(self) -> None:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -562,7 +563,7 @@ def test_mcp_lists_and_calls_the_same_tools(tmp_path: Path) -> None:
     assert refused.is_error is True
     text = refused.content[0].text  # type: ignore[union-attr]
     assert text.startswith("[CONFIRMATION_REQUIRED]")
-    assert "Next step:" in text
+    assert "Next step: This interface cannot ask you" in text and "darkroom chat" in text
     unknown = mcp_server.call_tool(registry, "run_photoshop_script", {"code": "x"})
     assert unknown.is_error is True
     server = mcp_server.build_server(registry)
@@ -651,7 +652,7 @@ def test_doctor_reports_each_part_without_touching_real_services(
     out = capsys.readouterr().out
     assert "[FAIL] Lightroom: [LR_NOT_REACHABLE]" in out
     assert "Photoshop is not running (it is started when needed)" in out
-    assert "model of the active profile is available" in out
+    assert "model of the active profile is loaded" in out
     assert "GPU 0 NVIDIA GeForce RTX 5090" in out
     assert "model server on GPU 1; Photoshop on no GPU (not running)" in out
     assert "[warn] Photoshop uses" not in out  # a model server on GPU 1 is not a warning
@@ -664,6 +665,9 @@ class ScriptedLlmWithClose(ScriptedLlm):
 
     def close(self) -> None:
         pass
+
+    def model_state(self) -> str:
+        return "loaded"
 
 
 # -- reasoning effort -----------------------------------------------------------------------------
@@ -829,3 +833,64 @@ def test_no_remeasure_after_a_pass_that_only_made_output_files(tmp_path: Path) -
     assert [s.ok for s in report.steps] == [True, True]
     assert (report.passes, report.images_sent) == (1, 2)
     assert "NEW MEASUREMENTS" in llm.sent[1][-1]["content"][0]["text"]
+
+
+# -- never rely on on-demand model loading --------------------------------------------------------
+
+
+def test_requests_are_refused_unless_the_model_is_loaded(server: FakeModelServer) -> None:
+    used = profile().model_copy(update={"base_url": server.url})
+    strict = LocalLlmClient(used, require_loaded=True)
+    message = [{"role": "user", "content": "hi"}]
+
+    for models, state in (
+        ([{"id": "local-model", "state": "not-loaded"}], "not-loaded"),
+        ([{"id": "other", "state": "loaded"}], "missing"),
+        ([{"id": "local-model"}], "unknown"),
+    ):
+        server.models = models
+        assert strict.model_state() == state
+        with pytest.raises(DarkroomError) as caught:
+            strict.chat(message)
+        assert caught.value.code is ErrorCode.LLM_MODEL_NOT_LOADED
+        assert "No request was sent." in caught.value.message
+        assert "require_loaded" in caught.value.next_step
+    assert server.requests == []  # nothing reached the chat endpoint
+
+    server.models = [{"id": "local-model", "state": "loaded"}]
+    assert strict.chat(message).content == "hello"
+    assert len(server.requests) == 1
+    strict.close()
+
+    relaxed = LocalLlmClient(used)  # the check is opt-in for the client, on by default in config
+    server.models = [{"id": "local-model", "state": "not-loaded"}]
+    assert relaxed.chat(message).content == "hello"
+    relaxed.close()
+    assert settings_for(Path(".")).llm.require_loaded is True
+
+
+def test_doctor_reports_listed_but_not_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "darkroom.toml"
+    config.write_text(
+        '[llm]\nactive_profile = "m"\n[llm.profiles.m]\n'
+        'base_url = "http://127.0.0.1:1234/v1"\nmodel = "local-model"\n',
+        encoding="utf-8",
+    )
+
+    class NotLoaded(ScriptedLlmWithClose):
+        def model_state(self) -> str:
+            return "not-loaded"
+
+    def no_plugin() -> None:
+        raise DarkroomError(ErrorCode.LR_NOT_REACHABLE)
+
+    monkeypatch.setattr(cli, "load_bridge_file", no_plugin)
+    monkeypatch.setattr(cli, "photoshop_windows", list)
+    monkeypatch.setattr(cli, "LocalLlmClient", lambda _profile: NotLoaded())
+    monkeypatch.setattr(cli, "read_gpus", lambda: report_with())
+    assert cli.main(["--config", str(config), "doctor"]) == cli.EXIT_PROBLEM
+    out = capsys.readouterr().out
+    assert "listed but NOT loaded (state: not-loaded)" in out
+    assert "2 problem(s) found" in out

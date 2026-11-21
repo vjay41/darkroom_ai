@@ -46,8 +46,11 @@ CHAT_TOOLS = ("adjust_lighting", "adjust_white_balance", "adjust_hsl", "crop", "
 class AskUser:
     """Confirmer for `darkroom chat`: asks the person at the keyboard, y or n."""
 
+    def __init__(self, lead: str = "The assistant wants to") -> None:
+        self._lead = lead
+
     def confirm(self, action: str, details: Mapping[str, Any]) -> bool:
-        print(f"\nThe assistant wants to: {action}")
+        print(f"\n{self._lead}: {action}")
         for key, value in details.items():
             print(f"  {key}: {value}")
         try:
@@ -93,8 +96,22 @@ def _doctor(settings: Settings) -> int:
     llm = LocalLlmClient(profile)
     try:
         models = llm.models()
-        if profile.model in models:
-            _line("ok", "model server answers; model of the active profile is available")
+        state = llm.model_state() if profile.model in models else "missing"
+        if state == "loaded":
+            _line("ok", "model server answers; model of the active profile is loaded")
+        elif state == "unknown":
+            _line(
+                "warn",
+                "model server answers and lists the model, but does not report whether it is "
+                "loaded",
+            )
+        elif state != "missing":
+            problems += 1
+            _line(
+                "FAIL",
+                f"model of the active profile is listed but NOT loaded (state: {state}). Load "
+                "it in the local model server; darkroom_ai does not load models by itself.",
+            )
         else:
             problems += 1
             _line("FAIL", "model server answers, but the active profile's model is not listed")
@@ -127,7 +144,7 @@ def _models_test(settings: Settings, names: list[str], skip_vision: bool, as_jso
             print(f"There is no profile named '{name}'.", file=sys.stderr)
             return EXIT_ERROR
         profile = settings.llm.profiles[name]
-        llm = LocalLlmClient(profile)
+        llm = LocalLlmClient(profile, require_loaded=settings.llm.require_loaded)
         print(f"== profile '{name}': {profile.model} (tool mode {profile.tool_mode}) ==")
         try:
             vision = None
@@ -210,7 +227,7 @@ def _chat(settings: Settings, args: argparse.Namespace) -> int:
             return EXIT_ERROR
         photo = selection.active
     print(f"photo: {photo.file_name} | model: {profile.model} | playbook: {args.playbook}")
-    llm = LocalLlmClient(profile)
+    llm = LocalLlmClient(profile, require_loaded=settings.llm.require_loaded)
     try:
         agent = Agent(
             llm,
@@ -259,7 +276,7 @@ def _revert(settings: Settings, photo_path: Path | None) -> int:
         "session(s) would be taken back on its virtual copy. Settings changed by hand in "
         "Lightroom are not touched; the original file is never changed."
     )
-    agreed = AskUser().confirm(
+    agreed = AskUser(lead="This will").confirm(
         "put these settings back to their values from before darkroom_ai's first edit",
         plan.settings,
     )
@@ -288,8 +305,10 @@ def _clean_outputs(settings: Settings) -> int:
     for category, paths in plan.remove.items():
         size = sum(path.stat().st_size for path in paths) / 1_000_000
         print(f"  {category}: {len(paths)} file(s), {size:.0f} MB, in {paths[0].parent}")
+        for path in paths:
+            print(f"      {path.name}")
     details = {category: f"{len(paths)} file(s)" for category, paths in plan.remove.items()}
-    if not AskUser().confirm("remove these intermediate files for good", details):
+    if not AskUser(lead="This will").confirm("remove these intermediate files for good", details):
         print("Nothing was removed.")
         return EXIT_OK
     print(f"Removed {apply_cleanup(plan)} file(s).")
