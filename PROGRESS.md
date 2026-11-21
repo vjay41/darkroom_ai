@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: doctor GPU rule changed; plan shown for the live `darkroom chat` run + Select Subject re-measurement with two models; waiting for the go
+## CURRENT STATE — 2026-11-21: Phase 6: live `darkroom chat` run DONE, edit NOT yet reverted (the user runs `darkroom revert`); Part B waits for Muse + the user's confirmation
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -190,8 +190,27 @@ allocation. Built for it:
 - `gpu.llm_gpu_index` removed from the config and `darkroom.toml` (nothing uses it any more).
 - 305 tests pass, `make quality` clean. `doctor` live: no warnings (no model was loaded at that moment).
 
-Still owed before the Phase 6 gate: a live `darkroom chat` run with a white-balance request on `TEST_2461-41.jpg`, the
-Select Subject re-measurement with both models loaded (plan shown, waiting for the go); `darkroom chat`, `darkroom revert` and MCP over real stdio are
+Live `darkroom chat` run (2026-11-21, `primary`, portrait playbook, `D:\darkroom_test\TEST_2461-41.jpg`, request "Make
+this photo slightly cooler"; session `4b4fad73...`; rule from the user: send requests only when the model is already loaded,
+never rely on JIT loading; the first attempt was stopped because no model was loaded):
+- A NEW virtual copy `AF024C2F-...` was created on the first edit (none existed for this photo); it stays in the catalog.
+- Turn 1 (14.3 s, 411 tokens, 319 thinking): `adjust_white_balance` temperature -10; applied `IncrementalTemperature`
+  0 -> -10 (not clamped; limit 30 per pass); tint not touched. Turn 2 (11.4 s, 320 tokens, 192 thinking): finished.
+  1 pass, 2 turns, 2 previews (138 kB, 139 kB), 31 s.
+- Measured colour balance before -> after: blue_yellow +0.0084 -> -0.0281; green_magenta -0.0051 -> +0.0004; strength
+  0.0099 -> 0.0281; description "no noticeable cast" -> "cast towards blue/cool" (as requested). Side effect: highlights
+  clipped 1.845 % -> 0.463 % (red channel 1.823 % -> 0.392 %); p50 0.553 -> 0.566.
+- The only setting that differs from the master's recorded values is `IncrementalTemperature`. Master's 170 settings and
+  the original SHA-256 unchanged. 1 edit pending on the copy.
+- Full chat output (with the model's summary) is in `logs\chat_run_20261121-102122.txt`; only status lines were read.
+- Model calls were 3-4 times slower than in the earlier runs (11-14 s vs 2-6 s). GPU readings at the time: GPU 0 3.6 GB
+  used, GPU 1 24.25 of 24.58 GB used, i.e. Qwen appears to sit on GPU 1 (RTX 3090), not GPU 0 as intended. Flagged to the
+  user; not changed by the assistant.
+- NOT YET DONE: the user runs `poetry run darkroom revert --photo D:\darkroom_test\TEST_2461-41.jpg`; then the
+  after-revert checks (copy equals the recorded start values, nothing pending, hash).
+
+Still owed before the Phase 6 gate: the revert + checks above; the Select Subject re-measurement with both models loaded
+(Part B; starts only after the user loads Muse and confirms); `darkroom chat`, `darkroom revert` and MCP over real stdio are
 unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
