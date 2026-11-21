@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error cases 1-4 of 5 done (Qwen is UNLOADED right now, the user reloads it); next: case 5 (Photoshop dialog), pip-audit, firewall run
+## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error cases 1-5 done (Photoshop's Preferences dialog is still OPEN; recovery check pending); next: pip-audit, firewall run, message review, README
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -368,7 +368,15 @@ Item 3, live error cases (2026-11-21):
    unchanged, so nothing was loaded on demand. Change asked for by the user and built first: chat (and
    `scripts/agent_run.py`) check the model BEFORE anything touches Lightroom; the plug-in log shows only doctor's two
    pings at that time and no command from the chat attempt. Unit test added (316 tests).
-5 (Photoshop dialog open): pending.
+5. Photoshop with a dialog open (Preferences dialog on screen; one read-only `info` call; the check script never starts
+   Photoshop): `[PS_NOT_REACHABLE] Photoshop is busy and rejected the call (likely a dialog is open).` after 0.3 s; next
+   step: check that Photoshop is running and no dialog is waiting, then retry; details: reason `busy`, COM 0x8001010A.
+   Nothing was opened or changed. A first attempt was INVALID and is not a result: the assistant's own check script lacked
+   the `if __name__ == "__main__"` guard that the spawned worker process needs, so the worker crashed before reaching
+   Photoshop and the 30 s watchdog answered instead (its text, for the record: "Photoshop is open but has not answered
+   for 30 s. Open Photoshop windows: 'Preferences', 'Adobe Photoshop 2026'..."). To improve in the message review: the
+   fast "busy" message could name the open dialog window, as the watchdog message does. Recovery after closing the
+   dialog: pending (the user closes it, the same call is repeated).
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error
