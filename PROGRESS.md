@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 gate ACCEPTED; README committed; Phase 8 plan shown, waiting for the user's go. Nothing pushed; the user decides when.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: list_presets built and run; RAW white-balance bug found and fixed before any RAW edit; waiting for the user's go on RAW step 1 and the OK on the preset guardrail design. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -18,7 +18,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 5 Tool layer + guardrails | GATE ACCEPTED by the user on 2026-11-21, pending the user's visual checks of the mask and the background JPG. `apply_preset` stays unexposed until tested live. |
 | 6 LLM layer + agent | GATE ACCEPTED by the user on 2026-11-21 with the listed deferrals (Muse/fast and the two-model GPU measurement to Phase 8). |
 | 7 Hardening | GATE ACCEPTED by the user on 2026-11-21 |
-| 8 Acceptance | Not started |
+| 8 Acceptance | In progress (see "Phase 8 progress") |
 
 ### Phase 6 (built 2026-11-21)
 User decisions: one model loaded at a time (JIT load / auto-unload if available, otherwise ask the user to switch); LM Studio
@@ -273,6 +273,27 @@ State left behind: virtual copies of `TEST_2459-39` and `TEST_2461-41` (both at 
 7. README (setup, commands, safety rules, limits); `pip install -e .` check in a throwaway venv outside the repo (needs
    the user's OK, since the rule is no second venv).
 8. `replace_background` result note (current edits and crop); `make quality`; PROGRESS.md; commit on `dev`; gate.
+
+### Phase 8 progress (2026-11-21)
+User go with changes: start with the RAW test and `list_presets` (read-only); before any live `apply_preset` show how a
+preset's values are checked against the guardrails (clamp or refuse) and wait for the OK; RAW test only on virtual copies
+of the three RAW files, one step at a time, journal restore verified; the real "y" confirmation test last, when the user
+is at the keyboard. No push yet (the repository is private; 64+ commits on `dev` are local only).
+
+Done so far (read-only in Lightroom; no edit, no virtual copy created):
+- `list_presets` tool built (read-only: name + folder, optional `contains`, `limit`; no internal ids; not in the chat tool
+  list). Live: 393 presets in 40 folders; filter works ("warm": 11 matches). `apply_preset` is still hidden.
+- RAW facts: `RAW_DSC00480/481/482.ARW` are in the catalog, format RAW, 7008 x 4672, process version 15.4, no darkroom_ai
+  copy yet, nothing pending. Their white balance is "As Shot" and Lightroom reports NO number for `Temperature` / `Tint`
+  (null).
+- BUG FOUND by this read-only step, before any RAW edit, and FIXED: the slider code treated an unknown current value as
+  0. A relative white-balance change on such a RAW file (e.g. +500 K) would have been computed from 0, clamped to the
+  range minimum and written as 2000 K, and the undo would have "restored" 0. Now settings whose neutral value is not 0
+  (RAW `Temperature`, `Tint`: `Limit.needs_current`) are refused with GUARDRAIL_REJECTED when Lightroom reports no
+  current value ("Nothing was changed"; next step: give the copy a fixed white balance once). Unit test added
+  (320 tests, `make quality` clean). JPG white balance (relative scale, neutral 0) is not affected.
+- OPEN for the RAW test: how to get a fixed Kelvin value for an "As Shot" RAW copy through the plug-in, and how undo
+  restores "As Shot". To be probed on a RAW virtual copy, one step at a time, with the user's go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes

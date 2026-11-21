@@ -307,6 +307,53 @@ def crop(ctx: ToolContext, args: CropInput) -> Outcome:
 # -- apply_preset ---------------------------------------------------------------------------------
 
 
+class ListPresetsInput(BaseModel):
+    """List Lightroom's develop presets (name and folder). Reads only; changes nothing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    contains: str | None = Field(
+        default=None, description="Only presets whose name or folder contains this text."
+    )
+    limit: int = Field(default=100, ge=1, le=500, description="Most presets to return.")
+
+
+class PresetEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    folder: str
+
+
+class ListPresetsResult(ToolResult):
+    total: int
+    matching: int
+    returned: int
+    presets: tuple[PresetEntry, ...]
+    note: str = ""
+
+
+def list_presets(ctx: ToolContext, args: ListPresetsInput) -> Outcome:
+    presets = ctx.lightroom.list_presets()
+    wanted = (args.contains or "").strip().lower()
+    matching = [
+        p for p in presets if not wanted or wanted in p.name.lower() or wanted in p.folder.lower()
+    ]
+    matching.sort(key=lambda p: (p.folder.lower(), p.name.lower()))
+    shown = matching[: args.limit]
+    note = ""
+    if len(shown) < len(matching):
+        note = f"{len(matching) - len(shown)} more match; narrow the search with `contains`."
+    result = ListPresetsResult(
+        total=len(presets),
+        matching=len(matching),
+        returned=len(shown),
+        presets=tuple(PresetEntry(name=p.name, folder=p.folder) for p in shown),
+        note=note,
+    )
+    return Outcome(result)
+
+
 class ApplyPresetInput(_Input):
     """Apply one of Lightroom's develop presets by its exact name."""
 
@@ -467,6 +514,7 @@ __all__ = [
     "CropInput",
     "EditResult",
     "GetPhotoInfoInput",
+    "ListPresetsInput",
     "UndoInput",
     "adjust_hsl",
     "adjust_lighting",
@@ -475,6 +523,7 @@ __all__ = [
     "apply_preset",
     "crop",
     "get_photo_info",
+    "list_presets",
     "pending_edits",
     "restore_values",
     "undo",

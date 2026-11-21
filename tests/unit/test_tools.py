@@ -92,6 +92,7 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "crop",
         "replace_background",
         "undo",
+        "list_presets",
     )
     assert "run_photoshop_script" not in rig.tools.names  # left out of v1 on purpose
     assert "apply_preset" not in rig.tools.names  # not exposed until tested live
@@ -102,7 +103,8 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
     json.dumps(schemas)  # must be plain JSON
     for schema in schemas:
         assert schema["description"]
-        assert "photo_id" in schema["parameters"]["properties"]
+        if schema["name"] != "list_presets":  # the only tool that is not about one photo
+            assert "photo_id" in schema["parameters"]["properties"]
         assert schema["parameters"]["additionalProperties"] is False
 
 
@@ -572,3 +574,42 @@ def test_revert_goes_back_to_the_original_and_is_not_a_tool(rig: Rig) -> None:
     with pytest.raises(DarkroomError) as caught:
         rig.call("revert", photo_id=MASTER)
     assert caught.value.code is ErrorCode.LLM_BAD_TOOL_CALL
+
+
+def test_list_presets_is_read_only_and_filtered(rig: Rig) -> None:
+    before = len(rig.journal.entries())
+    everything = rig.call("list_presets")
+    assert everything["total"] == everything["matching"] == everything["returned"] > 0
+    assert set(everything["presets"][0]) == {"name", "folder"}  # no internal ids
+    name = everything["presets"][0]["name"]
+    some = rig.call("list_presets", contains=name[:4].upper())
+    assert 0 < some["matching"] <= everything["total"]
+    one = rig.call("list_presets", limit=1)
+    assert one["returned"] == 1
+    if everything["total"] > 1:
+        assert "more match" in one["note"]
+    assert rig.call("list_presets", contains="no-such-preset-xyz")["matching"] == 0
+    assert "apply_preset" not in rig.tools.names  # listing does not expose applying
+    assert all(e.undo is None for e in rig.journal.entries()[before:])
+    assert "create_virtual_copy" not in rig.lightroom.calls
+
+
+def test_raw_white_balance_without_a_current_value_is_refused(tmp_path: Path) -> None:
+    """RAW + 'As Shot': Lightroom reports no Kelvin value. Never treat that as 0."""
+    rig = Rig(tmp_path, file_format="RAW")
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.1)["photo_id"]
+    rig.lightroom.settings[copy_id]["Temperature"] = None
+    rig.lightroom.settings[copy_id]["Tint"] = None
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("adjust_white_balance", photo_id=MASTER, temperature=500)
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert "no current value for temperature" in caught.value.message
+    assert "fixed white balance" in caught.value.next_step
+    assert rig.value(copy_id, "Temperature") is None  # nothing was written
+
+    rig.lightroom.settings[copy_id]["Temperature"] = 5200
+    rig.lightroom.settings[copy_id]["Tint"] = 8
+    result = rig.call("adjust_white_balance", photo_id=MASTER, temperature=500, tint=-3)
+    assert rig.value(copy_id, "Temperature") == 5700
+    assert rig.value(copy_id, "Tint") == 5
+    assert change(result, "temperature")["before"] == 5200

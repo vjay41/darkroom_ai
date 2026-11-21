@@ -60,9 +60,16 @@ def white_balance_limits(guardrails: GuardrailSettings, file_format: str) -> dic
     if file_format.upper() in RAW_FORMATS:
         return {
             "temperature": Limit(
-                "temperature", "Temperature", 2000.0, 50000.0, guardrails.wb_kelvin_per_pass
+                "temperature",
+                "Temperature",
+                2000.0,
+                50000.0,
+                guardrails.wb_kelvin_per_pass,
+                needs_current=True,
             ),
-            "tint": Limit("tint", "Tint", -150.0, 150.0, guardrails.wb_tint_raw_per_pass),
+            "tint": Limit(
+                "tint", "Tint", -150.0, 150.0, guardrails.wb_tint_raw_per_pass, needs_current=True
+            ),
         }
     relative = guardrails.wb_relative_per_pass
     return {

@@ -74,6 +74,12 @@ TOOLS: tuple[Tool, ...] = (
         writes=True,
     ),
     _tool("undo", lightroom_tools.UndoInput, lightroom_tools.undo, writes=True),
+    _tool(
+        "list_presets",
+        lightroom_tools.ListPresetsInput,
+        lightroom_tools.list_presets,
+        writes=False,
+    ),
 )
 
 

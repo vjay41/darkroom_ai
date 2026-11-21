@@ -179,6 +179,23 @@ def apply_slider_changes(
     keys = [limit.key for limit, _ in requests]
     current = ctx.lightroom.get_develop_settings(copy.id, [*keys, "ProcessVersion"])
     check_process_version(current)
+    unknown = [
+        limit.name
+        for limit, _ in requests
+        if limit.needs_current and not isinstance(current.get(limit.key), int | float)
+    ]
+    if unknown:
+        # Never guess: treating an unknown Kelvin value as 0 would set a wildly wrong value.
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"Lightroom reports no current value for {', '.join(unknown)} on this photo (a RAW "
+            "file whose white balance is 'As Shot' has no fixed number), so a relative change "
+            "cannot be worked out. Nothing was changed.",
+            next_step="In Lightroom, give the virtual copy a fixed white balance once (for "
+            "example move the Temp slider slightly or pick a preset such as Daylight), then "
+            "retry.",
+            details={"settings": unknown, "photo_id": copy.id},
+        )
     originals = original_values(ctx, copy.id, {key: current.get(key) for key in keys})
 
     if allow_beyond_total:

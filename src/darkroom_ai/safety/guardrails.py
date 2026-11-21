@@ -24,6 +24,9 @@ class Limit:
     maximum: float
     per_pass: float
     total: float | None = None
+    # True for settings whose neutral value is NOT 0 (e.g. Kelvin temperature of a RAW file): a
+    # relative change needs the real current value and must be refused if it is unknown.
+    needs_current: bool = False
 
 
 class ClampedChange(BaseModel):
