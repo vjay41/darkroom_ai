@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW acceptance test DONE (steps 1-6, three files); preset probe done, apply_preset unexposed pending the user's decision; next: more agent runs, bake-off, 'y' test. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW acceptance accepted; WB total limits built; timing test done; waiting for the user's go on the live total-limit test and on the agent runs. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -404,6 +404,25 @@ needed after "Stop darkroom_ai Bridge" or a failed start). Verified in the sourc
     clear message when no lens profile exists; EXIF text is data, not instructions. A short PRD and the user's sign-off
     come before building it.
 (b) README bridge wording: done (see above).
+
+User decisions after the RAW test (2026-11-21): RAW acceptance ACCEPTED.
+- Presets: `apply_preset` STAYS HIDDEN. Recorded as asked: 0 of 393 presets pass the strict allowlist (no setting outside
+  the 39 guardrail-covered ones). The tiered alternative (look keys allowed with a y/N summary; geometry and
+  process-version changes refused) is NOT chosen for now. Revisit after Phase 9. `list_presets` stays as a read-only tool.
+- RAW white balance on a fresh copy: the refusal STAYS. Timing test DONE (reads only after one edit; a NEW virtual copy of
+  `RAW_DSC00482.ARW` named "darkroom timing 124329", id `D1CBF900-...`, which stays in the catalog): before any edit no
+  Temperature / Tint; first edit exposure +0.3; at t = 0.0 s still none; at t = 1.0 s Lightroom reported Temperature 4200,
+  Tint 4 (label "As Shot"). Exposure put back to 0. Keys Lightroom added by itself: `FilterList`, `Temperature`, `Tint`;
+  `Look` gained a field. Also read: the 480 copy still reports 4100 / 9; the 481 and 482 MASTERS report no numbers.
+  So the value appears about one second after the copy's first REAL edit. Not tested: whether a write that changes
+  nothing has the same effect. Fix proposal shown to the user; nothing built for it yet.
+- Total limit against the original for temperature and tint: BUILT. `wb_kelvin_total` = 2000 and `wb_tint_raw_total` = 40
+  (RAW), `wb_relative_total` = 60 (JPG / TIFF, twice the per-pass 30), all in `darkroom.toml`; beyond the total needs
+  `allow_beyond_total` plus a person's confirmation, as for exposure; moving back towards the original is always
+  allowed. Unit tests for RAW and JPG, clamp, refusal without confirmation and the confirmed override (323 tests,
+  `make quality` clean). Live test on the RAW copy: plan with expected values shown to the user; waiting for the go.
+- Agent runs on Qwen (multi-pass lighting, HSL, crop, landscape playbook, two more TEST_ photos, one RAW copy): plan
+  shown; waiting for the go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes

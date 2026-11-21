@@ -613,3 +613,59 @@ def test_raw_white_balance_without_a_current_value_is_refused(tmp_path: Path) ->
     assert rig.value(copy_id, "Temperature") == 5700
     assert rig.value(copy_id, "Tint") == 5
     assert change(result, "temperature")["before"] == 5200
+
+
+def test_white_balance_total_limit_raw(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, file_format="RAW")
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.1)["photo_id"]
+    rig.lightroom.settings[copy_id]["Temperature"] = 4100
+    rig.lightroom.settings[copy_id]["Tint"] = 9
+
+    first = change(
+        rig.call("adjust_white_balance", photo_id=MASTER, temperature=1000), "temperature"
+    )
+    assert (first["after"], first["limited_by"]) == (5100, [])
+    second = change(
+        rig.call("adjust_white_balance", photo_id=MASTER, temperature=1000), "temperature"
+    )
+    assert (second["after"], second["limited_by"]) == (6100, [])
+    third = rig.call("adjust_white_balance", photo_id=MASTER, temperature=1000)
+    blocked = change(third, "temperature")
+    assert blocked["applied_change"] == 0 and blocked["limited_by"] == ["total"]
+    assert blocked["original"] == 4100 and rig.value(copy_id, "Temperature") == 6100
+    assert "total limit" in third["note"]
+    # Moving back towards the original is always allowed.
+    back = change(
+        rig.call("adjust_white_balance", photo_id=MASTER, temperature=-500), "temperature"
+    )
+    assert back["after"] == 5600
+
+    tint = change(rig.call("adjust_white_balance", photo_id=MASTER, tint=30), "tint")
+    assert tint["after"] == 39
+    tint = change(rig.call("adjust_white_balance", photo_id=MASTER, tint=30), "tint")
+    assert (tint["after"], tint["limited_by"]) == (49, ["total"])  # 9 + 40
+
+    # Beyond the total: only with a person's confirmation.
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("adjust_white_balance", photo_id=MASTER, temperature=1000, allow_beyond_total=True)
+    assert caught.value.code is ErrorCode.CONFIRMATION_REQUIRED
+    assert rig.value(copy_id, "Temperature") == 5600
+
+
+def test_white_balance_total_limit_jpg_and_confirmed_override(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    copy_id = rig.call("adjust_white_balance", photo_id=MASTER, temperature=30)["photo_id"]
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=30)
+    third = change(rig.call("adjust_white_balance", photo_id=MASTER, temperature=30), "temperature")
+    assert third["applied_change"] == 0 and third["limited_by"] == ["total"]
+    assert rig.value(copy_id, "IncrementalTemperature") == 60  # twice the per-pass limit
+    beyond = rig.call(
+        "adjust_white_balance", photo_id=MASTER, temperature=30, allow_beyond_total=True
+    )
+    assert change(beyond, "temperature")["after"] == 90  # a person agreed
+    limits = rig.context.settings.guardrails
+    assert (limits.wb_relative_total, limits.wb_kelvin_total, limits.wb_tint_raw_total) == (
+        60,
+        2000,
+        40,
+    )

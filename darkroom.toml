@@ -59,8 +59,11 @@ exposure_ev_per_pass = 1.5
 exposure_ev_total = 3.0     # going beyond needs an explicit confirmation
 tone_per_pass = 50          # contrast, highlights, shadows, whites, blacks
 wb_relative_per_pass = 30   # JPG/TIFF: Lightroom's relative -100..100 temperature/tint sliders
-wb_kelvin_per_pass = 1000   # RAW: Kelvin (untested)
-wb_tint_raw_per_pass = 30   # RAW (untested)
+wb_relative_total = 60      # JPG/TIFF: total against the original; beyond needs a confirmation
+wb_kelvin_per_pass = 1000   # RAW: Kelvin
+wb_kelvin_total = 2000      # RAW: total against the original; beyond needs a confirmation
+wb_tint_raw_per_pass = 30   # RAW
+wb_tint_raw_total = 40      # RAW: total against the original; beyond needs a confirmation
 hsl_per_pass = 30
 min_crop_fraction = 0.25
 

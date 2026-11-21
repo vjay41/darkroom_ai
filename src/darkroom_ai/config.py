@@ -115,9 +115,14 @@ class GuardrailSettings(_Section):
     # Contrast, highlights, shadows, whites, blacks (Lightroom scale -100..100).
     tone_per_pass: float = Field(default=50.0, gt=0.0, le=100.0)
     # White balance. JPG/TIFF use Lightroom's relative -100..100 sliders; RAW uses Kelvin.
+    # Each has a per-pass limit and a total against the photo's original value; going beyond
+    # the total needs an explicit confirmation (same pattern as exposure).
     wb_relative_per_pass: float = Field(default=30.0, gt=0.0, le=100.0)
-    wb_kelvin_per_pass: float = Field(default=1000.0, gt=0.0, le=10000.0)  # RAW: untested
-    wb_tint_raw_per_pass: float = Field(default=30.0, gt=0.0, le=150.0)  # RAW: untested
+    wb_relative_total: float = Field(default=60.0, gt=0.0, le=200.0)
+    wb_kelvin_per_pass: float = Field(default=1000.0, gt=0.0, le=10000.0)
+    wb_kelvin_total: float = Field(default=2000.0, gt=0.0, le=48000.0)
+    wb_tint_raw_per_pass: float = Field(default=30.0, gt=0.0, le=150.0)
+    wb_tint_raw_total: float = Field(default=40.0, gt=0.0, le=300.0)
     # HSL sliders (Lightroom scale -100..100).
     hsl_per_pass: float = Field(default=30.0, gt=0.0, le=100.0)
     # A crop must keep at least this share of the frame.

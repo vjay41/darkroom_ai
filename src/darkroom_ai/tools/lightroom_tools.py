@@ -173,11 +173,16 @@ class AdjustWhiteBalanceInput(_Input):
     """Change white balance by the given amounts.
 
     JPG/TIFF: both values are on Lightroom's relative -100..100 scale (positive temperature =
-    warmer, positive tint = more magenta). RAW: temperature is in Kelvin (untested).
+    warmer, positive tint = more magenta). RAW: temperature is a change in Kelvin. Values beyond
+    the per-pass or total limits are clamped; the result lists what was applied.
     """
 
     temperature: float | None = None
     tint: float | None = None
+    allow_beyond_total: bool = Field(
+        default=False,
+        description="Go beyond the total limit for this photo. Needs the user's confirmation.",
+    )
 
     @model_validator(mode="after")
     def _something_requested(self) -> Self:
@@ -195,7 +200,11 @@ def adjust_white_balance(ctx: ToolContext, args: AdjustWhiteBalanceInput) -> Out
         if getattr(args, name) is not None
     ]
     return apply_slider_changes(
-        ctx, args.photo_id, requests, history_name="darkroom_ai: white balance"
+        ctx,
+        args.photo_id,
+        requests,
+        history_name="darkroom_ai: white balance",
+        allow_beyond_total=args.allow_beyond_total,
     )
 
 

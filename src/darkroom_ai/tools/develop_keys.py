@@ -65,16 +65,25 @@ def white_balance_limits(guardrails: GuardrailSettings, file_format: str) -> dic
                 2000.0,
                 50000.0,
                 guardrails.wb_kelvin_per_pass,
+                guardrails.wb_kelvin_total,
                 needs_current=True,
             ),
             "tint": Limit(
-                "tint", "Tint", -150.0, 150.0, guardrails.wb_tint_raw_per_pass, needs_current=True
+                "tint",
+                "Tint",
+                -150.0,
+                150.0,
+                guardrails.wb_tint_raw_per_pass,
+                guardrails.wb_tint_raw_total,
+                needs_current=True,
             ),
         }
-    relative = guardrails.wb_relative_per_pass
+    relative, total = guardrails.wb_relative_per_pass, guardrails.wb_relative_total
     return {
-        "temperature": Limit("temperature", "IncrementalTemperature", -100.0, 100.0, relative),
-        "tint": Limit("tint", "IncrementalTint", -100.0, 100.0, relative),
+        "temperature": Limit(
+            "temperature", "IncrementalTemperature", -100.0, 100.0, relative, total
+        ),
+        "tint": Limit("tint", "IncrementalTint", -100.0, 100.0, relative, total),
     }
 
 
