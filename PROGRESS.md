@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: run 5 done, its edit is LEFT IN PLACE on the copy 'darkroom_ai 20261121-134032' of TEST_2457-37.jpg until the user runs darkroom revert. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: runs 1-5 done; run 5 reverted by the user and verified; run 6 (RAW white balance) waits for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -672,6 +672,15 @@ copies only, including a strong "much brighter" request and a white-balance requ
     CURRENT STATE OF THAT COPY: Highlights -25, temperature -10, mode "Custom". NOT undone. The user reverts with
     `darkroom revert --photo D:\darkroom_test\TEST_2457-37.jpg`; then the assistant compares every setting with the
     saved start state (including the mode back to "As Shot").
+  * RUN 5 REVERTED BY THE USER (`darkroom revert`, 3 settings: Highlights2012 0, IncrementalTemperature 0, WhiteBalance
+    "As Shot") and checked read-only by the assistant: all 170 settings of the copy equal the saved start state exactly
+    (Lightroom's own `FilterList` is the only extra key); white-balance mode back to "As Shot"; 1 revert entry in the
+    journal; nothing pending in any session; read-back clean; original file SHA-256 unchanged.
+    One difference on the MASTER: it now reports 171 settings instead of 170, the extra one being an empty
+    `FilterList = {}`; all 170 earlier values are identical. No darkroom_ai journal entry wrote to the master (the
+    plug-in refuses writes to masters). Right after the run the master was still identical. So Lightroom added that
+    empty key to the master by itself at some point afterwards (the same key it adds to copies after their first edit);
+    what triggered it is not established.
   * Runs 6, 7: waiting for the user's go, one at a time. The playbook-versus-none comparison is a separate block
     afterwards.
 
