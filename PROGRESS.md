@@ -1528,3 +1528,9 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   UUIDs; selectMask/setValue(local_*)/invertMask work; undo restores MaskGroupBasedCorrections (MaskInverted, Local*2012 keys;
   stored scale: exposure 0.5 EV -> 0.125, contrast 15 -> 0.15). Hermes judged subject vs inverted background from previews itself.
   Still unverified live: delete_mask, range/gradient masks, the user-prompt path of takeover, starting from a non-Develop module.
+
+## 2026-11-21 - Catalog inventory gap (plug-in 0.8.0)
+- New tools: catalog_summary (read; pages the catalog, counts by camera/lens/ISO band/format/rating/year/folder, says when truncated),
+  scan_folder (read; what an import would add), import_folder (bulk write; CONFIRMATION required with the photo count; uses
+  catalog:addPhoto = "add without moving", nothing on disk is moved/copied; only under photos_root; max 500 per call; not undoable by
+  the undo tool). UNVERIFIED live: all three, addPhoto behaviour, capture_time year parsing on this locale's date format.

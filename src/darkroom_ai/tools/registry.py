@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.errors import DarkroomError, ErrorCode
-from darkroom_ai.tools import app_status, background, lightroom_tools, masks
+from darkroom_ai.tools import app_status, background, catalog_tools, lightroom_tools, masks
 from darkroom_ai.tools.context import Outcome, ToolContext
 
 
@@ -64,6 +64,16 @@ TOOLS: tuple[Tool, ...] = (
         lightroom_tools.ListCatalogPhotosInput,
         lightroom_tools.list_catalog_photos,
         writes=False,
+    ),
+    _tool(
+        "catalog_summary",
+        catalog_tools.CatalogSummaryInput,
+        catalog_tools.catalog_summary,
+        writes=False,
+    ),
+    _tool("scan_folder", catalog_tools.ScanFolderInput, catalog_tools.scan_folder, writes=False),
+    _tool(
+        "import_folder", catalog_tools.ImportFolderInput, catalog_tools.import_folder, writes=True
     ),
     _tool(
         "get_photo_metadata",

@@ -88,6 +88,9 @@ NOT_ABOUT_ONE_PHOTO = {
     "get_selected_photos",
     "find_photo",
     "list_catalog_photos",
+    "catalog_summary",
+    "scan_folder",
+    "import_folder",
     "list_develop_parameters",
 }
 
@@ -105,6 +108,9 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "ensure_apps_running",
         "get_photo_info",
         "list_catalog_photos",
+        "catalog_summary",
+        "scan_folder",
+        "import_folder",
         "get_photo_metadata",
         "get_selected_photos",
         "find_photo",
@@ -1020,3 +1026,25 @@ def test_invert_and_delete_mask(rig: Rig) -> None:
     assert rig.call("invert_mask", photo_id=copy, mask_id=mask_id)["operation"] == "invert"
     assert rig.call("delete_mask", photo_id=copy, mask_id=mask_id)["masks_after"] == 0
     assert rig.call("inspect_masks", photo_id=copy)["masks"] == []
+
+
+def test_catalog_summary_counts_the_catalog(rig: Rig) -> None:
+    got = rig.call("catalog_summary")
+    assert got["total_photos"] == got["summarised"] >= 1 and got["truncated"] is False
+    assert got["cameras"] == {"NIKON CORPORATION NIKON D7500": got["total_photos"]}
+    assert got["iso_bands"] == {"up to 400": got["total_photos"]}
+
+
+def test_import_folder_needs_the_go_ahead(tmp_path: Path) -> None:
+    refused = Rig(tmp_path / "a")
+    assert refused.call("scan_folder", folder="D:\\darkroom_test\\photos")["scan"]["new_count"] == 3
+    with pytest.raises(DarkroomError) as caught:
+        refused.call("import_folder", folder="D:\\darkroom_test\\photos")
+    assert caught.value.code is ErrorCode.CONFIRMATION_REQUIRED
+    assert "import_folder" not in refused.lightroom.calls
+
+    confirmer = AllowAll()
+    allowed = Rig(tmp_path / "b", confirmer=confirmer)
+    got = allowed.call("import_folder", folder="D:\\darkroom_test\\photos", max_files=2)
+    assert got["imported"]["added"] == 2
+    assert "3 photos" not in confirmer.asked[0] and "2 photos" in confirmer.asked[0]

@@ -80,6 +80,30 @@ class CatalogPage(_Result):
     photos: tuple[PhotoMetadata, ...]
 
 
+class FolderScan(_Result):
+    """What a folder would add to the catalog (read only)."""
+
+    folder: str
+    new_count: int
+    new_files: tuple[str, ...] = ()  # the first few only
+    already_in_catalog: int = 0
+    unsupported_files: int = 0
+    truncated: bool = False
+
+
+class ImportFailure(_Result):
+    path: str
+    error: str
+
+
+class FolderImport(_Result):
+    folder: str
+    added: int
+    failed: tuple[ImportFailure, ...] = ()
+    already_in_catalog: int = 0
+    left_for_next_call: int = 0
+
+
 class MaskCreation(_Result):
     """Outcome of asking Lightroom to create a mask (checked by counting masks before and after)."""
 

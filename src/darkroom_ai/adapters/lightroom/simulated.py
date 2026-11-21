@@ -16,6 +16,8 @@ import numpy as np
 from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     ExportedTiff,
+    FolderImport,
+    FolderScan,
     MaskCreation,
     MaskInspection,
     MaskOperation,
@@ -159,6 +161,18 @@ class SimulatedLightroom:
         window = ids[offset : offset + limit]
         photos = tuple(self.get_metadata(pid) for pid in window)
         return CatalogPage(total=len(ids), offset=offset, returned=len(photos), photos=photos)
+
+    def scan_folder(self, folder: str, recursive: bool = False) -> FolderScan:
+        self.calls.append("scan_folder")
+        return FolderScan(
+            folder=folder, new_count=3, new_files=(f"{folder}\\a.jpg",), already_in_catalog=1
+        )
+
+    def import_folder(
+        self, folder: str, recursive: bool = False, max_files: int = 200
+    ) -> FolderImport:
+        self.calls.append("import_folder")
+        return FolderImport(folder=folder, added=min(3, max_files), already_in_catalog=1)
 
     def create_mask(
         self, photo_id: str, mask_type: str, subtype: str | None = None

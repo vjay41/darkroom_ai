@@ -21,6 +21,7 @@ WRITE_COMMANDS = {
     "export_tiff",
     "apply_preset",
     "create_mask",
+    "import_folder",
     "set_mask_values",
     "mask_operation",
 }
@@ -310,6 +311,19 @@ class FakeLightroomPlugin:
             "masks_after": len(masks),
             "accepted": True,
         }
+
+    def _cmd_scan_folder(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "folder": params["folder"],
+            "new_count": 2,
+            "new_files": ["a.jpg", "b.jpg"],
+            "already_in_catalog": 1,
+            "unsupported_files": 0,
+            "truncated": False,
+        }
+
+    def _cmd_import_folder(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"folder": params["folder"], "added": 2, "failed": [], "already_in_catalog": 1}
 
     def _cmd_find_photo(self, params: dict[str, Any]) -> dict[str, Any]:
         wanted = str(params.get("path", "")).lower()

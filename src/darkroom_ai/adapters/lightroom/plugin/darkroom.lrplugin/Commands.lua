@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.7.1"
+local PLUGIN_VERSION = "0.8.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -330,6 +330,98 @@ function Commands.read.list_photos(params, ctx)
 		photos[#photos + 1] = metadata(matches[i].photo)
 	end
 	return { total = #matches, offset = offset, returned = #photos, photos = list(photos) }
+end
+
+-- Folder import. Photos are added "without moving": nothing is copied, moved or changed on disk.
+local IMPORT_EXTENSIONS = {
+	jpg = true, jpeg = true, tif = true, tiff = true, png = true, dng = true, arw = true, nef = true,
+	cr2 = true, cr3 = true, raf = true, orf = true, rw2 = true, heic = true,
+}
+local SCAN_LIMIT = 2000
+
+local function checkedFolder(params, ctx)
+	local folder = params.folder
+	if type(folder) ~= "string" or folder == "" then
+		fail("INVALID_PARAMS", "folder is required")
+	end
+	if LrFileUtils.exists(folder) ~= "directory" then
+		fail("FOLDER_NOT_FOUND", "No such folder: " .. folder)
+	end
+	local root = ctx.config.photos_root
+	if type(root) == "string" and root ~= "" then
+		local normalized, base = normalizePath(folder), normalizePath(root)
+		if normalized ~= base and string.sub(normalized, 1, #base + 1) ~= base .. "\\" then
+			fail("PHOTO_OUTSIDE_ROOT", "Refused: the folder is not under the allowed folder (" .. root .. ")")
+		end
+	end
+	return folder
+end
+
+local function scanFolder(params, ctx)
+	local folder = checkedFolder(params, ctx)
+	local iterator = params.recursive and LrFileUtils.recursiveFiles(folder) or LrFileUtils.files(folder)
+	local newFiles, existing, unsupported, seen = {}, 0, 0, 0
+	for path in iterator do
+		local extension = string.lower(LrPathUtils.extension(path) or "")
+		if IMPORT_EXTENSIONS[extension] then
+			seen = seen + 1
+			if seen > SCAN_LIMIT then
+				break
+			end
+			if ctx.catalog:findPhotoByPath(path) then
+				existing = existing + 1
+			else
+				newFiles[#newFiles + 1] = path
+			end
+		else
+			unsupported = unsupported + 1
+		end
+	end
+	table.sort(newFiles)
+	return { folder = folder, new_files = newFiles, already_in_catalog = existing, unsupported_files = unsupported, truncated = seen > SCAN_LIMIT }
+end
+
+function Commands.read.scan_folder(params, ctx)
+	local result = scanFolder(params, ctx)
+	result.new_count = #result.new_files
+	local shown = {}
+	for i = 1, math.min(#result.new_files, 50) do
+		shown[i] = result.new_files[i]
+	end
+	result.new_files = list(shown)
+	return result
+end
+
+function Commands.write.import_folder(params, ctx)
+	local maxFiles = tonumber(params.max_files) or 200
+	if maxFiles < 1 or maxFiles > 500 then
+		fail("INVALID_PARAMS", "max_files must be 1-500")
+	end
+	local scan = scanFolder(params, ctx)
+	local added, failed = 0, {}
+	local todo = {}
+	for i = 1, math.min(#scan.new_files, maxFiles) do
+		todo[#todo + 1] = scan.new_files[i]
+	end
+	withWrite(ctx, "darkroom_ai: import folder", function()
+		for _, path in ipairs(todo) do
+			local ok, err = LrTasks.pcall(function()
+				ctx.catalog:addPhoto(path)
+			end)
+			if ok then
+				added = added + 1
+			else
+				failed[#failed + 1] = { path = path, error = tostring(err) }
+			end
+		end
+	end)
+	return {
+		folder = scan.folder,
+		added = added,
+		failed = list(failed),
+		already_in_catalog = scan.already_in_catalog,
+		left_for_next_call = #scan.new_files - #todo,
+	}
 end
 
 function Commands.read.get_photo(params, ctx)

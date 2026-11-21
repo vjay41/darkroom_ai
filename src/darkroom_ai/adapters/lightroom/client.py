@@ -21,6 +21,8 @@ from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     CommandList,
     ExportedTiff,
+    FolderImport,
+    FolderScan,
     MaskCreation,
     MaskInspection,
     MaskOperation,
@@ -418,6 +420,18 @@ class LightroomClient:
             timeout_s=self._export_timeout_s,
         )
         return self._typed(PreviewFile, "export_preview", data)
+
+    def scan_folder(self, folder: str, recursive: bool = False) -> FolderScan:
+        data = self.call("scan_folder", {"folder": folder, "recursive": recursive})
+        return self._typed(FolderScan, "scan_folder", data)
+
+    def import_folder(
+        self, folder: str, recursive: bool = False, max_files: int = 200
+    ) -> FolderImport:
+        """Add photos from a folder to the catalog without moving them (a bulk change)."""
+        params = {"folder": folder, "recursive": recursive, "max_files": max_files}
+        data = self.call("import_folder", params, timeout_s=self._export_timeout_s)
+        return self._typed(FolderImport, "import_folder", data)
 
     def create_mask(
         self, photo_id: str, mask_type: str, subtype: str | None = None

@@ -17,6 +17,8 @@ from typing import Any, Protocol
 from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     ExportedTiff,
+    FolderImport,
+    FolderScan,
     MaskCreation,
     MaskInspection,
     MaskOperation,
@@ -97,6 +99,12 @@ class LightroomAdapter(Protocol):
     def export_preview(self, photo_id: str, name: str, long_edge: int = ...) -> PreviewFile: ...
 
     def export_tiff(self, photo_id: str, name: str, color_space: str = ...) -> ExportedTiff: ...
+
+    def scan_folder(self, folder: str, recursive: bool = False) -> FolderScan: ...
+
+    def import_folder(
+        self, folder: str, recursive: bool = False, max_files: int = 200
+    ) -> FolderImport: ...
 
     def create_mask(
         self, photo_id: str, mask_type: str, subtype: str | None = None
