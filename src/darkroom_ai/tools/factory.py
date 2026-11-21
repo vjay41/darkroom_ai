@@ -6,6 +6,7 @@ from darkroom_ai.adapters.lightroom.bridge_file import load_bridge_file
 from darkroom_ai.adapters.lightroom.client import LightroomClient
 from darkroom_ai.adapters.photoshop.client import PhotoshopClient
 from darkroom_ai.adapters.photoshop.masks import PhotoshopSelectSubjectProvider
+from darkroom_ai.adapters.processes import WindowsProcesses
 from darkroom_ai.config import Settings
 from darkroom_ai.imaging.providers import build_face_detector, build_mask_provider
 from darkroom_ai.safety.confirm import Confirmer, DenyAll
@@ -37,6 +38,7 @@ def build_tool_context(
         photoshop=photoshop,
         masks=masks,
         faces=build_face_detector(settings),
+        processes=WindowsProcesses(),
     )
 
 

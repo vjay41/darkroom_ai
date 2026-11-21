@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.errors import DarkroomError, ErrorCode
-from darkroom_ai.tools import background, lightroom_tools
+from darkroom_ai.tools import app_status, background, lightroom_tools
 from darkroom_ai.tools.context import Outcome, ToolContext
 
 
@@ -41,6 +41,18 @@ def _tool(
 
 
 TOOLS: tuple[Tool, ...] = (
+    _tool(
+        "get_app_status",
+        app_status.GetAppStatusInput,
+        app_status.get_app_status,
+        writes=False,
+    ),
+    _tool(
+        "ensure_apps_running",
+        app_status.EnsureAppsRunningInput,
+        app_status.ensure_apps_running,
+        writes=False,
+    ),
     _tool(
         "get_photo_info",
         lightroom_tools.GetPhotoInfoInput,

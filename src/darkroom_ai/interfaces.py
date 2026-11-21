@@ -40,7 +40,16 @@ __all__ = [
     "LightroomAdapter",
     "MaskProvider",
     "PhotoshopAdapter",
+    "ProcessControl",
 ]
+
+
+class ProcessControl(Protocol):
+    """Is an Adobe program running, and start it. Used only for app readiness."""
+
+    def is_running(self, image_name: str) -> bool | None: ...
+
+    def start(self, exe: Path, arguments: list[str] | None = None) -> None: ...
 
 
 class LightroomAdapter(Protocol):

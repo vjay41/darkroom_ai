@@ -104,6 +104,17 @@ class PhotoshopSettings(_Section):
     select_subject_timeout_s: float = Field(default=180.0, gt=0.0, le=1800.0)
 
 
+class AppsSettings(_Section):
+    """Where the Adobe programs are installed (used only by ensure_apps_running to start them)."""
+
+    lightroom_exe: str = r"C:\Program Files\Adobe\Adobe Lightroom Classic\Lightroom.exe"
+    photoshop_exe: str = r"C:\Program Files\Adobe\Adobe Photoshop 2026\Photoshop.exe"
+    lightroom_process: str = "Lightroom.exe"
+    photoshop_process: str = "Photoshop.exe"
+    # Longest wait for an app to start and answer.
+    start_wait_s: float = Field(default=180.0, gt=0.0, le=900.0)
+
+
 class GuardrailSettings(_Section):
     """Limits for edits. Per-pass limits bound one tool call; totals bound the change against
     the photo's original values. Values beyond a limit are clamped and reported."""
@@ -189,6 +200,7 @@ class Settings(_Section):
     agent: AgentSettings = AgentSettings()
     lightroom: LightroomSettings = LightroomSettings()
     photoshop: PhotoshopSettings = PhotoshopSettings()
+    apps: AppsSettings = AppsSettings()
     guardrails: GuardrailSettings = GuardrailSettings()
     masks: MaskSettings = MaskSettings()
     backgrounds: BackgroundSettings = BackgroundSettings()
