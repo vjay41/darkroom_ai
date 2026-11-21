@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent run 1 of 7 done; waiting for the user's go on run 2 ("Make it much brighter"). Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-2 of 7 done (run 2 did not exercise the clamp); waiting for the user's go on the next run. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -531,7 +531,22 @@ copies only, including a strong "much brighter" request and a white-balance requ
     Read-back after the last export: every applied edit still holds. Undo: 1 step; all 170 settings equal the start
     state (Lightroom itself added `FilterList`); master unchanged; SHA-256 unchanged; nothing pending. Summary (657
     characters) in `logs\agent_run_20261121-130429.txt`, not read by the assistant.
-  * Runs 2-7: waiting for the user's go, one at a time.
+  * RUN 2 DONE (portrait playbook, lighting only, `TEST_2462-42.jpg` copy; request "Make it much brighter."):
+    the per-pass clamp was NOT exercised, because the model never asked for a large change.
+    Pass 1 (11.5 s, 1734 tokens, 1552 thinking): exposure +0.4 (requested +0.4, applied +0.4, no limit, empty note).
+    Pass 2 (3.9 s, 516 tokens, 345 thinking): highlights -25. Pass 3 (4.5 s, 628 tokens, 479 thinking): highlights -20
+    (-25 -> -45). Stopped by the 3-pass limit; the model wrote no summary of its own (the 294-character text in
+    `logs\agent_run_20261121-130632.txt` is the program's "Stopped (max passes)" line).
+    Multi-pass WAS used (3 passes). No identical call was repeated. Total exposure applied: +0.4 EV of the 3 EV total.
+    Clipped highlights per measurement: start 0.550 %, after pass 1 3.382 %, after pass 2 2.903 %; after pass 3 not
+    measured (the run ends at the pass limit without a final measurement). p50 0.585 -> 0.657 -> 0.648.
+    Observations: "much brighter" produced only +0.4 EV, the playbook's "small steps" and its p50 ceiling (0.65) pulled
+    the model back and it spent two passes repairing the highlights its own brightening had clipped. Whether that is
+    the wanted behaviour for an explicit "much brighter" is a playbook question for the user.
+    Read-back: every applied edit held. Undo: 3 steps; all 171 settings equal the start state; master and SHA-256
+    unchanged; nothing pending. 3 previews (136-139 kB), 21.8 s.
+  * Run 5 will leave its final edit in place at the user's request (`--pause`; the user reverts with `darkroom revert`).
+  * Runs 3-7: waiting for the user's go, one at a time.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
