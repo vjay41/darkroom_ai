@@ -1,112 +1,73 @@
 # darkroom_ai
 
-A local, offline photo-editing assistant for Windows. A vision model running on this computer
-looks at measurements and a small preview of one photo and edits it through the installed
-Lightroom Classic and Photoshop. darkroom_ai itself makes no internet connections; Lightroom,
-Photoshop and the model server are separate programs.
+A local, offline MCP tool that lets an AI agent (built for the Hermes agent with a local vision model)
+inspect a Lightroom Classic catalog and edit photos on Windows. darkroom_ai itself makes no internet connections:
+it listens on 127.0.0.1 only and talks to Lightroom through its own plug-in. The model, Lightroom and Hermes are
+separate programs.
 
-Scope and design: `PRD.md`. Current state, test evidence and open points: `PROGRESS.md`.
+The agent is the brain; this project is the hands. It exposes about thirty granular tools (read facts, measure a
+photo, set develop parameters, create and adjust masks, apply a preset, undo) and decides nothing about what an
+edit should be. Professional knowledge lives in agent skills (`hermes/skills/`), not in code.
+
+Design and decisions: `PRD.md`. State, test evidence and open points: `docs/PROGRESS.md`.
+Install: `docs/INSTALL.md`. After an Adobe or darkroom_ai update: `docs/UPGRADE.md`. Working in the repo
+as an agent: `AGENTS.md`.
 
 ## Safety rules the program enforces
-- Only loopback (127.0.0.1) connections. A non-local model address is rejected in the config.
-- Originals are never changed. Lightroom edits go to a virtual copy; Photoshop works on copies
-  and writes a NEW PSD and JPG under `outputs\photoshop`. Existing files are never overwritten.
-- Lightroom edits are refused unless the open catalog is the configured one and the photo is in
-  the configured photo folder.
-- Every slider change is clamped (per pass and in total) and reported as requested vs applied.
-- The model can only call the listed tools. It cannot confirm anything for itself, cannot run
-  scripts, and can only undo edits made in its own session.
-- A request is sent to the model only if the model server reports the model as already loaded.
-- Photoshop's Select Subject is used only in Device mode.
+- Loopback only (127.0.0.1). A test fails on any non-local connection or network import.
+- Originals are never overwritten. Edits go to a virtual copy and are journaled with what is needed to undo them.
+- Writes are refused unless the open catalog is the configured, allowlisted one. Develop and test on a dedicated
+  test catalog.
+- Every edit is clamped (per pass and in total) and reported as requested versus applied.
+- Anything destructive, bulk or interactive (a people mask, an import, going past a limit) asks the person first.
+  The agent cannot confirm for itself.
+- Every Adobe call has a timeout and failures use stable error codes with a plain next step.
 
-## Tested with
-Windows 11, Python 3.13, Lightroom Classic 15.2.1, Photoshop 2026 (27.8), LM Studio as the local
-model server. Other versions are untested: a different Lightroom version gives a warning in
-`darkroom doctor`, and an untested Photoshop version is reported as `ADOBE_VERSION_UNSUPPORTED`.
+## What works, honestly
+Tested with Windows 11, Python 3.13, **Lightroom Classic 15.2.1** and Photoshop 2026 (27.8), driven by Hermes with a
+local model through LM Studio. Other Adobe versions give a warning (`get_capabilities`), not a block.
 
-## Setup
-1. Install: Python 3.13, Poetry 2.x and GNU make, then `make install` (into the in-project `.venv`).
-   `make install` and `make audit` download packages or contact a package index; only the
-   running app is offline.
-2. Create `darkroom.local.toml` next to `darkroom.toml` (it is git-ignored):
-   ```toml
-   [lightroom]
-   test_catalog = 'D:\path\to\Your.lrcat'      # the only catalog edits are allowed in
-   test_photos_dir = 'D:\path\to\photo\folder' # only photos below this folder are edited
-   ```
-3. Lightroom: run `poetry run darkroom lightroom setup`, then in Lightroom choose
-   File > Plug-in Manager > Add and pick the folder the command printed. The connection (the
-   "bridge") starts by itself when Lightroom loads the plug-in. File > Plug-in Extras >
-   "Start darkroom_ai Bridge" is only needed after "Stop darkroom_ai Bridge" or if the start
-   failed.
-4. Photoshop: Preferences > Image Processing > "Select Subject and Remove Background" = Device.
-5. Model: see "Model setup" below.
-6. Check: `poetry run darkroom doctor`.
+| Area | State |
+|---|---|
+| Read tools (catalog, metadata, previews, measurements, develop state) | Verified |
+| Develop edits on JPG (lighting, white balance, HSL, crop, any listed parameter), undo | Verified |
+| Masks: gradient, radial, luminance, AI subject/sky/background, people (needs the person to pick) | Verified on the test catalog |
+| Presets (look settings allowed with a summary; crop and process-version changes refused) | Verified |
+| Reliability: 20-cycle soak on the test catalog | 0 failures |
+| RAW/DNG develop writes | Not verified |
+| Colour and depth range masks | Not available through Lightroom's scripting interface |
+| Face detection | Needs a YuNet ONNX file you provide; none is shipped or downloaded |
+| Import a folder into the catalog | Verified (asks first) |
+| Photoshop hand-off (`replace_background`: 16-bit TIFF in, new PSD out) | Present and verified, but outside the v1 scope; other Photoshop tools are not exposed |
 
-## Model setup
-The model runs in a local, OpenAI-compatible model server on this computer (tested: LM Studio at
-`http://127.0.0.1:1234/v1`). The profiles are in `darkroom.toml` under `[llm.profiles.*]`;
-`active_profile` picks one. A profile's address must be a loopback address.
+Known limits: the Lightroom plug-in serves one client at a time; mask tools briefly take over Lightroom's Develop
+view; a virtual copy inside a collapsed stack cannot be shown (expand stacks in the Library module first); Adobe
+versions are frozen until you update one at a time and run `darkroom selftest`.
 
-- Load the model yourself, in the model server, before you use darkroom_ai. The program checks
-  the server's list and refuses with `LLM_MODEL_NOT_LOADED` if the model is not loaded; it never
-  relies on the server loading a model on demand (`require_loaded = true` under `[llm]`).
-- Context length: about 32768 is enough. The default of a large model (for example 128k) only
-  costs GPU memory.
-- GPU: choose the GPU for the model in the model server. Photoshop's Select Subject also needs
-  GPU memory; `darkroom doctor` shows where both run and warns when a GPU that Photoshop uses is
-  short of free memory.
-- The model must accept images (a vision model) and tool calls. `darkroom models test` checks
-  both without touching Lightroom or your photos.
-- Tested live: the `primary` profile only. The `glimmer` and `fast` profiles in `darkroom.toml`
-  are UNTESTED starting values.
+## Quick start
+See `docs/INSTALL.md`. In short: `make install`, create `darkroom.local.toml` with your TEST catalog, run
+`poetry run darkroom deploy --hermes-profile <your Hermes profile folder>` (plans first, asks before each write),
+add the plug-in in Lightroom, restart Hermes, then `poetry run darkroom doctor` and `darkroom selftest`.
 
 ## Commands
 | Command | What it does |
 |---|---|
-| `darkroom doctor` | Checks config, Lightroom, Photoshop, the model and GPU memory. |
-| `darkroom chat "request" [--photo PATH] [--playbook portrait\|landscape]` | Lets the model edit one photo (lighting, white balance, colour, crop). Asks y/N before anything gated. |
-| `darkroom revert [--photo PATH]` | Puts the photo's virtual copy back to its values from before darkroom_ai's first edit. Asks first. Only for you, not for the model. |
-| `darkroom clean-outputs` | Lists and, after y, removes intermediate files (previews, hand-off TIFFs, masks, working copies). Final PSD/JPG results are kept. |
-| `darkroom models test [profile ...]` | Tests a model profile: a synthetic picture, tool calls on a simulated Lightroom, prompt injection. |
-| `darkroom mcp` | Serves the same tools over MCP (stdio). Requests that need a confirmation are refused there. |
-| `darkroom lightroom setup` / `ping` | Writes the plug-in's settings file / checks that the plug-in answers. |
+| `darkroom doctor` | Checks config, Lightroom, Photoshop and GPU memory. |
+| `darkroom selftest [--write]` | Checks each tool group against the installed apps (run after updates). |
+| `darkroom soak --cycles N --yes` | Repeats the real tools on the test catalog and counts failures. |
+| `darkroom connectors [--stop-stale\|--stop-all]` | Lists or stops running MCP connectors. |
+| `darkroom deploy --hermes-profile DIR [--dry-run]` | Connects a Hermes profile; plans first, backs up, asks per write. |
+| `darkroom revert [--photo PATH]` | Puts a photo's copy back to its original values. For you, not the agent. |
+| `darkroom clean-outputs` | Lists and, after a yes, removes intermediate files. |
+| `darkroom mcp` | Serves the tools over MCP (stdio). |
+| `darkroom lightroom setup\|ping` | Writes the plug-in's settings file / checks that the plug-in answers. |
 
-Run them as `poetry run darkroom ...` from the repository.
-
-## Where things go
-- `outputs\photoshop\*_darkroom.psd` / `.jpg`: final results. `outputs\handoff`, `outputs\masks`,
-  `previews`: intermediates. `logs\journal.jsonl`: every action, with what is needed to undo it.
-- All of these folders are git-ignored.
-
-## If something goes wrong
-Every error has a code, a plain message and a next step. The common ones:
-
-| Code | Usual cause |
-|---|---|
-| `LR_NOT_REACHABLE` | Lightroom is closed, the plug-in is disabled or its bridge is not started, or a dialog is waiting. |
-| `LR_WRONG_CATALOG` | A different catalog is open than the configured one. Nothing is changed. |
-| `PS_NOT_REACHABLE` | Photoshop is closed or a dialog is open; the message names the open windows. |
-| `LLM_NOT_REACHABLE` / `LLM_MODEL_NOT_LOADED` | The model server is not running / the model is not loaded. |
-| `GUARDRAIL_REJECTED` | The request is outside a safety rule; the message says which. |
-| `CONFIRMATION_REQUIRED` | The action needs your y/N in `darkroom chat`. |
-
-## Proving it stays offline
-- `make offline-check`: tests that fail on any non-loopback connection or network import.
-- `poetry run python scripts\offline_proof.py [--with-adobe --photo PATH]`: records every address
-  the process touches.
-- `powershell -File scripts\firewall_rules.ps1`: PRINTS Windows Firewall commands that block
-  Python's outbound traffic, for you to apply and remove yourself. darkroom_ai keeps working with
-  the block on. This says nothing about what Lightroom, Photoshop or the model server do.
-
-## Limits and known gaps
-- Tested live with one model profile (`primary`) and two test photos; the `glimmer` and `fast`
-  profiles are untested. See `PROGRESS.md` for what is
-  unit-tested only and what is deferred (other model profiles, RAW files, presets, the ONNX mask
-  backend, face detection).
-- The model's own impression of brightness is unreliable; the playbooks rely on measured numbers.
-- A virtual copy made by darkroom_ai stays in the catalog after a revert.
+Run them as `poetry run darkroom ...`. `make help` lists the make targets.
 
 ## Development
-`make quality` (lint, format check, type check, tests) must pass before every commit. `make help`
-lists all targets. `make audit` runs pip-audit and uses the network; it is not part of `make quality`.
+`make quality` (lint, format check, type check, tests) must pass before every commit. Dependencies are pinned
+exactly and `poetry.lock` is committed. `make audit` uses the network and is not part of `make quality`.
+
+## Licence and credits
+MIT, see `LICENSE`. Mask-handling ideas were ported with attribution from par4987/lightroom-mcp (MIT), see
+`NOTICE`. Not affiliated with Adobe.

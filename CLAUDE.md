@@ -38,6 +38,6 @@ Photoshop 2026 (27.8) on Windows 11. Read PRD.md for scope, architecture, and th
 
 ## Working style
 - Show a plan before building each spike; report what worked, what failed, and what is unverified.
-- Flag contradictions and risks instead of silently choosing. Keep decisions and open threads in PROGRESS.md (updated every phase);
+- Flag contradictions and risks instead of silently choosing. Keep decisions and open threads in docs/PROGRESS.md (updated every phase);
   edit PRD.md section 12 only when one of its open questions is answered.
 - Images you view are sent to Anthropic's API. Prefer numeric checks; view real photos only when needed for visual review.
