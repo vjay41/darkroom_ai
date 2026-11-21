@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7: all live items done, firewall rules removed; message review + README shown as drafts, waiting for the user's approval; then commit and gate
+## CURRENT STATE — 2026-11-21: Phase 7 GATE: report written; `README.new.md` (untracked) waits for the user's go; waiting for "proceed" to Phase 8. Do not push.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -17,7 +17,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
 | 5 Tool layer + guardrails | GATE ACCEPTED by the user on 2026-11-21, pending the user's visual checks of the mask and the background JPG. `apply_preset` stays unexposed until tested live. |
 | 6 LLM layer + agent | GATE ACCEPTED by the user on 2026-11-21 with the listed deferrals (Muse/fast and the two-model GPU measurement to Phase 8). |
-| 7 Hardening | In progress (see "Phase 7 progress") |
+| 7 Hardening | AT THE GATE (2026-11-21), waiting for "proceed"; README waits for the user's go to commit |
 | 8 Acceptance | Not started |
 
 ### Phase 6 (built 2026-11-21)
@@ -407,6 +407,46 @@ Remaining Phase 7 items (2026-11-21): the message review and the README are show
 committed until approved (README draft outside the repository; `README.md` unchanged). Already done earlier in this
 phase: the throwaway-venv install check and the `replace_background` note. `clean-outputs` would now remove 4 files
 (3 previews, 1 mask from the firewall run); left for the user to run.
+
+Message review APPROVED by the user (all seven changes) and applied (2026-11-21):
+1. `TOOL_TIMEOUT` removed (nothing raised it; timeouts surface as LR_/PS_/LLM_NOT_REACHABLE). PRD.md and CLAUDE.md do not
+   list it, so neither file was changed.
+2. `ADOBE_FEATURE_UNAVAILABLE` kept as reserved; nothing raises it yet (noted in `errors.py`).
+3. `LR_NOT_REACHABLE` default next step now mentions File > Plug-in Extras > "Start darkroom_ai Bridge".
+4. `GUARDRAIL_REJECTED` default is neutral ("Read the message above; nothing was changed."); the seven refusals that used
+   the default got their own next step (unknown playbook, colour values, JPEG quality, three "never overwrite" cases,
+   "no change requested", duplicate HSL channel).
+5. `CONFIRMATION_REQUIRED` default message: "This action needs your explicit go-ahead."
+6. `MASK_MODEL_MISSING` next step adds "Nothing is downloaded automatically."
+7. `doctor` warns (does not refuse) when Lightroom is not a 15.2.x version.
+A test for item 7 caught a bug in the first version of the patch (the warning sat between an `if` and its `else`, so
+doctor printed both "writes allowed" and the wrong-catalog failure); fixed before commit. 318 tests, `make quality` clean.
+
+README: the approved draft with the user's additions ("Model setup": context about 32768, choose the GPU in the model
+server, load the model yourself; `glimmer` and `fast` listed as untested; placeholder paths, no personal names) is in
+the repository as `README.new.md`, UNTRACKED and NOT committed. `README.md` is unchanged until the user says go.
+
+### Phase 7 gate report (2026-11-21)
+Done and verified live:
+- Offline proof: audit hook over third-party imports, model tests, MCP, doctor and Lightroom read tools: only 127.0.0.1.
+  Firewall run with outbound traffic of all three Python program paths blocked (block confirmed effective by the user):
+  doctor, offline proof, an agent run with undo, and Select Subject all worked; no network error. Rules removed (count 0).
+- Live error cases: Lightroom closed; plug-in disabled; wrong catalog; model unloaded; Photoshop dialog open (and recovery).
+  Three messages were improved as a result (no listener, doctor's catalog mismatch, Photoshop busy names the windows).
+- MCP over real stdio: simulated Lightroom (in the test suite) and the real Lightroom (list, read, gated call refused).
+- `llm.require_loaded`: no request unless the model is reported loaded; chat checks it before touching Lightroom.
+- `darkroom clean-outputs` run by the user (44 files removed, finals kept). `darkroom revert` run by the user earlier.
+- pip-audit (one-off): no known vulnerabilities in the 74 installed packages; the `ml` extra is not installed/audited.
+- Throwaway-venv install check (`--no-deps`): entry point registered; folder deleted.
+- Tracked files that could hold secrets: none found.
+Unit-tested only: the improved Photoshop "busy" text; doctor's catalog-mismatch FAIL line and Lightroom version warning;
+"plug-in enabled but bridge stopped"; clean-outputs rules for unusual file names; the reworded guardrail next steps.
+Not proven: that Lightroom, Photoshop or LM Studio themselves make no connections (they were never blocked); asyncio's
+own connect path is not seen by the audit hook; the error codes that only unit tests trigger (11 of 20).
+Open / carried to Phase 8: `glimmer` and `fast` profiles; Select Subject with two models loaded; RAW acceptance test;
+`list_presets` + live `apply_preset`; ONNX mask backend and YuNet (deferred by the user); playbook ranges untuned;
+a gated action confirmed with a real "y" in chat; HSL / crop / landscape playbook through the agent.
+Waiting for: the user's go to replace `README.md` with `README.new.md`; the user's "proceed" for Phase 8.
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error

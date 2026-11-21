@@ -15,7 +15,7 @@ from fakes import InMemoryJournal
 def _use(journal: ActionJournal) -> None:
     """Code under test depends on the Protocol only; both implementations must fit it."""
     journal.record("adjust_lighting", {"exposure": 0.4}, undo={"snapshot": "before-1"})
-    journal.record("crop", {"aspect": "4x5"}, status="error", error={"code": "TOOL_TIMEOUT"})
+    journal.record("crop", {"aspect": "4x5"}, status="error", error={"code": "LR_NOT_REACHABLE"})
 
 
 @pytest.mark.parametrize("kind", ["jsonl", "memory"])
@@ -32,7 +32,7 @@ def test_record_and_read_back(kind: str, tmp_path: Path) -> None:
     assert first.undo == {"snapshot": "before-1"}
     assert first.undoable
     assert second.status == "error"
-    assert second.error == {"code": "TOOL_TIMEOUT"}
+    assert second.error == {"code": "LR_NOT_REACHABLE"}
     assert not second.undoable
     assert first.id != second.id
 

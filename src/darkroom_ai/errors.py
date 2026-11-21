@@ -37,7 +37,6 @@ class ErrorCode(StrEnum):
     MASK_FAILED = "MASK_FAILED"
     FACE_MODEL_MISSING = "FACE_MODEL_MISSING"
     IMAGE_UNREADABLE = "IMAGE_UNREADABLE"
-    TOOL_TIMEOUT = "TOOL_TIMEOUT"
 
 
 # code -> (default message, default next step)
@@ -45,7 +44,8 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
     ErrorCode.LR_NOT_REACHABLE: (
         "Lightroom Classic did not answer on its local plugin connection.",
         "Check that Lightroom Classic is open, the darkroom plugin is enabled in the Plug-in "
-        "Manager, and no dialog is waiting (likely candidates: sign-in, trial or license "
+        'Manager, its connection is started (File > Plug-in Extras > "Start darkroom_ai '
+        'Bridge"), and no dialog is waiting (likely candidates: sign-in, trial or license '
         "prompts). Then retry.",
     ),
     ErrorCode.PS_NOT_REACHABLE: (
@@ -53,6 +53,8 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "Check that Photoshop is running and no dialog is waiting (likely candidates: sign-in, "
         "trial or license prompts, or an open modal dialog). Then retry.",
     ),
+    # Reserved (named in the project rules). Nothing raises it yet: no Adobe response has been
+    # observed that clearly means "feature disabled".
     ErrorCode.ADOBE_FEATURE_UNAVAILABLE: (
         "The Adobe app reports that a required feature is disabled.",
         "This is likely a license or trial issue inside the Adobe app. Fix it in the Adobe app, "
@@ -113,17 +115,17 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "darkroom_ai only talks to this computer. Use 127.0.0.1, localhost or ::1.",
     ),
     ErrorCode.GUARDRAIL_REJECTED: (
-        "The requested edit is outside the allowed limits.",
-        "Use a smaller change, or adjust the limits in the [guardrails] section of darkroom.toml.",
+        "The request is outside a safety rule.",
+        "Read the message above; nothing was changed.",
     ),
     ErrorCode.CONFIRMATION_REQUIRED: (
-        "This action is destructive or affects many photos and needs your explicit go-ahead.",
+        "This action needs your explicit go-ahead.",
         "Review the plan that was shown and confirm it to continue.",
     ),
     ErrorCode.MASK_MODEL_MISSING: (
         "The local mask model is not available.",
-        "Install the ml extra (`make install-ml`) and set the path of your ONNX model file in "
-        "darkroom.toml.",
+        "Install the ml extra (`make install-ml`) and set the path of your own ONNX model file "
+        "in darkroom.toml. Nothing is downloaded automatically.",
     ),
     ErrorCode.MASK_FAILED: (
         "The subject mask could not be created.",
@@ -138,10 +140,6 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
     ErrorCode.IMAGE_UNREADABLE: (
         "The image file could not be read.",
         "Check that the file exists and is a JPG, PNG, TIFF or supported RAW file.",
-    ),
-    ErrorCode.TOOL_TIMEOUT: (
-        "The operation did not finish in time.",
-        "Check that the app involved is responsive and has no dialog open, then retry.",
     ),
 }
 

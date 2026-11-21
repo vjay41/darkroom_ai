@@ -38,7 +38,9 @@ class PhotoshopSelectSubjectProvider:
     def subject_mask(self, image_path: Path, out_path: Path) -> MaskResult:
         if out_path.exists():
             raise DarkroomError(
-                ErrorCode.GUARDRAIL_REJECTED, f"Refusing to overwrite an existing file: {out_path}"
+                ErrorCode.GUARDRAIL_REJECTED,
+                f"Refusing to overwrite an existing file: {out_path}",
+                next_step="Rename or remove that file yourself; files are never overwritten.",
             )
         photoshop = self._photoshop
         mode = photoshop.select_subject_mode()

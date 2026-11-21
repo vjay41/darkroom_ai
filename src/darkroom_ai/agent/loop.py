@@ -103,6 +103,7 @@ def load_playbook(name: str) -> str:
         raise DarkroomError(
             ErrorCode.GUARDRAIL_REJECTED,
             f"There is no playbook named '{name}'. Available: {', '.join(PLAYBOOKS)}.",
+            next_step="Use one of the listed playbooks (--playbook).",
         )
     return (PLAYBOOK_DIR / f"{name}.md").read_text(encoding="utf-8")
 

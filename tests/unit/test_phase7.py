@@ -213,3 +213,83 @@ def test_photoshop_busy_error_names_the_open_windows(tmp_path: Path) -> None:
         assert "'Preferences', 'Adobe Photoshop 2026'" in caught.value.message
         assert "close that dialog" in caught.value.next_step
         assert caught.value.details["reason"] == "busy"
+
+
+def test_reviewed_error_texts() -> None:
+    from darkroom_ai.errors import DarkroomError, ErrorCode
+
+    assert "TOOL_TIMEOUT" not in ErrorCode.__members__
+    assert "ADOBE_FEATURE_UNAVAILABLE" in ErrorCode.__members__  # reserved, not raised yet
+    assert "Start darkroom_ai Bridge" in DarkroomError(ErrorCode.LR_NOT_REACHABLE).next_step
+    guardrail = DarkroomError(ErrorCode.GUARDRAIL_REJECTED)
+    assert "smaller change" not in guardrail.next_step
+    assert "nothing was changed" in guardrail.next_step
+    assert "destructive" not in DarkroomError(ErrorCode.CONFIRMATION_REQUIRED).message
+    assert (
+        "Nothing is downloaded automatically"
+        in DarkroomError(ErrorCode.MASK_MODEL_MISSING).next_step
+    )
+    for code in ErrorCode:
+        error = DarkroomError(code)
+        assert error.message and error.next_step
+
+
+def test_guardrail_refusals_have_their_own_next_step(tmp_path: Path) -> None:
+    from darkroom_ai.agent.loop import load_playbook
+    from darkroom_ai.errors import DarkroomError
+
+    with pytest.raises(DarkroomError) as caught:
+        load_playbook("wedding")
+    assert "--playbook" in caught.value.next_step
+
+
+def test_doctor_warns_about_an_untested_lightroom_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from types import SimpleNamespace
+
+    from darkroom_ai.gpu import GpuReport
+
+    class FakeLightroom:
+        def __init__(self, version: str) -> None:
+            self.version = version
+
+        def __enter__(self) -> FakeLightroom:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            pass
+
+        def ping(self) -> Any:
+            return SimpleNamespace(
+                lightroom_version=self.version,
+                plugin_version="0.3.0",
+                writes_allowed=True,
+                catalog_path="c",
+                configured_catalog="c",
+            )
+
+    class FakeLlm:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def models(self) -> list[str]:
+            return ["x"]
+
+        def model_state(self) -> str:
+            return "loaded"
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(cli, "load_bridge_file", lambda: None)
+    monkeypatch.setattr(cli, "photoshop_windows", list)
+    monkeypatch.setattr(cli, "LocalLlmClient", FakeLlm)
+    monkeypatch.setattr(cli, "read_gpus", lambda: GpuReport((), (), error="no nvidia-smi"))
+    for version, warned in (("15.2.1", False), ("16.0", True)):
+        monkeypatch.setattr(
+            cli.LightroomClient, "from_settings", lambda *_, v=version: FakeLightroom(v)
+        )
+        assert cli._doctor(settings_in(tmp_path)) == cli.EXIT_OK
+        out = capsys.readouterr().out
+        assert ("has not been tested with darkroom_ai" in out) is warned

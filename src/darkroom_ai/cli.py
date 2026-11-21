@@ -37,6 +37,7 @@ from darkroom_ai.tools.factory import build_tool_context
 from darkroom_ai.tools.registry import ToolRegistry
 from darkroom_ai.tools.revert import apply_revert, plan_revert
 
+TESTED_LIGHTROOM = ("15.2",)  # major.minor versions the plug-in has been run against
 EXIT_OK = 0
 EXIT_PROBLEM = 1
 EXIT_ERROR = 2
@@ -87,6 +88,14 @@ def _doctor(settings: Settings) -> int:
                 f"       configured: {info.configured_catalog}\n"
                 "       Open the configured catalog in Lightroom, or change lightroom.test_catalog "
                 "and run `darkroom lightroom setup` again.",
+            )
+        if not info.lightroom_version.startswith(TESTED_LIGHTROOM):
+            # A warning only: an untested version is not refused.
+            _line(
+                "warn",
+                f"Lightroom {info.lightroom_version} has not been tested with darkroom_ai "
+                f"(tested: {', '.join(v + '.x' for v in TESTED_LIGHTROOM)}). It may work; check "
+                "results carefully.",
             )
     except DarkroomError as exc:
         problems += 1

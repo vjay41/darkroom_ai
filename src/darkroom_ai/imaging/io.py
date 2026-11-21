@@ -65,6 +65,7 @@ def save_mask_png(mask: Mask, path: Path) -> Path:
         raise DarkroomError(
             ErrorCode.GUARDRAIL_REJECTED,
             f"Refusing to overwrite an existing file: {path}",
+            next_step="Rename or remove that file yourself; files are never overwritten.",
             details={"path": str(path)},
         )
     path.parent.mkdir(parents=True, exist_ok=True)

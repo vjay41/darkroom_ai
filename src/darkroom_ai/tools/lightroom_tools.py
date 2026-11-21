@@ -236,6 +236,7 @@ def adjust_hsl(ctx: ToolContext, args: AdjustHslInput) -> Outcome:
                 raise DarkroomError(
                     ErrorCode.GUARDRAIL_REJECTED,
                     f"{channel} of {adjustment.color} is given more than once.",
+                    next_step="List each colour and channel only once.",
                 )
             seen.add(limit.key)
             requests.append((limit, float(value)))

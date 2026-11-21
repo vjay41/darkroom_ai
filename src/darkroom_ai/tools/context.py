@@ -170,7 +170,11 @@ def apply_slider_changes(
     Shared by all slider edit tools.
     """
     if not requests:
-        raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, "No change was requested.")
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            "No change was requested.",
+            next_step="Give at least one value to change.",
+        )
     copy, created = working_copy(ctx, photo_id)
     keys = [limit.key for limit, _ in requests]
     current = ctx.lightroom.get_develop_settings(copy.id, [*keys, "ProcessVersion"])

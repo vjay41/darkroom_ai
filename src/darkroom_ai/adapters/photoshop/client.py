@@ -242,7 +242,11 @@ class PhotoshopClient:
     ) -> None:
         """Add a new bottom layer filled with one colour (the new background)."""
         if not all(0 <= value <= 255 for value in rgb):
-            raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, f"Colour values must be 0-255: {rgb}")
+            raise DarkroomError(
+                ErrorCode.GUARDRAIL_REJECTED,
+                f"Colour values must be 0-255: {rgb}",
+                next_step="Give red, green and blue as whole numbers from 0 to 255.",
+            )
         self.run_script(
             read_jsx("add_fill_layer_below.jsx"),
             document=path,
@@ -269,7 +273,11 @@ class PhotoshopClient:
     def save_jpg(self, path: Path, out_path: Path | None = None, quality: int = 10) -> Path:
         """Save a flattened JPEG next to the working copy. Never overwrites (new name chosen)."""
         if not 0 <= quality <= 12:
-            raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, "JPEG quality must be 0-12.")
+            raise DarkroomError(
+                ErrorCode.GUARDRAIL_REJECTED,
+                "JPEG quality must be 0-12.",
+                next_step="Use a quality from 0 (smallest file) to 12 (best).",
+            )
         resolved = self._inside_work_dir(path)
         wanted = out_path or resolved.with_name(f"{resolved.stem}_darkroom.jpg")
         target = unique_path(self._inside_work_dir(wanted))
@@ -289,7 +297,9 @@ class PhotoshopClient:
         target = self._inside_work_dir(out_png)
         if target.exists():
             raise DarkroomError(
-                ErrorCode.GUARDRAIL_REJECTED, f"Refusing to overwrite an existing file: {target}"
+                ErrorCode.GUARDRAIL_REJECTED,
+                f"Refusing to overwrite an existing file: {target}",
+                next_step="Rename or remove that file yourself; files are never overwritten.",
             )
         try:
             return self.run_script(
