@@ -1202,22 +1202,41 @@ class FinishesThePeopleMask:
 
 def test_people_mask_is_handed_to_the_person_and_then_checked(tmp_path: Path) -> None:
     rig = Rig(tmp_path)
-    rig.lightroom.refused_mask_subtypes.add("people")
     person = FinishesThePeopleMask(rig)
     rig.context.confirmer = person  # type: ignore[assignment]
     got = rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="people")
     assert got["creation"]["created"] is True and len(got["masks"]) == 1
     assert "Create Mask" in person.asked[0]
-    assert "finished it in Lightroom" in got["note"]
+    assert got["mask_id"] == "p2"
+    assert "The person made the people mask" in got["note"]
+    assert "create_mask" not in rig.lightroom.calls  # Lightroom's own call is not used for people
 
 
-def test_people_mask_without_the_person_says_what_to_do(tmp_path: Path) -> None:
+def test_people_mask_declined_changes_nothing(tmp_path: Path) -> None:
     rig = Rig(tmp_path)
-    rig.lightroom.refused_mask_subtypes.add("people")
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="people")
+    assert caught.value.code is ErrorCode.CONFIRMATION_REQUIRED
+    assert rig.call("list_masks", photo_id=MASTER)["count"] == 0
+
+
+class SaysYesButDoesNothing:
+    def confirm(self, action: str, details: Any) -> bool:
+        return True
+
+
+def test_people_mask_that_never_appears_says_what_to_do(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.context.confirmer = SaysYesButDoesNothing()  # type: ignore[assignment]
     with pytest.raises(DarkroomError) as caught:
         rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="people")
     assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
     assert "Create Mask" in caught.value.next_step
+
+
+def test_list_masks_explains_the_stored_scale(rig: Rig) -> None:
+    rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="subject")
+    assert "slider EV / 4" in rig.call("list_masks", photo_id=MASTER)["note"]
 
 
 def test_list_develop_parameters_names_the_readable_lens_profile_settings(rig: Rig) -> None:

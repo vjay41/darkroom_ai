@@ -1656,3 +1656,15 @@ Built (Python only; src/darkroom_ai/runtime.py):
 - Consequence to remember: editing any .py under src/darkroom_ai while a connector runs makes it stale; restart it before the next live test.
 - Working rule for me: every live-test prompt starts with get_app_status and reports connector.running_code; I check it before reading results.
 - 344 tests pass on Linux (+1 known Windows-path failure), ruff and mypy strict clean.
+
+### Live pass 2026-11-21 19:15-19:21 - hand-built masks (new connector: state current, running_code == code_on_disk, pid 42000)
+- PASSED: linear gradient (start 0.5/0.15, end 0.5/0.45), radial gradient (center 0.5/0.55, radius 0.2/0.25) and luminance range
+  (LumRange "0.55 0.65 0.95 1.0") were written exactly as requested, read back with the stored geometry, survived ~10 s, took
+  set_mask_adjustments, and were deleted (count back to 0). Sky (SDK route) also worked. Lens profile on/off round-trips; Name/Filename stay
+  null with the toggle on (Lightroom found no profile for this D7500 JPG): the toggle alone applies nothing. Stack of old connectors gone.
+- 0.3 EV is stored as LocalExposure2012 0.075 (EV / 4); known scale (earlier: 0.5 EV -> 0.125). Not a bug; list_masks note now says so.
+  list_masks' local_adjustments lagged the full MaskGroupBasedCorrections read once or twice (first read 0, later 0.075): trust the full read.
+- People: the flow ran as built but failed: SDK call waited 25 s, THEN the approval prompt appeared (19:20:34), answered at 19:20:39, then the
+  12 s wait was too short / the person had not finished. Redesign (this commit): no SDK call for people; ask first, wait up to 60 s for the mask,
+  report its id. UNVERIFIED live.
+- Unverified: luminance-range semantics and gradient direction at a visible strength (0.3 EV is too weak to see); colour-range refusal text; people.

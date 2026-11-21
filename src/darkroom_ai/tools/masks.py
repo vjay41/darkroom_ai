@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from darkroom_ai.adapters.lightroom.models import MaskCreation, MaskValues
 from darkroom_ai.errors import DarkroomError, ErrorCode
+from darkroom_ai.safety.confirm import require_confirmation
 from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult, resolve_copy, working_copy
 from darkroom_ai.tools.takeover import run_with_takeover, takeover_note
 
@@ -29,7 +30,8 @@ RANGE_SUBTYPES = ("color", "luminance", "depth")
 MAX_RAW_CHARS = 4000
 READBACK_WAIT_S = 6.0
 READBACK_POLL_S = 0.5
-PEOPLE_WAIT_S = 12.0
+PEOPLE_POLL_S = 1.0
+PEOPLE_WAIT_S = 60.0  # Lightroom's person model needs several seconds after Create Mask
 _sleep = time.sleep
 
 Point = tuple[float, float]
@@ -117,7 +119,13 @@ def list_masks(ctx: ToolContext, args: ListMasksInput) -> Outcome:
     copy = resolve_copy(ctx, args.photo_id)
     raw = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY])
     masks = summarize_masks(raw.get(MASKS_KEY))
-    note = "" if masks else "This photo has no masks."
+    note = (
+        "This photo has no masks."
+        if not masks
+        else "Stored Local*2012 values use Lightroom's internal scale, not slider units: "
+        "LocalExposure2012 is the slider EV / 4 (0.3 EV is stored as 0.075), contrast-type "
+        "values are slider / 100. LocalExposure (no 2012) is a legacy key and stays 0."
+    )
     return Outcome(ListMasksResult(photo_id=copy.id, count=len(masks), masks=masks, note=note))
 
 
@@ -133,10 +141,12 @@ class CreateMaskInput(BaseModel):
     - mask_type 'rangeMask' with subtype 'luminance': give luminance_range = four brightness
       values 0-1 in rising order (a, b, c, d): the mask ramps in from a to b, is full from b to c
       and ramps out from c to d (0, 0, 1, 1 = the whole tonal range).
-    - mask_type 'aiSelection' with subtype subject, sky, background, objects, landscape or people
-      (people: Lightroom needs the person chosen and 'Create Mask' pressed in its panel; the
-      tool asks the person to do that). Lightroom switches to Develop while this runs; the person
-      should not click in Lightroom meanwhile.
+    - mask_type 'aiSelection' with subtype subject, sky, background, objects or landscape.
+      Lightroom switches to Develop while this runs; the person should not click in Lightroom
+      meanwhile.
+    - mask_type 'aiSelection' with subtype 'people': Lightroom only makes it after a person is
+      chosen and 'Create Mask' is pressed in its panel, so the tool asks the person to do that,
+      then waits up to a minute for the mask and checks it.
     - rangeMask color or depth cannot be created automatically yet.
     Undo with the undo tool."""
 
@@ -362,6 +372,31 @@ def _create_written(
         )
     parts = found.get("CorrectionMasks")
     stored_part = parts[0] if isinstance(parts, list) and parts else None
+    return _created_outcome(
+        ctx,
+        photo_id,
+        created,
+        previous,
+        stored,
+        stored_part if isinstance(stored_part, dict) else None,
+        waited,
+        {"photo_id": photo_id, "mask_type": args.mask_type, "subtype": args.subtype},
+        "Mask written and read back from the photo's settings.",
+    )
+
+
+def _created_outcome(
+    ctx: ToolContext,
+    photo_id: str,
+    created: bool,
+    previous: list[Any],
+    stored: list[Any],
+    stored_part: dict[str, Any] | None,
+    waited: float,
+    applied: dict[str, Any],
+    how: str,
+) -> Outcome:
+    """Result for a mask that is now in the photo's settings: ask Lightroom for its id."""
     mask_id: str | None = None
     note = ""
     try:
@@ -385,42 +420,55 @@ def _create_written(
         ),
         masks=summarize_masks(stored),
         mask_id=mask_id,
-        stored=stored_part if isinstance(stored_part, dict) else None,
-        note="Mask written and read back from the photo's settings. It has no adjustments yet: "
-        "use set_mask_adjustments with this mask_id (call inspect_masks if mask_id is empty)."
-        + note,
+        stored=stored_part,
+        note=f"{how} It has no adjustments yet: use set_mask_adjustments with this mask_id "
+        f"(call inspect_masks if mask_id is empty).{note}",
     )
     return Outcome(
-        result,
-        applied={"photo_id": photo_id, "mask_type": args.mask_type, "subtype": args.subtype},
-        undo={"photo_id": photo_id, "settings": {MASKS_KEY: previous}},
+        result, applied=applied, undo={"photo_id": photo_id, "settings": {MASKS_KEY: previous}}
     )
 
 
-def _finish_people(
-    ctx: ToolContext, photo_id: str, previous_count: int, creation: MaskCreation
-) -> MaskCreation:
-    """Lightroom shows its person list and waits; ask the person to finish it, then re-count."""
-    confirmed = ctx.confirmer.confirm(
-        "finish the people mask in Lightroom: choose the person, tick the parts you want and "
-        "press 'Create Mask' in Lightroom's Masking panel, then answer here",
+def _create_people(ctx: ToolContext, photo_id: str, created: bool) -> Outcome:
+    """Lightroom makes a people mask only after a person is chosen and 'Create Mask' is pressed in
+    its panel, so the person does that step; the tool waits for the mask and checks it."""
+    previous = _stored_masks(ctx, photo_id)
+    require_confirmation(
+        ctx.confirmer,
+        "make a people mask: in Lightroom's Masking panel choose Select People, pick the person, "
+        "tick the parts you want and press 'Create Mask' (Return). Answer here once the mask "
+        "shows in Lightroom (or right away; the tool then waits up to a minute for it)",
         {"photo_id": photo_id},
     )
-    if not confirmed:
-        return creation
     waited = 0.0
     while True:
-        count = len(_stored_masks(ctx, photo_id))
-        if count > previous_count or waited >= PEOPLE_WAIT_S:
+        stored = _stored_masks(ctx, photo_id)
+        if len(stored) > len(previous) or waited >= PEOPLE_WAIT_S:
             break
-        _sleep(READBACK_POLL_S)
-        waited += READBACK_POLL_S
-    return MaskCreation(
-        created=count > previous_count,
-        masks_before=previous_count,
-        masks_after=count,
-        waited_s=creation.waited_s + waited,
-        mask_id=None,
+        _sleep(PEOPLE_POLL_S)
+        waited += PEOPLE_POLL_S
+    if len(stored) <= len(previous):
+        raise DarkroomError(
+            ErrorCode.LR_COMMAND_FAILED,
+            f"No people mask appeared within {waited:g} s of your go-ahead (masks: "
+            f"{len(previous)} before, {len(stored)} now). Nothing was changed.",
+            next_step="In Lightroom's Masking panel choose Select People, pick the person and "
+            "press 'Create Mask', then call inspect_masks (or this tool again).",
+            details={"masks_before": len(previous)},
+        )
+    last = stored[-1]
+    parts = last.get("CorrectionMasks") if isinstance(last, dict) else None
+    part = parts[0] if isinstance(parts, list) and parts and isinstance(parts[0], dict) else None
+    return _created_outcome(
+        ctx,
+        photo_id,
+        created,
+        previous,
+        stored,
+        part,
+        waited,
+        {"photo_id": photo_id, "mask_type": "aiSelection", "subtype": "people"},
+        "The person made the people mask in Lightroom; it is read back from the photo's settings.",
     )
 
 
@@ -428,6 +476,8 @@ def create_mask(ctx: ToolContext, args: CreateMaskInput) -> Outcome:
     copy, created = working_copy(ctx, args.photo_id)
     if args.is_written:
         return _create_written(ctx, args, copy.id, created)
+    if args.mask_type == "aiSelection" and args.subtype == "people":
+        return _create_people(ctx, copy.id, created)
     before = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY]).get(MASKS_KEY)
     creation, waited = run_with_takeover(
         ctx,
@@ -435,23 +485,12 @@ def create_mask(ctx: ToolContext, args: CreateMaskInput) -> Outcome:
         lambda: ctx.lightroom.create_mask(copy.id, args.mask_type, args.subtype),
         what="create mask",
     )
-    handed_over = False
-    if not creation.created and args.subtype == "people":
-        creation = _finish_people(
-            ctx, copy.id, len(before) if isinstance(before, list) else 0, creation
-        )
-        handed_over = True
     if not creation.created:
         if args.subtype in ("color", "depth"):
             next_step = (
                 "Colour and depth range masks cannot be created automatically yet: Lightroom's "
                 "call only arms the tool and waits for a person to click a sample. Use a "
                 "luminance range, a gradient or an AI mask instead."
-            )
-        elif args.subtype == "people":
-            next_step = (
-                "Lightroom needs the person chosen and 'Create Mask' pressed in its Masking "
-                "panel. Do that, then call inspect_masks."
             )
         else:
             next_step = (
@@ -475,9 +514,7 @@ def create_mask(ctx: ToolContext, args: CreateMaskInput) -> Outcome:
         masks=summarize_masks(after),
         mask_id=creation.mask_id,
         note="Mask created and selected. It has no adjustments yet: use set_mask_adjustments "
-        "with this mask_id (call inspect_masks if mask_id is empty)."
-        + (" The person finished it in Lightroom." if handed_over else "")
-        + takeover_note(waited),
+        "with this mask_id (call inspect_masks if mask_id is empty)." + takeover_note(waited),
     )
     return Outcome(
         result,
