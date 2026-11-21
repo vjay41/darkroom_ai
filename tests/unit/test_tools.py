@@ -81,7 +81,7 @@ def rig(tmp_path: Path) -> Rig:
     return Rig(tmp_path)
 
 
-NOT_ABOUT_ONE_PHOTO = {"list_presets", "get_selected_photos", "find_photo"}
+NOT_ABOUT_ONE_PHOTO = {"list_presets", "get_selected_photos", "find_photo", "list_catalog_photos"}
 
 
 def change(result: dict[str, Any], name: str) -> dict[str, Any]:
@@ -94,6 +94,8 @@ def change(result: dict[str, Any], name: str) -> dict[str, Any]:
 def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
     assert rig.tools.names == (
         "get_photo_info",
+        "list_catalog_photos",
+        "get_photo_metadata",
         "get_selected_photos",
         "find_photo",
         "get_preview",
@@ -928,3 +930,14 @@ def test_selected_photos_and_find_photo_are_read_only(rig: Rig) -> None:
     assert "photos" in selected and "note" in selected
     missing = rig.call("find_photo", path="X:/not/in/catalog.jpg")
     assert missing["found"] is False and "import" in missing["note"]
+
+
+def test_catalog_listing_and_metadata_are_facts_only(rig: Rig) -> None:
+    rig.lightroom.add_photo("master-2", "TEST_0002.jpg")
+    page = rig.call("list_catalog_photos", limit=1)["page"]
+    assert page["total"] == 2 and page["returned"] == 1
+    assert "offset 1" in rig.call("list_catalog_photos", limit=1)["note"]
+    only = rig.call("list_catalog_photos", path_contains="0002")["page"]
+    assert [p["file_name"] for p in only["photos"]] == ["TEST_0002.jpg"]
+    meta = rig.call("get_photo_metadata", photo_id=MASTER)["metadata"]
+    assert meta["camera_model"] and meta["iso"] and meta["lens"]

@@ -12,7 +12,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from darkroom_ai.adapters.lightroom.models import PhotoInfo
+from darkroom_ai.adapters.lightroom.models import CatalogPage, PhotoInfo, PhotoMetadata
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.imaging.analysis import ImageAnalysis, analyze
 from darkroom_ai.imaging.faces import FaceAnalysis, analyze_faces
@@ -131,6 +131,61 @@ def find_photo(ctx: ToolContext, args: FindPhotoInput) -> Outcome:
     photo = ctx.lightroom.find_photo(args.path)
     note = "" if photo else "That file is not in the open catalog (import it into Lightroom first)."
     return Outcome(FindPhotoResult(found=photo is not None, photo=photo, note=note))
+
+
+# -- get_photo_metadata / list_catalog_photos -----------------------------------------------------
+
+
+class GetPhotoMetadataInput(_Input):
+    """Read the camera, lens and exposure facts of a photo (make, model, lens, focal length,
+    aperture, shutter speed, ISO, capture time, size, file type). Facts only; changes nothing."""
+
+
+class PhotoMetadataResult(ToolResult):
+    metadata: PhotoMetadata
+    note: str = "Values are as recorded in the file's metadata; a missing value is null."
+
+
+def get_photo_metadata(ctx: ToolContext, args: GetPhotoMetadataInput) -> Outcome:
+    return Outcome(PhotoMetadataResult(metadata=ctx.lightroom.get_metadata(args.photo_id)))
+
+
+class ListCatalogPhotosInput(BaseModel):
+    """List photos in the open Lightroom catalog, one page at a time, with their ids and
+    camera/lens/exposure facts. Reads only; changes nothing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    offset: int = Field(default=0, ge=0, description="How many photos to skip.")
+    limit: int = Field(default=25, ge=1, le=100, description="Most photos to return (1-100).")
+    path_contains: str | None = Field(
+        default=None, description="Only photos whose file path contains this text (e.g. a folder)."
+    )
+    include_virtual_copies: bool = Field(
+        default=False, description="Also list virtual copies (normally only the originals)."
+    )
+
+
+class ListCatalogPhotosResult(ToolResult):
+    page: CatalogPage
+    note: str = ""
+
+
+def list_catalog_photos(ctx: ToolContext, args: ListCatalogPhotosInput) -> Outcome:
+    page = ctx.lightroom.list_catalog(
+        args.offset,
+        args.limit,
+        include_virtual_copies=args.include_virtual_copies,
+        path_contains=args.path_contains,
+    )
+    more = page.offset + page.returned < page.total
+    note = (
+        f"{page.total - page.offset - page.returned} more; call again with offset "
+        f"{page.offset + page.returned}."
+        if more
+        else ""
+    )
+    return Outcome(ListCatalogPhotosResult(page=page, note=note))
 
 
 # -- get_preview ----------------------------------------------------------------------------------

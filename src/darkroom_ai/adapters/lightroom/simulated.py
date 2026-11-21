@@ -14,8 +14,10 @@ import cv2
 import numpy as np
 
 from darkroom_ai.adapters.lightroom.models import (
+    CatalogPage,
     ExportedTiff,
     PhotoInfo,
+    PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
@@ -113,6 +115,46 @@ class SimulatedLightroom:
 
     def get_selection(self) -> Selection:
         return Selection(active=self._info("master-1"), photos=(self._info("master-1"),))
+
+    def get_metadata(self, photo_id: str) -> PhotoMetadata:
+        self.calls.append("get_metadata")
+        info = self._info(photo_id)
+        return PhotoMetadata(
+            id=info.id,
+            file_name=info.file_name,
+            path=info.path,
+            file_format=info.file_format,
+            is_virtual_copy=info.is_virtual_copy,
+            width=info.width,
+            height=info.height,
+            camera_make="NIKON CORPORATION",
+            camera_model="NIKON D7500",
+            lens="18.0-140.0 mm f/3.5-5.6",
+            focal_length="35 mm",
+            aperture="f / 5.6",
+            shutter_speed="1/250 sec",
+            iso="200",
+        )
+
+    def list_catalog(
+        self,
+        offset: int = 0,
+        limit: int = 50,
+        *,
+        include_virtual_copies: bool = False,
+        path_contains: str | None = None,
+    ) -> CatalogPage:
+        self.calls.append("list_catalog")
+        wanted = (path_contains or "").lower()
+        ids = [
+            pid
+            for pid, photo in self.photos.items()
+            if (include_virtual_copies or not photo["is_virtual_copy"])
+            and wanted in str(photo["path"]).lower()
+        ]
+        window = ids[offset : offset + limit]
+        photos = tuple(self.get_metadata(pid) for pid in window)
+        return CatalogPage(total=len(ids), offset=offset, returned=len(photos), photos=photos)
 
     def find_photo(self, path: str) -> PhotoInfo | None:
         for photo in self.photos.values():

@@ -45,6 +45,39 @@ class PhotoInfo(_Result):
     snapshots: tuple[Snapshot, ...] = ()
 
 
+class PhotoMetadata(_Result):
+    """Facts about a photo from the catalog and its EXIF. Missing values are None (not guessed)."""
+
+    id: str
+    file_name: str
+    path: str | None = None
+    file_format: str
+    is_virtual_copy: bool = False
+    width: int | None = None
+    height: int | None = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    lens: str | None = None
+    focal_length: str | None = None
+    aperture: str | None = None
+    shutter_speed: str | None = None
+    iso: str | None = None
+    exposure_bias: str | None = None
+    flash: str | None = None
+    capture_time: str | None = None
+    rating: int | None = None
+    has_develop_edits: bool | None = None
+
+
+class CatalogPage(_Result):
+    """One page of photos from the open catalog (master photos unless virtual copies are asked)."""
+
+    total: int
+    offset: int
+    returned: int
+    photos: tuple[PhotoMetadata, ...]
+
+
 class Selection(_Result):
     active: PhotoInfo | None = None
     photos: tuple[PhotoInfo, ...] = ()

@@ -18,9 +18,11 @@ from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.adapters.lightroom.bridge_file import BridgeFile
 from darkroom_ai.adapters.lightroom.models import (
+    CatalogPage,
     CommandList,
     ExportedTiff,
     PhotoInfo,
+    PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
@@ -334,6 +336,27 @@ class LightroomClient:
 
     def get_photo(self, photo_id: str) -> PhotoInfo:
         return self._typed(PhotoInfo, "get_photo", self.call("get_photo", {"photo_id": photo_id}))
+
+    def get_metadata(self, photo_id: str) -> PhotoMetadata:
+        data = self.call("get_metadata", {"photo_id": photo_id})
+        return self._typed(PhotoMetadata, "get_metadata", data)
+
+    def list_catalog(
+        self,
+        offset: int = 0,
+        limit: int = 50,
+        *,
+        include_virtual_copies: bool = False,
+        path_contains: str | None = None,
+    ) -> CatalogPage:
+        params: dict[str, Any] = {
+            "offset": offset,
+            "limit": limit,
+            "include_virtual_copies": include_virtual_copies,
+        }
+        if path_contains:
+            params["path_contains"] = path_contains
+        return self._typed(CatalogPage, "list_photos", self.call("list_photos", params))
 
     def get_develop_settings(
         self, photo_id: str, keys: Sequence[str] | None = None

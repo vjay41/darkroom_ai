@@ -15,8 +15,10 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from darkroom_ai.adapters.lightroom.models import (
+    CatalogPage,
     ExportedTiff,
     PhotoInfo,
+    PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
@@ -51,6 +53,17 @@ class LightroomAdapter(Protocol):
     def find_photo(self, path: str) -> PhotoInfo | None: ...
 
     def get_photo(self, photo_id: str) -> PhotoInfo: ...
+
+    def get_metadata(self, photo_id: str) -> PhotoMetadata: ...
+
+    def list_catalog(
+        self,
+        offset: int = 0,
+        limit: int = 50,
+        *,
+        include_virtual_copies: bool = False,
+        path_contains: str | None = None,
+    ) -> CatalogPage: ...
 
     def get_develop_settings(
         self, photo_id: str, keys: Sequence[str] | None = None

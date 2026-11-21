@@ -27,7 +27,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.4.0"
+local PLUGIN_VERSION = "0.5.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 
@@ -231,6 +231,89 @@ function Commands.read.find_photo(params, ctx)
 		return { found = false }
 	end
 	return { found = true, photo = summary(photo) }
+end
+
+-- Facts about one photo from the catalog and its EXIF. Every key is read inside pcall because a
+-- metadata key that Lightroom does not know (or a photo without that value) must give nil, not an error.
+local function safeFormatted(photo, key)
+	local ok, value = pcall(function()
+		return photo:getFormattedMetadata(key)
+	end)
+	if ok and value ~= nil and value ~= "" then
+		return tostring(value)
+	end
+	return nil
+end
+
+local function safeRaw(photo, key)
+	local ok, value = pcall(function()
+		return photo:getRawMetadata(key)
+	end)
+	if ok then
+		return value
+	end
+	return nil
+end
+
+local function metadata(photo)
+	local info = summary(photo)
+	local captured = safeRaw(photo, "captureTime")
+	return {
+		id = info.id,
+		file_name = info.file_name,
+		path = info.path,
+		file_format = info.file_format,
+		is_virtual_copy = info.is_virtual_copy,
+		width = info.width,
+		height = info.height,
+		camera_make = safeFormatted(photo, "cameraMake"),
+		camera_model = safeFormatted(photo, "cameraModel"),
+		lens = safeFormatted(photo, "lens"),
+		focal_length = safeFormatted(photo, "focalLength"),
+		aperture = safeFormatted(photo, "aperture"),
+		shutter_speed = safeFormatted(photo, "shutterSpeed"),
+		iso = safeFormatted(photo, "isoSpeedRating"),
+		exposure_bias = safeFormatted(photo, "exposureBias"),
+		flash = safeFormatted(photo, "flash"),
+		capture_time = safeFormatted(photo, "dateTimeOriginal") or (captured and tostring(captured) or nil),
+		rating = safeRaw(photo, "rating"),
+		has_develop_edits = safeRaw(photo, "hasAdjustments"),
+	}
+end
+
+function Commands.read.get_metadata(params, ctx)
+	return metadata(findPhoto(ctx, params.photo_id))
+end
+
+-- One page of the open catalog (master photos unless include_virtual_copies is true), in a stable order.
+function Commands.read.list_photos(params, ctx)
+	local offset = tonumber(params.offset) or 0
+	local limit = tonumber(params.limit) or 50
+	if offset < 0 or limit < 1 or limit > 200 then
+		fail("INVALID_PARAMS", "offset must be >= 0 and limit 1-200")
+	end
+	local wanted = nil
+	if type(params.path_contains) == "string" and params.path_contains ~= "" then
+		wanted = string.lower(params.path_contains)
+	end
+	local matches = {}
+	for _, photo in ipairs(ctx.catalog:getAllPhotos()) do
+		local isCopy = photo:getRawMetadata("isVirtualCopy") and true or false
+		if params.include_virtual_copies or not isCopy then
+			local path = photo:getRawMetadata("path") or ""
+			if not wanted or string.find(string.lower(path), wanted, 1, true) then
+				matches[#matches + 1] = { path = path, photo = photo }
+			end
+		end
+	end
+	table.sort(matches, function(a, b)
+		return a.path < b.path
+	end)
+	local photos = {}
+	for i = offset + 1, math.min(offset + limit, #matches) do
+		photos[#photos + 1] = metadata(matches[i].photo)
+	end
+	return { total = #matches, offset = offset, returned = #photos, photos = list(photos) }
 end
 
 function Commands.read.get_photo(params, ctx)

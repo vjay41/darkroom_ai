@@ -48,6 +48,18 @@ TOOLS: tuple[Tool, ...] = (
         writes=False,
     ),
     _tool(
+        "list_catalog_photos",
+        lightroom_tools.ListCatalogPhotosInput,
+        lightroom_tools.list_catalog_photos,
+        writes=False,
+    ),
+    _tool(
+        "get_photo_metadata",
+        lightroom_tools.GetPhotoMetadataInput,
+        lightroom_tools.get_photo_metadata,
+        writes=False,
+    ),
+    _tool(
         "get_selected_photos",
         lightroom_tools.GetSelectedPhotosInput,
         lightroom_tools.get_selected_photos,

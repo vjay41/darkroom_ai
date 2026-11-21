@@ -306,3 +306,16 @@ def test_get_preset_settings_reads_without_applying(client: LightroomClient) -> 
         client.get_preset_settings("no-such-preset")
     assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
     assert "get_preset" in client.list_commands().read
+
+
+def test_catalog_listing_and_metadata_round_trip(
+    plugin: FakeLightroomPlugin, client: LightroomClient
+) -> None:
+    selection = client.get_selection()
+    assert selection.active is not None
+    page = client.list_catalog(0, 10)
+    assert page.total >= 1 and page.returned == len(page.photos)
+    assert all(not photo.is_virtual_copy for photo in page.photos)
+    meta = client.get_metadata(selection.active.id)
+    assert meta.id == selection.active.id and meta.camera_model == "NIKON D7500"
+    assert client.list_catalog(0, 10, path_contains="no-such-folder-xyz").total == 0

@@ -226,6 +226,38 @@ class FakeLightroomPlugin:
         photos = [self.photos[i].summary() for i in self.selected]
         return {"active": photos[0], "photos": photos} if photos else {"photos": []}
 
+    def _metadata(self, photo: FakePhoto) -> dict[str, Any]:
+        info = photo.summary()
+        return {
+            "id": info["id"],
+            "file_name": info["file_name"],
+            "path": info["path"],
+            "file_format": info["file_format"],
+            "is_virtual_copy": info["is_virtual_copy"],
+            "camera_model": "NIKON D7500",
+            "iso": "200",
+        }
+
+    def _cmd_get_metadata(self, params: dict[str, Any]) -> dict[str, Any]:
+        return self._metadata(self._photo(params))
+
+    def _cmd_list_photos(self, params: dict[str, Any]) -> dict[str, Any]:
+        wanted = str(params.get("path_contains", "")).lower()
+        chosen = [
+            photo
+            for photo in self.photos.values()
+            if (params.get("include_virtual_copies") or not photo.is_virtual_copy)
+            and wanted in photo.summary()["path"].lower()
+        ]
+        offset, limit = int(params.get("offset", 0)), int(params.get("limit", 50))
+        window = chosen[offset : offset + limit]
+        return {
+            "total": len(chosen),
+            "offset": offset,
+            "returned": len(window),
+            "photos": [self._metadata(p) for p in window],
+        }
+
     def _cmd_find_photo(self, params: dict[str, Any]) -> dict[str, Any]:
         wanted = str(params.get("path", "")).lower()
         for photo in self.photos.values():
