@@ -1453,3 +1453,34 @@ Phase 3 (below).
 
 ### Open threads
 - Still due before Phase 5: live wrong-catalog refusal test.
+
+## darkroom-mcp pivot (2026-11-21) - decisions and P0 result
+User decision (2026-11-21, "go with your recommendation"): the project becomes an MCP tool for the Hermes Agent (Darkroom profile). Hermes' single model does all the thinking; no second LLM and no agent loop in this project any more. Full PRD and the P0 memo are in the Claude project "Hermes Agent <--> LightRoom" (darkroom-mcp/PRD.md, darkroom-mcp/P0-audit-par4987.md).
+Decisions:
+1. Hybrid: own plug-in + tool layer stay; port pure-SDK logic (masks, write-survival check) from par4987/lightroom-mcp after audit (MIT, attribute Marcin Skalski / par4987). Not adopted wholesale.
+2. Photoshop adapter/tools stay in code, OFF by default, out of v1.
+3. Old chat/agent/llm code: git tag first, then park in `legacy/`. Nothing is deleted.
+4. "TEST catalog only" is replaced by: reads on any open catalog; writes only on an explicit catalog allowlist AND a backup rule. Test catalog stays allowlisted; the production catalog is NOT allowlisted until P6 passes and the user says so. (CLAUDE.md wording to be updated with the user's OK when P1 starts.)
+5. JPG white-balance loss is fixed right after P1, before masks and presets.
+6. `mcp_servers.darkroom_ai` goes into the Darkroom profile config.yaml at the end of P1 (backup, diff shown, include filter, sampling off).
+7. P5 adopts the tiered preset rule (look settings with confirmation summary; geometry / process-version refused) with exact undo. This reverses "apply_preset stays hidden", in P5 only.
+P0 audit of par4987/lightroom-mcp (commit e51dc75, read-only, nothing run): no outbound network in server or plug-in, loopback + token. BUT four Lua files run PowerShell with ExecutionPolicy Bypass (SendKeys for AI Denoise and remove_from_catalog; a Lightroom-window SCREEN CAPTURE in the AI-mask helper): REJECTED. Single squashed commit, 0 stars: reference only. Portable: createNewMask ai/range logic (needs the masking tool open; may return nil even on success; verify by diffing getAllMasks), MaskGroupBasedCorrections read/write. KEY LEAD for the JPG white-balance loss: its Corrections.lua says Lightroom serves a write back on an immediate read and discards it on the next recompute, and that a tiny throwaway render is the reliable check. Hypothesis only.
+Next: P1 plan shown to the user; waiting for the go. Not committed, not pushed.
+User decisions (2026-11-21, "go with your recommendations") on the deploy and release questions:
+8. P8 Deploy kit added after P1 and the JPG white-balance fix: AGENTS.md, a Hermes skill shipped in `hermes/skills/`, and `darkroom deploy` (plans first, asks before every write, refuses to run unattended, backs up and diffs the Hermes config).
+9. Repo PRIVATE until P8 passes, then public. Another Hermes instance fetching before then uses a read-only deploy key or token.
+10. MIT licence, plus a NOTICE crediting Marcin Skalski / par4987 for ported mask logic.
+11. On GitHub set `dev` as the default branch; `master` is not touched. After P8 the user merges dev to master and tags a release.
+12. PROGRESS.md moves to docs/PROGRESS.md before the repo goes public (after P1), with the CLAUDE.md path updated.
+Interim: the user pushes `dev` privately as a backup (Claude has no GitHub credentials in this setup).
+User decisions (2026-11-21, "go with your recommendation") on upgrade resilience and maturity:
+13. New phase P1c "Compatibility layer" after P1 and the JPG white-balance fix: capability probing in the plug-in and a `get_capabilities` tool; `compatibility.toml` (tested / known issue / untested per Adobe version; warn, never refuse); Develop key map as data plus a drift check; `darkroom selftest` (live, test catalog only: set, read-back via a tiny throwaway render, export, undo per tool, pass/fail report per tool); plug-in/server protocol handshake; upgrade runbook in AGENTS.md and the Hermes skill. Photoshop version handling changes from refuse (ADOBE_VERSION_UNSUPPORTED) to warn; only a failed capability probe blocks a tool.
+14. Adobe version freeze until P6: Creative Cloud auto-update off for Lightroom Classic (baseline 15.2.1) and Photoshop (27.8). After P6 ONE deliberate update, with `darkroom selftest` as the first upgrade drill.
+15. The docs state the limits: Adobe's apps and Hermes' model stay external; Python and Poetry are prerequisites; anything Adobe does not expose through its SDK (e.g. new AI features) is outside this tool and returns ADOBE_FEATURE_UNAVAILABLE.
+Status 2026-11-21 14:59: the `pre-mcp-pivot` git tag does NOT exist yet (checked); no code changes until the user confirms it. PRD v1.2 is in the Claude project.
+
+## Design principle reaffirmed by the user (2026-11-21 15:06) - no scripted editing
+The project provides granular raw-material tools; Hermes' model is the brain (looks at the picture through `get_preview`, reads facts, decides, edits, looks again); Hermes skills hold professional knowledge, not recipes. Nothing in the code may follow a fixed editing pattern, pipeline or formula, and no tool or report may state a "this photo needs X" verdict. Code keeps: measurements and facts, safety bounds (configurable; exceeding needs confirmation), undo, journal, read-back, capability probing.
+Amendments to the plan: (1) "genre recipes with bounded ranges" dropped; the skill is `lr-genre-knowledge` (what professionals look for, trade-offs, failure modes, how to judge a result; no values to follow). (2) `inventory`/metadata return facts only. (3) Generic `list_develop_parameters` / `get_develop_parameters` / `set_develop_parameters` are added (P2) so the AI can reach ANY supported parameter; the friendly tools (adjust_lighting etc.) remain thin conveniences. (4) `darkroom selftest` verifies tool behaviour, never edit quality.
+Also decided 2026-11-21 15:02: Claude does everything it can itself and asks only when a confirmation is really needed.
+P1 status (2026-11-21 15:10): `pre-mcp-pivot` tag created locally (9d1bd93). Legacy parked: src/darkroom_ai/llm and agent, chat/models CLI code, test_llm_agent.py, 4 scripts, the [llm]/[agent] config sections moved under legacy/llm_agent (see legacy/README.md). `[llm]` is optional in config; doctor no longer checks a model server. Verified in a throwaway Linux venv (Python 3.13, copy outside the repo): ruff, ruff format, mypy strict clean; pytest 289 passed, 8 skipped (need the Windows Lua compiler), 1 failed = a Windows-path test that also fails on the untouched baseline (test_export_tiff_only_for_virtual_copies_and_never_overwrites, Linux vs backslash paths). NOT yet run on Windows: the user runs `make quality`. Nothing committed or pushed. GitHub: not reachable from Claude's side (claude.ai GitHub not linked; add_repo push access denied by the permission check; no credentials in the device shell).

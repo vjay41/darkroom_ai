@@ -41,8 +41,8 @@ def _with(path: str, value: Any) -> dict[str, Any]:
 
 def test_repository_config_is_valid() -> None:
     settings = load_config(REPO / "darkroom.toml")
-    assert set(settings.llm.profiles) == {"primary", "glimmer", "fast"}
-    assert settings.llm.active is settings.llm.profiles["primary"]
+    # darkroom_ai is an MCP tool: the repository config carries no model profile.
+    assert settings.llm is None
     assert settings.guardrails.max_passes == 3
     assert settings.guardrails.exposure_ev_per_pass == 1.5
 
@@ -98,10 +98,10 @@ def test_invalid_values_rejected(path: str, value: Any, expected: str) -> None:
     assert expected in caught.value.message
 
 
-def test_missing_llm_section_rejected() -> None:
-    with pytest.raises(DarkroomError) as caught:
-        parse_settings({})
-    assert caught.value.code is ErrorCode.CONFIG_INVALID
+def test_llm_section_is_optional() -> None:
+    """darkroom_ai is an MCP tool: a config without [llm] is valid and has no model profile."""
+    settings = parse_settings({})
+    assert settings.llm is None
 
 
 def test_missing_file(tmp_path: Path) -> None:

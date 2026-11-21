@@ -169,7 +169,8 @@ def test_no_network_imports_outside_loopback_module() -> None:
 
 
 def test_no_model_names_or_wildcard_binds_in_source() -> None:
-    with (REPO / "darkroom.toml").open("rb") as handle:
+    # The model names live only in the parked example file; none may appear in the source.
+    with (REPO / "legacy" / "llm_agent" / "darkroom.llm.example.toml").open("rb") as handle:
         profiles = tomllib.load(handle)["llm"]["profiles"]
     banned = {profile["model"] for profile in profiles.values()} | {"0.0.0.0"}
     assert len(banned) > 1

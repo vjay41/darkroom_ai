@@ -183,7 +183,9 @@ class AgentSettings(_Section):
 
 
 class Settings(_Section):
-    llm: LlmSettings
+    # LEGACY (parked in legacy/llm_agent): the model profiles are only read by the old chat/agent
+    # code. darkroom_ai is an MCP tool now and has no model of its own; the section is optional.
+    llm: LlmSettings | None = None
     agent: AgentSettings = AgentSettings()
     lightroom: LightroomSettings = LightroomSettings()
     photoshop: PhotoshopSettings = PhotoshopSettings()

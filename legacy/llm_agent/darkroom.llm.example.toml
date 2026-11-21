@@ -1,0 +1,49 @@
+# PARKED model profiles and agent settings (2026-11-21). Not read by darkroom_ai any more.
+# Hermes runs the model; this project is an MCP tool.
+
+# darkroom_ai configuration (checked in; no secrets, no personal paths).
+# Put machine-specific overrides in darkroom.local.toml next to this file (git-ignored).
+# Every address must be a loopback address (127.0.0.1, localhost, ::1); anything else is rejected.
+
+[llm]
+active_profile = "primary"
+require_loaded = true       # never let a request load a model: refuse if it is not loaded already
+
+# vision / tool_mode below are starting values and are UNVERIFIED until `darkroom models test` (phase 6).
+[llm.profiles.primary]
+base_url = "http://127.0.0.1:1234/v1"
+model = "qwen/qwen3.8-27b"
+vision = true
+tool_mode = "native"        # native | json_schema | prompt
+reasoning_effort_tools = "none"   # no thinking on tool follow-up turns (measured: about half the time)
+# reasoning_effort_planning is not set: planning turns (new measurements) use the model's default thinking
+temperature = 0.2
+max_image_px = 1024
+max_images = 2
+timeout_s = 120
+
+[llm.profiles.glimmer]
+base_url = "http://127.0.0.1:1234/v1"
+model = "meta/muse-glimmer"
+vision = true
+tool_mode = "json_schema"
+temperature = 0.2
+max_image_px = 1024
+max_images = 2
+timeout_s = 120
+
+[llm.profiles.fast]
+base_url = "http://127.0.0.1:1234/v1"
+model = "google/gemma-4-e4b"
+vision = true
+tool_mode = "json_schema"
+temperature = 0.2
+max_image_px = 768
+max_images = 1
+timeout_s = 60
+
+
+[agent]
+# Briefing for `darkroom chat` when --playbook is not given: "portrait", "landscape", or "none"
+# (tools, measurements and safety limits only, no editing advice).
+default_playbook = "portrait"

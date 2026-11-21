@@ -1,8 +1,6 @@
 """Command line entry point (`darkroom`).
 
-darkroom doctor                 check the local setup (config, Lightroom, Photoshop, model, GPUs)
-darkroom models test [...]      test model profiles (vision, tool calling, prompt injection)
-darkroom chat "..." [...]       let the local model edit one photo; asks before anything gated
+darkroom doctor                 check the local setup (config, Lightroom, Photoshop, GPUs)
 darkroom mcp                    serve the tools over MCP (stdio)
 darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
 darkroom clean-outputs          remove intermediate files (never final results); asks first
@@ -13,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -27,22 +24,17 @@ from darkroom_ai.adapters.lightroom.bridge_file import (
 )
 from darkroom_ai.adapters.lightroom.client import LightroomClient
 from darkroom_ai.adapters.photoshop.windows import photoshop_windows
-from darkroom_ai.agent.loop import PLAYBOOKS, Agent
 from darkroom_ai.cleanup import apply_cleanup, plan_cleanup
 from darkroom_ai.config import Settings, load_config
 from darkroom_ai.errors import DarkroomError
 from darkroom_ai.gpu import conflict_warnings, placement, read_gpus
-from darkroom_ai.llm import selftest
-from darkroom_ai.llm.client import LocalLlmClient
 from darkroom_ai.tools.factory import build_tool_context
-from darkroom_ai.tools.registry import ToolRegistry
 from darkroom_ai.tools.revert import apply_revert, plan_revert
 
 TESTED_LIGHTROOM = ("15.2",)  # major.minor versions the plug-in has been run against
 EXIT_OK = 0
 EXIT_PROBLEM = 1
 EXIT_ERROR = 2
-CHAT_TOOLS = ("adjust_lighting", "adjust_white_balance", "adjust_hsl", "crop", "undo")
 
 
 class AskUser:
@@ -71,8 +63,7 @@ def _line(status: str, text: str) -> None:
 
 def _doctor(settings: Settings) -> int:
     problems = 0
-    profile = settings.llm.active
-    _line("ok", f"config: profile '{settings.llm.active_profile}' at {profile.base_url}")
+    _line("ok", "config: loaded")
 
     try:
         with LightroomClient.from_settings(settings, load_bridge_file()) as lightroom:
@@ -110,34 +101,6 @@ def _doctor(settings: Settings) -> int:
         note = "it is started when needed" if settings.photoshop.auto_start else "start it first"
         _line("warn", f"Photoshop is not running ({note})")
 
-    llm = LocalLlmClient(profile)
-    try:
-        models = llm.models()
-        state = llm.model_state() if profile.model in models else "missing"
-        if state == "loaded":
-            _line("ok", "model server answers; model of the active profile is loaded")
-        elif state == "unknown":
-            _line(
-                "warn",
-                "model server answers and lists the model, but does not report whether it is "
-                "loaded",
-            )
-        elif state != "missing":
-            problems += 1
-            _line(
-                "FAIL",
-                f"model of the active profile is listed but NOT loaded (state: {state}). Load "
-                "it in the local model server; darkroom_ai does not load models by itself.",
-            )
-        else:
-            problems += 1
-            _line("FAIL", "model server answers, but the active profile's model is not listed")
-    except DarkroomError as exc:
-        problems += 1
-        _line("FAIL", f"model server: [{exc.code.value}] {exc.message}\n       {exc.next_step}")
-    finally:
-        llm.close()
-
     report = read_gpus()
     for gpu in report.gpus:
         _line("ok", f"GPU {gpu.index} {gpu.name}: {gpu.used_mb} of {gpu.total_mb} MB used")
@@ -148,139 +111,6 @@ def _doctor(settings: Settings) -> int:
 
     print("\nAll checks passed." if not problems else f"\n{problems} problem(s) found.")
     return EXIT_OK if not problems else EXIT_PROBLEM
-
-
-# -- models test ----------------------------------------------------------------------------------
-
-
-def _models_test(settings: Settings, names: list[str], skip_vision: bool, as_json: bool) -> int:
-    wanted = names or [settings.llm.active_profile]
-    failed = 0
-    for name in wanted:
-        if name not in settings.llm.profiles:
-            print(f"There is no profile named '{name}'.", file=sys.stderr)
-            return EXIT_ERROR
-        profile = settings.llm.profiles[name]
-        llm = LocalLlmClient(profile, require_loaded=settings.llm.require_loaded)
-        print(f"== profile '{name}': {profile.model} (tool mode {profile.tool_mode}) ==")
-        try:
-            vision = None
-            if profile.vision and not skip_vision:
-                vision = selftest.vision_test(llm, profile)
-                state = "PASS" if vision.passed else "FAIL"
-                print(
-                    f"  vision [{state}]: {vision.correct}/{vision.total} correct, "
-                    f"{vision.seconds:.1f} s, sent {vision.image} (synthetic picture)"
-                )
-                failed += 0 if vision.passed else 1
-            # With thinking switched off for tool turns, compare against the model's default.
-            thinking_off = profile.reasoning_effort_tools is not None
-            baseline = None
-            if thinking_off:
-                default_profile = profile.model_copy(
-                    update={"reasoning_effort_tools": None, "reasoning_effort_planning": None}
-                )
-                baseline = selftest.tool_calling_test(llm, default_profile, settings)
-            scenarios = selftest.tool_calling_test(
-                llm, profile, settings, planning=not thinking_off
-            )
-            for item in scenarios:
-                state = "PASS" if item.passed else "FAIL"
-                print(
-                    f"  tools  [{state}]: {item.name}: {item.valid_calls}/{item.calls} valid "
-                    f"calls, {item.turns} turns, {item.seconds:.1f} s, exposure "
-                    f"{item.final_exposure:+g} ({item.stopped_because}) {item.note}"
-                )
-                failed += 0 if item.passed else 1
-            if baseline is not None:
-                rate_on = selftest.valid_call_rate(baseline)
-                rate_off = selftest.valid_call_rate(scenarios)
-                state = "FAIL" if rate_off < rate_on else "PASS"
-                print(
-                    f"  think  [{state}]: valid-call rate {rate_on:.0%} with the model's default "
-                    f"thinking ({sum(s.passed for s in baseline)}/{len(baseline)} scenarios, "
-                    f"{sum(s.seconds for s in baseline):.1f} s) vs {rate_off:.0%} with "
-                    f"reasoning_effort={profile.reasoning_effort_tools!r} on every turn "
-                    f"({sum(s.passed for s in scenarios)}/{len(scenarios)} scenarios, "
-                    f"{sum(s.seconds for s in scenarios):.1f} s); the lines above are the latter"
-                )
-                failed += 1 if rate_off < rate_on else 0
-            injections = selftest.injection_test(llm, profile, settings, planning=not thinking_off)
-            for hit in injections:
-                state = "PASS" if hit.guardrails_held else "FAIL"
-                followed = "model FOLLOWED it" if hit.followed else "model ignored it"
-                print(
-                    f"  inject [{state}]: text in {hit.where}: {followed}; guardrails "
-                    f"{'held' if hit.guardrails_held else 'DID NOT HOLD'}; exposure "
-                    f"{hit.final_exposure:+g}; {'; '.join(hit.attempts) or 'no attempts'}"
-                )
-                failed += 0 if hit.guardrails_held else 1
-            if as_json:
-                print(selftest.summary_json(name, profile, vision, scenarios, injections))
-        except DarkroomError as exc:
-            failed += 1
-            print(f"  [{exc.code.value}] {exc.message}\n  Next step: {exc.next_step}")
-        finally:
-            llm.close()
-    return EXIT_OK if not failed else EXIT_PROBLEM
-
-
-# -- chat -----------------------------------------------------------------------------------------
-
-
-def _chat(settings: Settings, args: argparse.Namespace) -> int:
-    profile = settings.llm.profiles[args.profile or settings.llm.active_profile]
-    if settings.llm.require_loaded:
-        # First of all, before anything touches Lightroom: is the model loaded?
-        probe = LocalLlmClient(profile)
-        try:
-            probe.ensure_loaded()
-        finally:
-            probe.close()
-    context = build_tool_context(settings, confirmer=AskUser())
-    registry = ToolRegistry(context)
-    if args.photo:
-        photo = context.lightroom.find_photo(str(args.photo))
-        if photo is None:
-            print(f"{args.photo} is not in the open Lightroom catalog.", file=sys.stderr)
-            return EXIT_ERROR
-    else:
-        selection = context.lightroom.get_selection()
-        if selection.active is None:
-            print("Select one photo in Lightroom, or pass --photo PATH.", file=sys.stderr)
-            return EXIT_ERROR
-        photo = selection.active
-    playbook = args.playbook or settings.agent.default_playbook
-    print(f"photo: {photo.file_name} | model: {profile.model} | playbook: {playbook}")
-    llm = LocalLlmClient(profile, require_loaded=settings.llm.require_loaded)
-    try:
-        agent = Agent(
-            llm,
-            registry,
-            profile,
-            max_passes=settings.guardrails.max_passes,
-            allowed_tools=CHAT_TOOLS,
-            playbook=playbook,
-            guardrails=settings.guardrails,
-            on_event=lambda text: print(f"  {text}"),
-        )
-        report = agent.run(args.request, photo.id)
-    finally:
-        llm.close()
-    if getattr(args, "summary_file", False):
-        log_dir = settings.paths.logs_dir.resolve()
-        log_dir.mkdir(parents=True, exist_ok=True)
-        target = log_dir / f"chat_summary_{time.strftime('%Y%m%d-%H%M%S')}.txt"
-        target.write_text(report.final_message, encoding="utf-8")
-        print(f"\nsummary: {len(report.final_message)} characters, saved to {target}")
-    else:
-        print(f"\n{report.final_message}")
-    print(
-        f"({report.passes} pass(es), {report.turns} turns, {report.seconds:.0f} s, "
-        f"{report.images_sent} preview(s) sent to the local model; `darkroom chat` with "
-        f"'undo' or the undo tool takes the edits back)"
-    )
-    return EXIT_OK
 
 
 # -- revert ---------------------------------------------------------------------------------------
@@ -379,35 +209,12 @@ def _lightroom_ping(settings: Settings) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="darkroom",
-        description="Local, offline AI photo-editing agent for Lightroom Classic and Photoshop.",
+        description="Local, offline MCP tool: lets an agent edit photos in Lightroom Classic.",
     )
     parser.add_argument("--version", action="version", version=f"darkroom {__version__}")
     parser.add_argument("--config", type=Path, default=None, help="path to darkroom.toml")
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("doctor", help="check the local setup")
-
-    models = commands.add_parser("models", help="model profile checks")
-    model_commands = models.add_subparsers(dest="models_command", required=True)
-    test = model_commands.add_parser("test", help="vision, tool-calling and injection tests")
-    test.add_argument("profiles", nargs="*", help="profile names (default: the active profile)")
-    test.add_argument("--skip-vision", action="store_true", help="do not send the test picture")
-    test.add_argument("--json", action="store_true", help="also print the results as JSON")
-
-    chat = commands.add_parser("chat", help="let the local model edit one photo")
-    chat.add_argument("request", help='what to do, e.g. "brighten the faces a little"')
-    chat.add_argument("--photo", type=Path, default=None, help="file path of the photo")
-    chat.add_argument(
-        "--playbook",
-        choices=PLAYBOOKS,
-        default=None,
-        help="briefing for the model (default: agent.default_playbook in darkroom.toml)",
-    )
-    chat.add_argument(
-        "--summary-file",
-        action="store_true",
-        help="write the model's summary to a file under logs/ and print only its length",
-    )
-    chat.add_argument("--profile", default=None, help="model profile (default: the active one)")
 
     commands.add_parser("mcp", help="serve the tools over MCP (stdio)")
 
@@ -437,13 +244,6 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_config(args.config)
         if args.command == "doctor":
             return _doctor(settings)
-        if args.command == "models":
-            return _models_test(settings, args.profiles, args.skip_vision, args.json)
-        if args.command == "chat":
-            if args.profile and args.profile not in settings.llm.profiles:
-                print(f"There is no profile named '{args.profile}'.", file=sys.stderr)
-                return EXIT_ERROR
-            return _chat(settings, args)
         if args.command == "revert":
             return _revert(settings, args.photo)
         if args.command == "clean-outputs":

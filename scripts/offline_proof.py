@@ -45,8 +45,7 @@ sys.addaudithook(_hook)
 
 # Imported only after the hook is in place, so import-time network use would be seen too.
 from darkroom_ai.config import load_config  # noqa: E402
-from darkroom_ai.errors import DarkroomError  # noqa: E402
-from darkroom_ai.net.loopback import LocalHttp, is_loopback_host  # noqa: E402
+from darkroom_ai.net.loopback import is_loopback_host  # noqa: E402
 
 THIRD_PARTY = ("opentelemetry", "uvicorn", "starlette", "truststore", "mcp", "httpx2", "cv2")
 
@@ -61,7 +60,6 @@ def main() -> int:
     parser.add_argument("--photo", type=Path, default=None, help="test photo for the read tools")
     args = parser.parse_args()
     settings = load_config(None)
-    profile = settings.llm.active
 
     step("import third-party packages: " + ", ".join(THIRD_PARTY))
     for name in THIRD_PARTY:
@@ -70,37 +68,6 @@ def main() -> int:
     import mcp.server.stdio  # noqa: F401
 
     from darkroom_ai import cli, mcp_server
-    from darkroom_ai.llm import selftest
-    from darkroom_ai.llm.client import LocalLlmClient
-
-    step("model server: list models")
-    http = LocalHttp("http://127.0.0.1:1234", timeout_s=20)
-    try:
-        _, models = http.request_json("GET", "api/v0/models")
-    except OSError as exc:
-        models = {}
-        print(f"   model server not reachable: {exc}")
-    finally:
-        http.close()
-    items = models.get("data", []) if isinstance(models, dict) else []
-    loaded = [m.get("id") for m in items if m.get("state") == "loaded"]
-    print("   loaded:", loaded)
-    if profile.model in loaded:
-        step("model tests, text only, simulated Lightroom (tool calling + prompt injection)")
-        llm = LocalLlmClient(profile)
-        try:
-            results = selftest.tool_calling_test(llm, profile, settings, planning=False)
-            injections = selftest.injection_test(llm, profile, settings, planning=False)
-            print(
-                f"   scenarios passed {sum(r.passed for r in results)}/{len(results)}; "
-                f"guardrails held {sum(i.guardrails_held for i in injections)}/{len(injections)}"
-            )
-        except DarkroomError as exc:
-            print(f"   [{exc.code.value}] {exc.message}")
-        finally:
-            llm.close()
-    else:
-        print("   SKIPPED model tests: the active profile's model is not loaded (no request sent)")
 
     step("MCP server object with simulated tools (in this process, no client)")
     import tempfile
@@ -124,7 +91,7 @@ def main() -> int:
         print("   get_photo_info error:", call.is_error)
 
     if args.with_adobe:
-        step("darkroom doctor (Lightroom ping, Photoshop window check, model list, nvidia-smi)")
+        step("darkroom doctor (Lightroom ping, Photoshop window check, nvidia-smi)")
         cli.main(["doctor"])
         if args.photo is not None:
             step("Lightroom read tools on the test photo (get_photo_info, analyze_photo)")

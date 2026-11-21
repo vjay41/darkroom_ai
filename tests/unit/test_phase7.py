@@ -234,15 +234,6 @@ def test_reviewed_error_texts() -> None:
         assert error.message and error.next_step
 
 
-def test_guardrail_refusals_have_their_own_next_step(tmp_path: Path) -> None:
-    from darkroom_ai.agent.loop import load_playbook
-    from darkroom_ai.errors import DarkroomError
-
-    with pytest.raises(DarkroomError) as caught:
-        load_playbook("wedding")
-    assert "--playbook" in caught.value.next_step
-
-
 def test_doctor_warns_about_an_untested_lightroom_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -269,22 +260,8 @@ def test_doctor_warns_about_an_untested_lightroom_version(
                 configured_catalog="c",
             )
 
-    class FakeLlm:
-        def __init__(self, *_: Any, **__: Any) -> None:
-            pass
-
-        def models(self) -> list[str]:
-            return ["x"]
-
-        def model_state(self) -> str:
-            return "loaded"
-
-        def close(self) -> None:
-            pass
-
     monkeypatch.setattr(cli, "load_bridge_file", lambda: None)
     monkeypatch.setattr(cli, "photoshop_windows", list)
-    monkeypatch.setattr(cli, "LocalLlmClient", FakeLlm)
     monkeypatch.setattr(cli, "read_gpus", lambda: GpuReport((), (), error="no nvidia-smi"))
     for version, warned in (("15.2.1", False), ("16.0", True)):
         monkeypatch.setattr(
