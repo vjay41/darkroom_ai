@@ -27,7 +27,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.3.0"
+local PLUGIN_VERSION = "0.4.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 
@@ -264,6 +264,26 @@ function Commands.read.list_presets()
 		result[#result + 1] = { name = item.name, uuid = item.uuid, folder = item.folder }
 	end
 	return { presets = list(result) }
+end
+
+-- The settings a develop preset WOULD apply (LrDevelopPreset:getSetting). Read-only: nothing
+-- is applied to any photo. Used to check a preset against the limits before applying it.
+function Commands.read.get_preset(params)
+	if type(params.preset_uuid) ~= "string" or params.preset_uuid == "" then
+		fail("INVALID_PARAMS", "preset_uuid is required")
+	end
+	for _, item in ipairs(allPresets()) do
+		if item.uuid == params.preset_uuid then
+			local ok, settings = pcall(function()
+				return item.preset:getSetting()
+			end)
+			if not ok then
+				fail("PRESET_UNREADABLE", "Lightroom could not read this preset: " .. tostring(settings))
+			end
+			return { name = item.name, uuid = item.uuid, folder = item.folder, settings = settings or {} }
+		end
+	end
+	fail("PRESET_NOT_FOUND", "No develop preset with that id")
 end
 
 --------------------------------------------------------------------------------

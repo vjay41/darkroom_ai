@@ -214,7 +214,7 @@ class FakeLightroomPlugin:
     def _cmd_list_commands(self, _: dict[str, Any]) -> dict[str, Any]:
         names = sorted(name[5:] for name in dir(self) if name.startswith("_cmd_"))
         return {
-            "plugin_version": "0.3.0",
+            "plugin_version": "0.4.0",
             "read": [name for name in names if name not in WRITE_COMMANDS],
             "write": [name for name in names if name in WRITE_COMMANDS],
         }
@@ -318,6 +318,12 @@ class FakeLightroomPlugin:
 
     def _cmd_list_presets(self, _: dict[str, Any]) -> dict[str, Any]:
         return {"presets": list(self.PRESETS)}
+
+    def _cmd_get_preset(self, params: dict[str, Any]) -> dict[str, Any]:
+        preset = next((p for p in self.PRESETS if p["uuid"] == params.get("preset_uuid")), None)
+        if preset is None:
+            raise PluginError("PRESET_NOT_FOUND", "No develop preset with that id")
+        return {**preset, "settings": dict(self.PRESET_SETTINGS[preset["uuid"]])}
 
     def _cmd_apply_preset(self, params: dict[str, Any]) -> dict[str, Any]:
         photo = self._writable(params, needs_copy=True)

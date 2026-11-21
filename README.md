@@ -35,8 +35,10 @@ model server. Other versions are untested: a different Lightroom version gives a
    test_photos_dir = 'D:\path\to\photo\folder' # only photos below this folder are edited
    ```
 3. Lightroom: run `poetry run darkroom lightroom setup`, then in Lightroom choose
-   File > Plug-in Manager > Add and pick the folder the command printed. Start the connection
-   with File > Plug-in Extras > "Start darkroom_ai Bridge" (needed after each Lightroom start).
+   File > Plug-in Manager > Add and pick the folder the command printed. The connection (the
+   "bridge") starts by itself when Lightroom loads the plug-in. File > Plug-in Extras >
+   "Start darkroom_ai Bridge" is only needed after "Stop darkroom_ai Bridge" or if the start
+   failed.
 4. Photoshop: Preferences > Image Processing > "Select Subject and Remove Background" = Device.
 5. Model: see "Model setup" below.
 6. Check: `poetry run darkroom doctor`.

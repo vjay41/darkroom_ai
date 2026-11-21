@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: list_presets built and run; RAW white-balance bug found and fixed before any RAW edit; waiting for the user's go on RAW step 1 and the OK on the preset guardrail design. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW steps 1-2 done (step 2 not as predicted; edit taken back); STOPPED before RAW step 3; preset probe needs a plug-in reload (0.4.0) by the user. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -292,8 +292,61 @@ Done so far (read-only in Lightroom; no edit, no virtual copy created):
   (RAW `Temperature`, `Tint`: `Limit.needs_current`) are refused with GUARDRAIL_REJECTED when Lightroom reports no
   current value ("Nothing was changed"; next step: give the copy a fixed white balance once). Unit test added
   (320 tests, `make quality` clean). JPG white balance (relative scale, neutral 0) is not affected.
-- OPEN for the RAW test: how to get a fixed Kelvin value for an "As Shot" RAW copy through the plug-in, and how undo
-  restores "As Shot". To be probed on a RAW virtual copy, one step at a time, with the user's go.
+- (superseded by the RAW steps below) how to get a fixed Kelvin value for an "As Shot" RAW copy.
+
+RAW test, user go for steps 1-6 in order (2026-11-21) with additions: list the RAW folder for new .xmp and re-hash the
+three ARW files at the end; the step-3 probe goes through the normal write gate and its restore is verified exactly
+against a saved snapshot; step 4 uses the As Shot Kelvin value the probe reports, otherwise stop, never guess; before
+step 5 check free space on D:, write only to the hand-off folder, change no Lightroom export preset; show the exact
+plug-in call for step 3 and wait for the OK.
+- Baseline: the RAW folder holds only the three ARW files (no .xmp); their SHA-256 recorded in `logs\raw_test_state.json`.
+- Step 1 DONE: a new virtual copy of `RAW_DSC00480.ARW` (`C924BDE9-...`; stays in the catalog); snapshot of all 169
+  settings of the copy and of the master saved; `adjust_lighting` exposure +0.3 (requested +0.3, applied +0.3, 0 -> 0.3,
+  not clamped); undo; all 169 settings equal the snapshot EXACTLY; master unchanged; nothing pending; hash unchanged; no
+  new file.
+- Step 2 did NOT go as predicted (prediction: refused). Between step 1 and step 2 Lightroom started to report numbers for
+  the copy: `Temperature` 4100, `Tint` 9, with `WhiteBalance` still "As Shot" (the master still reports none). So the
+  tool had a real current value and APPLIED the request: Temperature 4100 -> 4600 (requested +500, within the 1000 K
+  per-pass limit). The assistant took it back at once through the journal (resumed session, `undo`: Temperature -> 4100;
+  nothing pending). No guess was involved and the guard did what it is built for, but the step's expectation was wrong.
+- State now, exact comparison with the step-1 snapshot: every setting darkroom_ai wrote is back at its value. Four
+  differences remain, all added by Lightroom itself after the copy's first edit, none written by darkroom_ai:
+  `Temperature` 4100 and `Tint` 9 now present (were absent), `FilterList` = {} now present, and `Look.Parameters` gained
+  an empty `PointColors`. Master identical to its snapshot.
+- Findings: (1) Lightroom reports As Shot numbers for a RAW virtual copy only after the copy has been edited once, and
+  not immediately (step 1's check right after the undo still saw none). (2) The `WhiteBalance` label stayed "As Shot"
+  even while Temperature was 4600, so the label cannot be used to tell whether a fixed value is set. (3) An "exactly
+  equal to the snapshot" check on a RAW copy must allow for keys that Lightroom adds by itself, or take the snapshot
+  after the first edit. (4) Not verified: that 4100 / 9 are really the camera's As Shot values, and that the 4600 K
+  edit changed the rendering (no measurement was taken while it was applied).
+- Lens-related develop settings are readable on the RAW copy (read only): `EnableLensCorrections` true,
+  `LensProfileEnable` 0, `LensProfileSetup` "LensDefaults", `AutoLateralCA` 0, `ChromaticAberrationR/B` 0, `Defringe*`,
+  `PerspectiveUpright` 0, `PostCropVignette*`, `Upright*`, `Vignette*`. Whether they can be SET is untested.
+- STOPPED here: step 3 (and everything after) waits for the user's decision.
+
+Presets, user decisions (2026-11-21): first a read-only probe of whether the SDK exposes a preset's contents; if not,
+`apply_preset` stays unexposed. If yes: allowlist (a preset containing any setting outside the guardrail-covered set is
+REFUSED with the setting named, not stripped); compare its change with the photo's current values; its exposure change
+counts toward the 3 EV total; always ask y/N in chat, refused over MCP; preset names are data (injection test). Show the
+design and wait for the OK before any live `apply_preset`.
+- SDK documentation (local API reference): `LrDevelopPreset:getSetting()` "retrieves the settings for this preset"
+  (marked experimental). So the contents should be readable; NOT yet verified live.
+- Built for the probe: plug-in read command `get_preset` (returns the preset's settings; applies nothing), plug-in
+  build 0.4.0, client method `get_preset_settings`. The plug-in loaded in Lightroom is still 0.3.0 until the user
+  reloads it. 321 tests, `make quality` clean.
+
+README: bridge wording corrected (the bridge starts by itself when Lightroom loads the plug-in; the menu entry is only
+needed after "Stop darkroom_ai Bridge" or a failed start). Verified in the source: `Init.lua` calls `Bridge.start()`.
+
+### Open threads for later, NOT part of Phase 8 (recorded for the user, 2026-11-21)
+(a) Phase 9 enhancement: read EXIF (camera, lens, focal length, aperture, ISO, shutter) through the plug-in as a
+    read-only tool; then lens-profile correction, chromatic-aberration removal and vignette correction as a
+    deterministic pre-fix step (the model confirms from metadata and preview). Open points: whether the SDK can set
+    these develop keys per file type (read-only probe first, on a virtual copy only; reading works, see above); the
+    guardrail rule for on/off switches; a JPG may already be lens-corrected in camera (avoid double correction); a
+    clear message when no lens profile exists; EXIF text is data, not instructions. A short PRD and the user's sign-off
+    come before building it.
+(b) README bridge wording: done (see above).
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes

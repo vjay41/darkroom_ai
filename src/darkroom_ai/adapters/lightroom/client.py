@@ -403,6 +403,12 @@ class LightroomClient:
         data = self.call("list_presets").get("presets") or []
         return tuple(self._typed(PresetInfo, "list_presets", item) for item in data)
 
+    def get_preset_settings(self, preset_uuid: str) -> dict[str, Any]:
+        """The settings a preset would apply, without applying it (plug-in 0.4.0 or later)."""
+        data = self.call("get_preset", {"preset_uuid": preset_uuid})
+        settings = data.get("settings")
+        return dict(settings) if isinstance(settings, dict) else {}
+
     def apply_preset(self, photo_id: str, preset_uuid: str) -> PresetChange:
         data = self.call("apply_preset", {"photo_id": photo_id, "preset_uuid": preset_uuid})
         return self._typed(PresetChange, "apply_preset", data)

@@ -296,3 +296,13 @@ def test_client_reconnects_after_close(plugin: FakeLightroomPlugin) -> None:
     lightroom.close()
     assert lightroom.ping().protocol == 1
     lightroom.close()
+
+
+def test_get_preset_settings_reads_without_applying(client: LightroomClient) -> None:
+    presets = client.list_presets()
+    settings = client.get_preset_settings(presets[0].uuid)
+    assert settings == {"Exposure": 0.4, "Contrast": 10}
+    with pytest.raises(DarkroomError) as caught:
+        client.get_preset_settings("no-such-preset")
+    assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
+    assert "get_preset" in client.list_commands().read
