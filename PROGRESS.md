@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: playbook-versus-none batch DONE (22 runs); SIX blind-pair copies carry edits until the user's verdict, then `compare_modes.py undo-blind`. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: playbook-versus-none batch DONE, blind pairs revealed and undone; all copies at start values. Open: the user's decision on the default mode; glimmer/fast bake-off; 'y' test. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -790,6 +790,21 @@ brighter", TEST_2457-37.jpg); 'pair 3 A' / 'pair 3 B' ("Reduce the saturation of
 Which mode is A and which is B is ONLY in `logs\\blind_pairs_mapping.json`; the assistant has not read it and will not
 say until the user has given a verdict. Then: `scripts/compare_modes.py undo-blind` undoes each pair copy through its
 saved session and compares it exactly. Until then those six copies carry edits.
+
+Blind pairs: VERDICT, REVEAL and UNDO (2026-11-21). The user's first message still had placeholders, so the mapping stayed
+closed until the user answered: pair 1 A, pair 2 A, pair 3 A. Only then was the mapping read.
+| Pair | Preferred | A was | B was | What differed |
+|---|---|---|---|---|
+| 1 "Fix the lighting" | A | none: exposure +0.3, contrast +10, highlights -50 in total, shadows +15, temperature -5, tint +3 (2 passes; 2 unrequested white-balance settings); final clipped highlights 6.51 %, median 0.452 | playbook: highlights -30 (1 pass); final 0.14 %, median 0.411 | the user preferred the none result although it clips far more by the numbers |
+| 2 "Make it much brighter" | A | playbook: exposure +0.5, highlights -80 in total, whites -15 (3 passes, pass limit); final 1.21 %, median 0.540 | none: exposure +1.2, highlights -45 in total, shadows +20, whites -10 (2 passes); final 8.87 %, median 0.722 | the user preferred the playbook result, the less bright one |
+| 3 "Reduce orange saturation" | A | playbook: orange -15 | none: orange -15 | NOTHING: both runs made the identical edit and measure identically, so this preference cannot reflect a difference |
+Reading: one preference for each mode and one pair with no real difference; the user chose "A" all three times. This is
+three pairs from one viewer and is not enough to decide between the modes. It does show that the measured clipping does
+not predict the user's preference (pair 1).
+Undo: `compare_modes.py undo-blind` took back all six pair copies through their saved sessions: restore exact, master
+unchanged, file unchanged and nothing pending for each of the six. The six copies stay in the catalog at their start
+values.
+BATCH TOTALS: 22 runs (limit 24), 6 new virtual copies (limit 8), no stop rule triggered.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
