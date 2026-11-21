@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: second agent run stage 1 DONE and PAUSED (edit NOT undone); waiting for the user's go on stage 2 (undo)
+## CURRENT STATE — 2026-11-21: Phase 6: both agent runs PASSED on `primary` and are undone; `glimmer` / `fast` still owed; not yet at the gate
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -156,7 +156,18 @@ it, then replace the background with solid light grey RGB 210/210/210):
   Lightroom (one wasted preview and turn input). Not verified by numbers: the composite's background colour and the output
   files' contents (the user is looking at them).
 
-Still owed: stage 2 (undo + checks); profiles `glimmer` and `fast` (the user will
+Second agent run, stage 2 (2026-11-21, session `097de950...` resumed from `logs\agent_run_state.json`): `undo all` took
+back 1 step (the only pending edit, from that session; 0 from other sessions). All 171 settings of the copy equal the
+recorded start state; the master's 170 settings never changed; original SHA-256 unchanged; nothing left pending. The PSD,
+JPG, mask and TIFF stay in `outputs\` (git-ignored). The user looked at the result during the pause.
+
+Change after the run: a pass in which only `replace_background` succeeded (no Lightroom edit in that step) no longer
+re-measures or sends a new preview; the model is told the last measurements still hold. A Lightroom edit in the same step
+still triggers both. Unit-tested (305 tests, `make quality` clean); not re-run live.
+
+Still owed before the Phase 6 gate: profiles `glimmer` and `fast` (tool-calling, injection, vision; after the user confirms
+LM Studio's auto-unload or switches models by hand); `darkroom chat`, `darkroom revert` and MCP over real stdio are
+unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
 Earlier note (done): a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its

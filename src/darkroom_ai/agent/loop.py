@@ -33,6 +33,8 @@ PLAYBOOKS = ("portrait", "landscape")
 EDIT_TOOLS = frozenset(
     {"adjust_lighting", "adjust_white_balance", "adjust_hsl", "crop", "replace_background"}
 )
+# Tools that write new files but change nothing in Lightroom: the measurements stay valid.
+OUTPUT_ONLY_TOOLS = frozenset({"replace_background"})
 MAX_BAD_CALLS = 3
 
 SYSTEM_RULES = """You are darkroom_ai, a photo-editing assistant that works on ONE photo.
@@ -276,6 +278,7 @@ class Agent:
                 break
 
             edited = False
+            lightroom_changed = False
             for call in parsed.calls:
                 step, result = self._run_call(call, turn)
                 steps.append(step)
@@ -288,6 +291,9 @@ class Agent:
                     bad_calls = 0
                     working_copy = result.get("photo_id") or working_copy
                     edited = edited or call.name in EDIT_TOOLS
+                    lightroom_changed = lightroom_changed or (
+                        call.name in EDIT_TOOLS and call.name not in OUTPUT_ONLY_TOOLS
+                    )
                 elif result.get("error") == ErrorCode.LLM_BAD_TOOL_CALL.value:
                     bad_calls += 1
             if bad_calls >= MAX_BAD_CALLS:
@@ -299,6 +305,18 @@ class Agent:
                 if passes >= self._max_passes:
                     stopped = "max_passes"
                     break
+                if not lightroom_changed:
+                    # Only new output files were made: no new measurement, no new preview.
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": f"Pass {passes} of {self._max_passes} is done. Nothing "
+                            "changed in Lightroom in this pass, so the last measurements still "
+                            "hold. Continue only if something still needs doing; otherwise "
+                            "finish with your summary.",
+                        }
+                    )
+                    continue
                 # Look again: new numbers and a new preview after the edits of this pass.
                 analysis = self._registry.call("analyze_photo", {"photo_id": photo_id})
                 text = (

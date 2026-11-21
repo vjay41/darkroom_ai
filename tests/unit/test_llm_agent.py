@@ -781,3 +781,46 @@ def test_revert_command_asks_first(
     assert cli._revert(context.settings, path) == cli.EXIT_OK
     assert "no darkroom_ai edits to take back" in capsys.readouterr().out
     assert "revert" not in [tool.name for tool in mcp_server.list_tools(ToolRegistry(context))]
+
+
+def test_no_remeasure_after_a_pass_that_only_made_output_files(tmp_path: Path) -> None:
+    from darkroom_ai.imaging.masks import SyntheticMaskProvider
+    from fakes import FakePhotoshop
+
+    def run(replies: list[ChatReply], folder: Path) -> tuple[Any, FakeLightroom, ScriptedLlm]:
+        lightroom = FakeLightroom(folder)
+        context = ToolContext(
+            settings=settings_for(folder),
+            lightroom=lightroom,
+            journal=InMemoryJournal(),
+            photoshop=FakePhotoshop(folder / "outputs" / "photoshop"),
+            masks=SyntheticMaskProvider(),
+        )
+        llm = ScriptedLlm(replies)
+        agent = Agent(
+            llm,
+            ToolRegistry(context),
+            profile(vision=True, max_image_px=64),
+            allowed_tools=("adjust_lighting", "replace_background"),
+        )
+        return agent.run("Grey background", MASTER), lightroom, llm
+
+    background = call("replace_background", photo_id=MASTER, color=[210, 210, 210])
+    report, lightroom, llm = run([background, ChatReply("Done.")], tmp_path / "a")
+    assert [(s.tool, s.ok) for s in report.steps] == [("replace_background", True)]
+    assert (report.passes, report.images_sent) == (1, 1)  # only the first preview
+    assert lightroom.calls.count("export_preview") == 1
+    assert "Nothing changed in Lightroom" in llm.sent[1][-1]["content"]
+
+    # A Lightroom edit in the same step still triggers a new measurement and preview.
+    both = ChatReply(
+        "",
+        (
+            RawToolCall("c1", "adjust_lighting", json.dumps({"photo_id": MASTER, "exposure": 0.2})),
+            *background.tool_calls,
+        ),
+    )
+    report, lightroom, llm = run([both, ChatReply("Done.")], tmp_path / "b")
+    assert [s.ok for s in report.steps] == [True, True]
+    assert (report.passes, report.images_sent) == (1, 2)
+    assert "NEW MEASUREMENTS" in llm.sent[1][-1]["content"][0]["text"]
