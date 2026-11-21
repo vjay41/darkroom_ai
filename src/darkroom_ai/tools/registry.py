@@ -95,6 +95,24 @@ TOOLS: tuple[Tool, ...] = (
         lightroom_tools.adjust_white_balance,
         writes=True,
     ),
+    _tool(
+        "list_develop_parameters",
+        lightroom_tools.ListDevelopParametersInput,
+        lightroom_tools.list_develop_parameters,
+        writes=False,
+    ),
+    _tool(
+        "get_develop_parameters",
+        lightroom_tools.GetDevelopParametersInput,
+        lightroom_tools.get_develop_parameters,
+        writes=False,
+    ),
+    _tool(
+        "set_develop_parameters",
+        lightroom_tools.SetDevelopParametersInput,
+        lightroom_tools.set_develop_parameters,
+        writes=True,
+    ),
     _tool("adjust_hsl", lightroom_tools.AdjustHslInput, lightroom_tools.adjust_hsl, writes=True),
     _tool("crop", lightroom_tools.CropInput, lightroom_tools.crop, writes=True),
     _tool(

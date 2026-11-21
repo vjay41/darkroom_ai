@@ -81,7 +81,13 @@ def rig(tmp_path: Path) -> Rig:
     return Rig(tmp_path)
 
 
-NOT_ABOUT_ONE_PHOTO = {"list_presets", "get_selected_photos", "find_photo", "list_catalog_photos"}
+NOT_ABOUT_ONE_PHOTO = {
+    "list_presets",
+    "get_selected_photos",
+    "find_photo",
+    "list_catalog_photos",
+    "list_develop_parameters",
+}
 
 
 def change(result: dict[str, Any], name: str) -> dict[str, Any]:
@@ -102,6 +108,9 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "analyze_photo",
         "adjust_lighting",
         "adjust_white_balance",
+        "list_develop_parameters",
+        "get_develop_parameters",
+        "set_develop_parameters",
         "adjust_hsl",
         "crop",
         "replace_background",
@@ -941,3 +950,17 @@ def test_catalog_listing_and_metadata_are_facts_only(rig: Rig) -> None:
     assert [p["file_name"] for p in only["photos"]] == ["TEST_0002.jpg"]
     meta = rig.call("get_photo_metadata", photo_id=MASTER)["metadata"]
     assert meta["camera_model"] and meta["iso"] and meta["lens"]
+
+
+def test_generic_develop_parameters_are_bounded_and_refuse_unlisted_names(rig: Rig) -> None:
+    listed = rig.call("list_develop_parameters", panel="detail")["parameters"]
+    assert listed and all(entry["panel"] == "detail" for entry in listed)
+    got = rig.call("set_develop_parameters", photo_id=MASTER, changes={"Clarity2012": 80})
+    entry = change(got, "Clarity2012")
+    assert entry["applied_change"] == 50.0 and got["clamped"] is True  # per-call limit: 25% of 200
+    values = rig.call("get_develop_parameters", photo_id=got["photo_id"], names=["Clarity2012"])
+    assert values["values"]["Clarity2012"] == 50.0
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("set_develop_parameters", photo_id=MASTER, changes={"Exposure2012": 1})
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert "adjust_lighting" in caught.value.next_step

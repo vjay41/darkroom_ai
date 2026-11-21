@@ -43,6 +43,11 @@ from darkroom_ai.tools.develop_keys import (
     lighting_limits,
     white_balance_limits,
 )
+from darkroom_ai.tools.develop_parameters import (
+    DEVELOP_PARAMETERS,
+    OWN_TOOLS,
+    parameter_limit,
+)
 
 PREVIEW_LONG_EDGE = 1024
 
@@ -453,6 +458,97 @@ def adjust_hsl(ctx: ToolContext, args: AdjustHslInput) -> Outcome:
             seen.add(limit.key)
             requests.append((limit, float(value)))
     return apply_slider_changes(ctx, args.photo_id, requests, history_name="darkroom_ai: HSL")
+
+
+# -- list / get / set develop parameters ---------------------------------------------------------
+
+
+class ListDevelopParametersInput(BaseModel):
+    """List the Lightroom develop parameters you can read and set with get_develop_parameters and
+    set_develop_parameters (name, panel, allowed range). Changes nothing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    panel: str | None = Field(
+        default=None,
+        description="One panel: basic, detail, lens, geometry, effects, color_grading, calibration.",
+    )
+
+
+class ParameterEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    panel: str
+    minimum: float
+    maximum: float
+    note: str = ""
+
+
+class ListDevelopParametersResult(ToolResult):
+    parameters: tuple[ParameterEntry, ...]
+    set_with_other_tools: str = OWN_TOOLS
+    note: str = (
+        "set_develop_parameters changes a value by an amount you give (not to an absolute value), "
+        "clamped to the range and to a per-call limit. Read the current value first."
+    )
+
+
+def list_develop_parameters(ctx: ToolContext, args: ListDevelopParametersInput) -> Outcome:
+    entries = tuple(
+        ParameterEntry(name=name, panel=panel, minimum=low, maximum=high, note=note)
+        for name, (panel, low, high, note) in DEVELOP_PARAMETERS.items()
+        if args.panel is None or panel == args.panel
+    )
+    return Outcome(ListDevelopParametersResult(parameters=entries))
+
+
+class GetDevelopParametersInput(_Input):
+    """Read the current value of develop settings of a photo (or its working copy). Give the exact
+    Lightroom setting names, e.g. "Clarity2012"; leave names empty for all listed parameters."""
+
+    names: list[str] = Field(default_factory=list, max_length=80)
+
+
+class GetDevelopParametersResult(ToolResult):
+    photo_id: str
+    values: dict[str, Any]
+    note: str = "A value that is null is not set on this photo (Lightroom's default applies)."
+
+
+def get_develop_parameters(ctx: ToolContext, args: GetDevelopParametersInput) -> Outcome:
+    copy = resolve_copy(ctx, args.photo_id)
+    keys = args.names or list(DEVELOP_PARAMETERS)
+    raw = ctx.lightroom.get_develop_settings(copy.id, keys)
+    return Outcome(
+        GetDevelopParametersResult(photo_id=copy.id, values={k: raw.get(k) for k in keys})
+    )
+
+
+class SetDevelopParametersInput(_Input):
+    """Change listed develop parameters of a photo's virtual copy. Each value is the CHANGE to
+    apply (positive or negative), not the final value; it is limited to the parameter's range and
+    to a per-call amount. The original is never touched. Undo with the undo tool."""
+
+    changes: dict[str, float] = Field(min_length=1, max_length=20)
+
+
+def set_develop_parameters(ctx: ToolContext, args: SetDevelopParametersInput) -> Outcome:
+    unknown = [name for name in args.changes if name not in DEVELOP_PARAMETERS]
+    if unknown:
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"Not a settable parameter: {', '.join(unknown)}.",
+            next_step="Call list_develop_parameters for the names. Exposure, tone, white balance "
+            "and colour mixer have their own tools: " + OWN_TOOLS,
+        )
+    requests = [
+        (parameter_limit(ctx.settings.guardrails, name), float(change))
+        for name, change in args.changes.items()
+    ]
+    return apply_slider_changes(
+        ctx, args.photo_id, requests, history_name="darkroom_ai: develop parameters"
+    )
 
 
 # -- crop -----------------------------------------------------------------------------------------
