@@ -94,7 +94,11 @@ def run_selftest(
                 name="lightroom answers",
                 status="fail",
                 detail=f"[{exc.code.value}] {exc.message}",
-                next_step=exc.next_step,
+                next_step=(
+                    f"{exc.next_step} The plug-in serves one client at a time: if Hermes' "
+                    "connector is running it may hold the connection, so run the check from "
+                    "Hermes (tool run_selftest) instead of the command line."
+                ),
             )
         )
         info = None

@@ -12,6 +12,8 @@ from darkroom_ai.compat import (
     plugin_is_recent_enough,
 )
 from darkroom_ai.errors import DarkroomError
+from darkroom_ai.safety.confirm import require_confirmation
+from darkroom_ai.selftest import Probe, run_selftest
 from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult
 
 
@@ -90,5 +92,51 @@ def get_capabilities(ctx: ToolContext, args: GetCapabilitiesInput) -> Outcome:
             features=data.features,
             not_verified=not_verified,
             advice=advice,
+        )
+    )
+
+
+class RunSelftestInput(BaseModel):
+    """Check, probe by probe, that the installed Lightroom Classic (and Photoshop, if it is
+    already running) still behaves as darkroom_ai expects: versions, catalog read, every Develop
+    key the tools use (drift check), metadata, presets, preview. Run it after an Adobe update and
+    report every probe. Reads only by default. With write=true it also makes ONE virtual copy in
+    the test catalog, changes Exposure by +0.1 EV, reads it back and puts it back; that asks
+    Vijay first. A failed probe means the matching tools may not work: say which."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    write: bool = False
+
+
+class RunSelftestResult(ToolResult):
+    lightroom_version: str | None
+    photoshop_version: str | None
+    wrote_a_virtual_copy: bool
+    all_passed: bool
+    probes: list[Probe]
+
+
+def run_selftest_tool(ctx: ToolContext, args: RunSelftestInput) -> Outcome:
+    if args.write:
+        require_confirmation(
+            ctx.confirmer,
+            "run the write self-test: make one virtual copy in the test catalog, change Exposure "
+            "by +0.1 EV and put it back",
+            {"catalog": "test catalog only", "originals": "untouched"},
+        )
+    photoshop = ctx.photoshop
+    if ctx.processes is not None and ctx.processes.is_running(ctx.settings.apps.photoshop_process):
+        pass
+    else:
+        photoshop = None  # the selftest never starts Photoshop
+    report = run_selftest(ctx.lightroom, photoshop, ctx.settings.guardrails, write=args.write)
+    return Outcome(
+        RunSelftestResult(
+            lightroom_version=report.lightroom_version,
+            photoshop_version=report.photoshop_version,
+            wrote_a_virtual_copy=report.wrote,
+            all_passed=not report.failed,
+            probes=report.probes,
         )
     )

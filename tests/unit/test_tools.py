@@ -84,6 +84,7 @@ def rig(tmp_path: Path) -> Rig:
 NOT_ABOUT_ONE_PHOTO = {
     "get_app_status",
     "get_capabilities",
+    "run_selftest",
     "ensure_apps_running",
     "list_presets",
     "get_selected_photos",
@@ -107,6 +108,7 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
     assert rig.tools.names == (
         "get_app_status",
         "get_capabilities",
+        "run_selftest",
         "ensure_apps_running",
         "get_photo_info",
         "list_catalog_photos",

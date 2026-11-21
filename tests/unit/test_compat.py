@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from test_tools import make_settings
 
 from darkroom_ai.compat import (
@@ -17,7 +18,7 @@ from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.selftest import expected_keys, format_report, run_selftest
 from darkroom_ai.tools.context import ToolContext
 from darkroom_ai.tools.registry import TOOLS, ToolRegistry
-from fakes import FakeLightroom, FakePhotoshop, InMemoryJournal
+from fakes import AllowAll, FakeLightroom, FakePhotoshop, InMemoryJournal
 
 
 def test_data_file_loads_and_every_tool_named_in_it_exists() -> None:
@@ -140,3 +141,23 @@ def test_expected_keys_cover_the_key_map() -> None:
     assert {"Exposure2012", "CropLeft", "HueAdjustmentRed", "MaskGroupBasedCorrections"} <= set(
         keys
     )
+
+
+def test_run_selftest_tool_reads_without_asking(tmp_path: Path) -> None:
+    got = _registry(tmp_path).call("run_selftest", {})
+    assert got["all_passed"] is True and got["wrote_a_virtual_copy"] is False
+    assert {p["name"] for p in got["probes"]} >= {"develop key map", "write probe"}
+
+
+def test_run_selftest_write_mode_needs_a_go_ahead(tmp_path: Path) -> None:
+    with pytest.raises(DarkroomError) as caught:
+        _registry(tmp_path).call("run_selftest", {"write": True})
+    assert caught.value.code is ErrorCode.CONFIRMATION_REQUIRED
+    context = ToolContext(
+        settings=make_settings(tmp_path),
+        lightroom=FakeLightroom(tmp_path),
+        journal=InMemoryJournal(),
+        confirmer=AllowAll(),
+    )
+    got = ToolRegistry(context).call("run_selftest", {"write": True})
+    assert got["wrote_a_virtual_copy"] is True and got["all_passed"] is True

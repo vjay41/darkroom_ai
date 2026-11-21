@@ -1711,3 +1711,15 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
   metadata, masks (virtual copy only), presets, preview render; with --write a virtual copy in the TEST catalog gets Exposure +0.1, read back, restored. Report in
   outputs/selftest-<date>.json. Photoshop only asked if already running.
 - 357 tests pass on Linux (ruff, format, mypy clean). NOT done yet: plug-in capability probe + protocol handshake (needs Lua + live check), upgrade runbook (P8), live selftest run.
+
+### 2026-11-21 20:45 - run_selftest tool; live findings while restarting Hermes pieces
+- The Lightroom plug-in serves ONE client at a time (known, PRD). So `darkroom selftest` / `doctor` / `lightroom ping` from the command line fail with
+  LR_NOT_REACHABLE while Hermes' connector holds the connection (seen live at 20:34: connector get_app_status = ready, CLI ping = not reachable).
+  Fix: new MCP tool `run_selftest` (read-only by default; write=true asks first) runs inside the connector; the CLI selftest error now says so.
+  (Earlier recommendation "selftest not triggered by Hermes" is reversed for this reason.)
+- Live on Windows: `hermes mcp test darkroom_ai` discovers 30 tools incl. get_capabilities (new code works). Hermes (gateway process, pid 26652) keeps its own
+  in-memory + `cache/mcp_schema_cache.json` copy of the tool list (29 tools, written 19:24). Desktop "new session", app restart, config touch and
+  /reload-mcp-less attempts did NOT refresh it. I removed the darkroom_ai entry from the cache file (backup: mcp_schema_cache.json.bak-20261121); the running
+  gateway still serves the old list. Needs a Hermes gateway restart (affects the user's other bots/cron) or Hermes' own /reload-mcp: LEFT TO THE USER.
+- Hermes footer now shows "Manual" approvals in the darkroom profile (verified in the desktop UI after a new session).
+- Connector verified live current: running code b78dc128faa11866 == disk at 20:23; Lightroom 15.2.1, plug-in 0.9.1 ready.

@@ -61,6 +61,12 @@ TOOLS: tuple[Tool, ...] = (
         writes=False,
     ),
     _tool(
+        "run_selftest",
+        capabilities.RunSelftestInput,
+        capabilities.run_selftest_tool,
+        writes=False,
+    ),
+    _tool(
         "ensure_apps_running",
         app_status.EnsureAppsRunningInput,
         app_status.ensure_apps_running,
