@@ -11,6 +11,8 @@ base_url = "http://127.0.0.1:1234/v1"
 model = "qwen/qwen3.8-27b"
 vision = true
 tool_mode = "native"        # native | json_schema | prompt
+reasoning_effort_tools = "none"   # no thinking on tool follow-up turns (measured: about half the time)
+# reasoning_effort_planning is not set: planning turns (new measurements) use the model's default thinking
 temperature = 0.2
 max_image_px = 1024
 max_images = 2
@@ -79,7 +81,7 @@ score_threshold = 0.7
 
 [gpu]
 llm_gpu_index = 0           # the model server should be pinned to this GPU (RTX 5090)
-min_free_mb = 6000          # doctor warns if the model server and Photoshop share a GPU below this
+min_free_mb = 3000          # doctor warns if the model server and Photoshop share a GPU below this
 
 [paths]
 logs_dir = "logs"

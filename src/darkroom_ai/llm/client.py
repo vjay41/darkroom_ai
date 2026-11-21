@@ -47,6 +47,7 @@ class LlmClient(Protocol):
         tools: Sequence[dict[str, Any]] | None = None,
         response_format: dict[str, Any] | None = None,
         max_tokens: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> ChatReply: ...
 
     def models(self) -> list[str]: ...
@@ -97,6 +98,7 @@ class LocalLlmClient:
         tools: Sequence[dict[str, Any]] | None = None,
         response_format: dict[str, Any] | None = None,
         max_tokens: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> ChatReply:
         payload: dict[str, Any] = {
             "model": self._profile.model,
@@ -110,6 +112,8 @@ class LocalLlmClient:
             payload["response_format"] = response_format
         if max_tokens:
             payload["max_tokens"] = max_tokens
+        if reasoning_effort:
+            payload["reasoning_effort"] = reasoning_effort
 
         started = time.monotonic()
         data = self._request("POST", "chat/completions", payload)

@@ -135,7 +135,17 @@ def _models_test(settings: Settings, names: list[str], skip_vision: bool, as_jso
                     f"{vision.seconds:.1f} s, sent {vision.image} (synthetic picture)"
                 )
                 failed += 0 if vision.passed else 1
-            scenarios = selftest.tool_calling_test(llm, profile, settings)
+            # With thinking switched off for tool turns, compare against the model's default.
+            thinking_off = profile.reasoning_effort_tools is not None
+            baseline = None
+            if thinking_off:
+                default_profile = profile.model_copy(
+                    update={"reasoning_effort_tools": None, "reasoning_effort_planning": None}
+                )
+                baseline = selftest.tool_calling_test(llm, default_profile, settings)
+            scenarios = selftest.tool_calling_test(
+                llm, profile, settings, planning=not thinking_off
+            )
             for item in scenarios:
                 state = "PASS" if item.passed else "FAIL"
                 print(
@@ -144,7 +154,20 @@ def _models_test(settings: Settings, names: list[str], skip_vision: bool, as_jso
                     f"{item.final_exposure:+g} ({item.stopped_because}) {item.note}"
                 )
                 failed += 0 if item.passed else 1
-            injections = selftest.injection_test(llm, profile, settings)
+            if baseline is not None:
+                rate_on = selftest.valid_call_rate(baseline)
+                rate_off = selftest.valid_call_rate(scenarios)
+                state = "FAIL" if rate_off < rate_on else "PASS"
+                print(
+                    f"  think  [{state}]: valid-call rate {rate_on:.0%} with the model's default "
+                    f"thinking ({sum(s.passed for s in baseline)}/{len(baseline)} scenarios, "
+                    f"{sum(s.seconds for s in baseline):.1f} s) vs {rate_off:.0%} with "
+                    f"reasoning_effort={profile.reasoning_effort_tools!r} on every turn "
+                    f"({sum(s.passed for s in scenarios)}/{len(scenarios)} scenarios, "
+                    f"{sum(s.seconds for s in scenarios):.1f} s); the lines above are the latter"
+                )
+                failed += 1 if rate_off < rate_on else 0
+            injections = selftest.injection_test(llm, profile, settings, planning=not thinking_off)
             for hit in injections:
                 state = "PASS" if hit.guardrails_held else "FAIL"
                 followed = "model FOLLOWED it" if hit.followed else "model ignored it"

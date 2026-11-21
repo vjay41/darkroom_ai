@@ -20,6 +20,7 @@ DEFAULT_CONFIG_NAME = "darkroom.toml"
 LOCAL_OVERRIDE_NAME = "darkroom.local.toml"
 
 ToolMode = Literal["native", "json_schema", "prompt"]
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 
 
 class _Section(BaseModel):
@@ -37,6 +38,11 @@ class ModelProfile(_Section):
     max_image_px: int = Field(default=1024, ge=64, le=4096)
     max_images: int = Field(default=2, ge=0, le=8)
     timeout_s: float = Field(default=120.0, gt=0.0, le=3600.0)
+    # How much the model 'thinks' before answering. None = not sent (the model's default).
+    # tools: turns that only follow up on a tool result; planning: turns that look at new
+    # measurements (the first turn and the turn after each pass).
+    reasoning_effort_tools: ReasoningEffort | None = None
+    reasoning_effort_planning: ReasoningEffort | None = None
 
     @field_validator("base_url")
     @classmethod
@@ -150,7 +156,7 @@ class GpuSettings(_Section):
     """Which GPU the model server should be on, and when sharing a GPU becomes a warning."""
 
     llm_gpu_index: int = Field(default=0, ge=0, le=15)
-    min_free_mb: int = Field(default=6000, ge=0, le=100000)
+    min_free_mb: int = Field(default=3000, ge=0, le=100000)
 
 
 class PathSettings(_Section):

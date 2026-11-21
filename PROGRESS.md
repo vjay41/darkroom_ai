@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: photo vision check and GPU conflict measurement done on `primary`; waiting for the user
+## CURRENT STATE — 2026-11-21: Phase 6: thinking setting, GPU threshold and playbooks updated; first agent run plan shown, waiting for the go
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -92,7 +92,23 @@ tool call). Original SHA-256 unchanged; documents closed without saving; Photosh
 although the measurement shows no problem; the threshold may be too cautious (open decision).
 Left behind: `outputs\masks\TEST_2457-37_subject-2.png`, `-3.png`, copies in `outputs\photoshop`, one preview in `previews`.
 
-Still owed: profiles `glimmer` and `fast` (after the user confirms LM Studio's auto-unload); the first agent run.
+User decisions (2026-11-21) and what was built for them:
+- Per-profile `reasoning_effort_tools` / `reasoning_effort_planning` (none | minimal | low | medium | high; unset = not sent).
+  `primary` has tools = "none"; planning is unset, so planning turns (the first turn and the turn after each pass, i.e. when
+  the model sees new measurements) keep the model's default thinking. `Agent(planning=False)` uses the tools value on every turn.
+- `darkroom models test` now runs the tool scenarios twice when thinking is off for tools and fails if the valid-call rate
+  drops. Run on `primary` (text only, simulated): 100 % valid calls and 4/4 scenarios both ways; 17.8 s with default thinking
+  vs 4.2 s with "none" on every turn. Injection tests (thinking off on every turn): ignored, guardrails held.
+- `gpu.min_free_mb` = 3000; the shared-GPU message states what was measured (4.3 GB free with Photoshop open, no slowdown,
+  one photo). `doctor` with Photoshop open now prints it as a note (4457 MB free).
+- Playbooks and the system rules: exposure / highlights / shadows decisions come from the measurements (p50, p05,
+  highlights_pct, shadows_pct with stated ranges); the model's visual impression of brightness and clipping is declared
+  unreliable; the preview is for subject, skin and colour only. The numeric ranges in the playbooks are my starting values,
+  not tuned.
+- 300 tests pass, `make quality` clean.
+
+Still owed: the first agent run (plan shown, waiting for the go); profiles `glimmer` and `fast` after that (the user will
+confirm LM Studio's auto-unload or switch models by hand).
 
 Earlier note (done): a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its
 brightness statement, and the GPU conflict measurement with Photoshop running. Still owed: profiles `glimmer` and `fast`.

@@ -280,9 +280,11 @@ class ScriptedLlm:
     def __init__(self, replies: Sequence[ChatReply]) -> None:
         self._replies = list(replies)
         self.sent: list[list[dict[str, Any]]] = []
+        self.options: list[dict[str, Any]] = []
 
-    def chat(self, messages: Sequence[dict[str, Any]], **_: Any) -> ChatReply:
+    def chat(self, messages: Sequence[dict[str, Any]], **options: Any) -> ChatReply:
         self.sent.append([dict(m) for m in messages])
+        self.options.append(options)
         return self._replies.pop(0) if self._replies else ChatReply("Nothing more to do.")
 
     def models(self) -> list[str]:
@@ -657,3 +659,72 @@ class ScriptedLlmWithClose(ScriptedLlm):
 
     def close(self) -> None:
         pass
+
+
+# -- reasoning effort -----------------------------------------------------------------------------
+
+
+def test_reasoning_effort_is_sent_only_when_set(server: FakeModelServer) -> None:
+    llm = LocalLlmClient(profile().model_copy(update={"base_url": server.url}))
+    llm.chat([{"role": "user", "content": "hi"}])
+    assert "reasoning_effort" not in server.requests[-1]
+    llm.chat([{"role": "user", "content": "hi"}], reasoning_effort="none")
+    assert server.requests[-1]["reasoning_effort"] == "none"
+    llm.close()
+    with pytest.raises(ValueError, match="reasoning_effort_tools"):
+        profile(reasoning_effort_tools="lots")
+
+
+def test_agent_thinks_on_planning_turns_only(tmp_path: Path) -> None:
+    replies = [
+        ChatReply("", (RawToolCall("c1", "adjust_lighting", "{broken"),)),
+        call("adjust_lighting", photo_id=MASTER, exposure=0.3),
+        ChatReply("Done."),
+    ]
+    used = profile(reasoning_effort_tools="none", reasoning_effort_planning="low")
+    rig = Rig(tmp_path / "a", replies, profile=used)
+    rig.agent.run("Brighten", MASTER)
+    # first look = planning; retry after an unusable answer = tool turn; new numbers = planning
+    assert [o["reasoning_effort"] for o in rig.llm.options] == ["low", "none", "low"]
+
+    never = Rig(tmp_path / "b", replies, profile=used, planning=False)
+    never.agent.run("Brighten", MASTER)
+    assert [o["reasoning_effort"] for o in never.llm.options] == ["none", "none", "none"]
+
+    unset = Rig(tmp_path / "c", replies)
+    unset.agent.run("Brighten", MASTER)
+    assert [o["reasoning_effort"] for o in unset.llm.options] == [None, None, None]
+
+
+def test_playbooks_and_rules_put_measurements_first() -> None:
+    from darkroom_ai.agent.loop import SYSTEM_RULES
+
+    assert "visual impression of brightness and clipping" in SYSTEM_RULES
+    for name in ("portrait", "landscape"):
+        text = load_playbook(name)
+        assert "MEASUREMENTS" in text and "unreliable" in text
+
+
+def test_valid_call_rate_and_measured_note() -> None:
+    from darkroom_ai.gpu import MEASURED
+
+    results = [
+        selftest.ScenarioResult("a", True, 3, 3, 1, "finished", 1.0, 0.0),
+        selftest.ScenarioResult("b", False, 1, 0, 1, "finished", 1.0, 0.0),
+    ]
+    assert selftest.valid_call_rate(results) == 0.75
+    assert selftest.valid_call_rate([]) == 0.0
+    shared = report_with(("x\\llama-server.exe", "GPU-aaa"), ("x\\Photoshop.exe", "GPU-aaa"))
+    (warning,) = conflict_warnings(shared, llm_gpu=0, min_free_mb=6000)
+    assert MEASURED in warning and "one photo" in warning
+    assert (
+        parse_settings(
+            {
+                "llm": {
+                    "active_profile": "m",
+                    "profiles": {"m": {"base_url": "http://127.0.0.1:1/v1", "model": "x"}},
+                }
+            }
+        ).gpu.min_free_mb
+        == 3000
+    )
