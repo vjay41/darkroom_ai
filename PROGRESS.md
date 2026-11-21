@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-3 done; next the clamp run ("Increase the exposure by 3 stops"), waiting for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-3 and the clamp run done; next the "much brighter" run on TEST_2467-47.jpg, waiting for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -561,7 +561,25 @@ copies only, including a strong "much brighter" request and a white-balance requ
     measurement: clipped highlights 0.029 % (start 0.550 %), p50 0.592 (start 0.585), cast "no noticeable cast",
     measurable. Read-back: the edit held after the export. Undo: 1 step; all 171 settings equal the start state; master
     and SHA-256 unchanged; nothing pending. Summary (363 characters) in `logs\agent_run_20261121-130956.txt`.
-  * Next: the clamp run, then the dark-photo run, 4, 5, 6, 7; each waits for the user's go.
+  * CLAMP RUN DONE (portrait playbook, lighting only, `TEST_2462-42.jpg` copy; request "Increase the exposure by 3
+    stops."): turn 1 (3.1 s, 384 tokens, 310 thinking): exposure +3 requested, +1.5 applied, rule "per_pass"; the model
+    saw `clamped: true` and the note "Clamped - exposure: asked +3, applied +1.5 (per_pass limit)". Turn 2 (10.9 s, 1650
+    tokens, 1526 thinking): a SECOND, different request, exposure +1.5 (applied +1.5, 1.5 -> 3.0, no limit). Turn 3
+    (3.5 s): finished with a summary. It did not repeat the identical call and did not ask to go beyond the total.
+    Total exposure: +3.0 EV, exactly the 3 EV total and exactly what the user asked for. 2 passes, 19.4 s, 3 previews.
+    Measurements: start p50 0.585, clipped highlights 0.55 %; after pass 1 p50 0.806, 13.2 %; final (after pass 2)
+    p50 0.941, clipped highlights 61.9 %, cast "no noticeable cast" (measurable). Read-back: both edits held. Undo:
+    2 steps; all 171 settings equal the start state; master and SHA-256 unchanged; nothing pending. Summary (701
+    characters) in `logs\agent_run_20261121-131317.txt`, not read.
+    Observation: the per-pass limit slows a large change down but does not stop it; an explicit request can reach the
+    full 3 EV total in two passes, here with 62 % of the picture clipped. Whether the model warned about that in its
+    summary is not known to the assistant.
+  * `TEST_2457-37.jpg` measured (one preview export of the MASTER, no edit): p50 0.528, p05 0.119, p95 0.896, clipped
+    highlights 2.618 %, cast "no noticeable cast" (measurable). Confirmed: exactly one new file (a preview), no virtual
+    copy created, master settings and file SHA-256 unchanged, no .xmp. Its p50 is not below 0.40, so the "much
+    brighter" run uses `TEST_2467-47.jpg` (p50 0.437). Note: none of the five TEST_ JPGs is really dark; the only dark
+    test material is the RAW copy of `RAW_DSC00480.ARW` (p50 0.008).
+  * Next: the dark-photo run, then 4, 5 (`--pause`), 6, 7; each waits for the user's go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
