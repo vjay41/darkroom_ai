@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-3 and the clamp run done; next the "much brighter" run on TEST_2467-47.jpg, waiting for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-3, the clamp run and the dark-photo run done; design note (no hard-coded editing decisions) shown, waiting for sign-off; runs 4-7 wait for the go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -579,7 +579,32 @@ copies only, including a strong "much brighter" request and a white-balance requ
     copy created, master settings and file SHA-256 unchanged, no .xmp. Its p50 is not below 0.40, so the "much
     brighter" run uses `TEST_2467-47.jpg` (p50 0.437). Note: none of the five TEST_ JPGs is really dark; the only dark
     test material is the RAW copy of `RAW_DSC00480.ARW` (p50 0.008).
-  * Next: the dark-photo run, then 4, 5 (`--pause`), 6, 7; each waits for the user's go.
+  * DARK-PHOTO RUN DONE (user choice: the RAW copy of `RAW_DSC00480.ARW`, median 0.008; portrait playbook, lighting
+    only; request "Make it much brighter."):
+    Pass 1 (6.6 s, 985 tokens, 807 thinking): exposure +2 requested, +1.5 applied (per_pass; note "Clamped - exposure:
+    asked +2, applied +1.5 (per_pass limit)"), shadows +30, highlights -20.
+    Pass 2 (6.2 s, 905 tokens, 722 thinking): exposure +1.5 (applied, now +3.0, the total), highlights -30 (-50),
+    shadows +20 (+50). A different request, not a repeat.
+    Pass 3 (15.4 s, 2258 tokens, 2077 thinking): exposure +0.5 requested, 0 applied (total; note "Clamped - exposure:
+    asked +0.5, applied +0 (total limit)"), highlights -30 (-80).
+    Ended at the pass limit. The model did NOT ask to go beyond the total (`allow_beyond_total` was never set), so the
+    confirmation path was not triggered; it simply met the total clamp. Total exposure +3.0 of 3 EV.
+    Measurements, median / clipped highlights / clipped shadows: start 0.008 / 1.27 % / 34.2 %; after pass 1 0.050 /
+    6.70 % / 4.67 %; after pass 2 0.215 / 15.1 % / 0.04 %; FINAL (after pass 3, taken by the new final measurement)
+    0.204 / 10.1 % / 0.04 %. Cast: "towards magenta" at the start, "towards blue/cool" from pass 2 on.
+    Read-back: all edits held. Undo: 3 steps; all 172 settings equal the start state; master and SHA-256 unchanged;
+    nothing pending. 30.6 s, 3 previews (50-77 kB). Summary file holds the program's pass-limit line (332 characters).
+    Observations: even at the full +3 EV the median is only 0.20, i.e. the request "much brighter" on a very dark RAW
+    is bounded by the 3 EV total; and 10 % of the picture is clipped at the end.
+  * DESIGN PRINCIPLE from the user (2026-11-21), also recorded in PRD.md section 5.0: no editing decision is hard-coded
+    or scripted; the AI analyses and decides; the application is tools, measurements and safety limits. Safety rules,
+    the write gate, undo, honest measurements and read-back checks stay in code. PHASE 9 CHANGES accordingly: EXIF, lens
+    profile, chromatic aberration and vignette become tools the model chooses to use; there is NO deterministic pre-fix
+    step (this replaces the "deterministic pre-fix step" wording in the open thread (a) below).
+  * After the dark-photo run, no code: a design note was shown to the user (inventory of editing heuristics in code and
+    prompts; a `--playbook none` mode; a playbook-vs-none comparison after run 7; Phase 9 as tools; a way for the model
+    to see beforehand what an edit would do). Waiting for the user's sign-off.
+  * Runs 4, 5 (`--pause`), 6, 7: waiting for the user's go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes

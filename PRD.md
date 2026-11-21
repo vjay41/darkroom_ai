@@ -44,6 +44,13 @@ User ──► CLI chat / MCP client ──► agent loop ──► local VLM (L
    Lua plugin in LrC    Photoshop.exe
 ```
 
+### 5.0 Design principle (from the user, 2026-11-21)
+No editing decision is hard-coded or scripted. The AI analyses the photo and decides what to do; the application is a
+collection of tools and measurements plus safety limits. What stays in code: the safety rules (limits, virtual copies
+only, never overwrite), the write gate, undo and revert, honest measurements ("not measurable" instead of a guess) and
+read-back checks. Consequence for later phases: EXIF, lens-profile correction, chromatic-aberration removal and vignette
+correction become tools the model chooses to use; there is no deterministic pre-fix step.
+
 ### 5.1 Lightroom connection
 Our OWN Lua plugin (.lrplugin, in this repository) runs inside Lightroom and exposes JSON commands over localhost TCP sockets
 (LrSocket). Python sends commands (read photo, get/apply Develop settings, create virtual copy, snapshot, export preview to a file).
