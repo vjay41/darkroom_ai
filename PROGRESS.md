@@ -1509,3 +1509,13 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
 - Constraint: every one of these "must be called while the Develop module is active" (some also with the masking tool open), and they act on the photo currently shown in Develop. So a mask tool has to select the target virtual copy, switch Lightroom to Develop (LrApplicationView.switchToModule) and open masking; the person will SEE Lightroom change module. This is the SDK-sanctioned route (no UI automation), but it takes over the Lightroom view while it runs.
 - Verification: createNewMask can return nil/async for AI masks; verify by diffing getAllMasks before/after, then read back the photo's MaskGroupBasedCorrections via getDevelopSettings. Adjustments inside a mask can be written with applyDevelopSettings (MaskGroupBasedCorrections) or setValue("local_*") after selectMask.
 - Plan (P4): read-only list_masks first; then create_ai_mask / create_range_mask / create_gradient_mask on a virtual copy only; then set_mask_adjustments; remove_mask; each with read-back and journaled exact undo. Tested live through Hermes on the test catalog before exposure. Ported logic from par4987/lightroom-mcp (MIT) only after the P0 audit table; attribution in NOTICE.
+
+## 2026-11-21 - P4 masks, live results
+- Live in Lightroom via Hermes (DSC_2411-1.jpg): create_mask aiSelection/subject OK (mask id is a UUID; getAllMasks entries are
+  {Hidden, ID, Name, Tools}), inspect_masks OK, set_mask_adjustments local_Exposure +0.5 / local_Contrast +15 OK (before/after
+  verified), undo x2 restored MaskGroupBasedCorrections to [] OK.
+- invert_mask failed with MASK_PHOTO_NOT_SHOWN: Lightroom's Develop module showed another photo (DSC00528.ARW copy). Cause not
+  proven (a click in Lightroom, or slow selection change after export_preview). Plug-in 0.7.1: showInMasking retries 4x and names
+  the photo Lightroom shows. UNVERIFIED: invert_mask, delete_mask live.
+- Hermes has no select-photo tool; the plug-in selects the working copy itself. Rule for the user: do not click in Lightroom while a
+  mask tool runs.

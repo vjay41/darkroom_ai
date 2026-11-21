@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.7.0"
+local PLUGIN_VERSION = "0.7.1"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -630,16 +630,34 @@ local function maskDump()
 	}
 end
 
+local SHOW_ATTEMPTS = 4
+
+-- Makes Lightroom's Develop module show `photo` and opens Masking. Lightroom can be slow to follow
+-- a selection change (or the person may have clicked another photo), so this re-selects and checks
+-- up to SHOW_ATTEMPTS times before giving up, and says which photo Lightroom is showing instead.
 local function showInMasking(ctx, photo)
-	ctx.catalog:setSelectedPhotos(photo, {})
-	LrApplicationView.switchToModule("develop")
-	LrTasks.sleep(1.0)
-	local target = ctx.catalog:getTargetPhoto()
-	if not target or target:getRawMetadata("uuid") ~= photo:getRawMetadata("uuid") then
-		fail("MASK_PHOTO_NOT_SHOWN", "Lightroom's Develop module is not showing the requested photo")
+	local wanted = photo:getRawMetadata("uuid")
+	local shownName = nil
+	for attempt = 1, SHOW_ATTEMPTS do
+		ctx.catalog:setSelectedPhotos(photo, {})
+		LrApplicationView.switchToModule("develop")
+		LrTasks.sleep(0.5 * attempt + 0.5)
+		local target = ctx.catalog:getTargetPhoto()
+		if target and target:getRawMetadata("uuid") == wanted then
+			LrDevelopController.goToMasking()
+			LrTasks.sleep(0.5)
+			return
+		end
+		shownName = target and target:getFormattedMetadata("fileName") or "no photo"
 	end
-	LrDevelopController.goToMasking()
-	LrTasks.sleep(0.5)
+	fail(
+		"MASK_PHOTO_NOT_SHOWN",
+		"Lightroom's Develop module is showing "
+			.. tostring(shownName)
+			.. " instead of the requested photo after "
+			.. SHOW_ATTEMPTS
+			.. " tries. Do not click in Lightroom while a mask tool runs."
+	)
 end
 
 function Commands.write.create_mask(params, ctx)
