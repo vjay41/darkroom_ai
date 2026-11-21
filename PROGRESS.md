@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21 08:25: Select Subject mask backend PASSED; waiting for the user
+## CURRENT STATE — 2026-11-21 08:35: Phase 4 gate accepted; Phase 5 plan shown, waiting for the user's go
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -14,8 +14,9 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 1 lightroom-cli review | Done (not adopted; own plug-in) |
 | 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
-| 4 Imaging toolkit | Hand-off spike DONE. Toolkit built and unit-tested. Photoshop Select Subject mask backend (Device mode only) BUILT and run once on a test copy: PASSED. NOT run: ONNX backend (no model file, `make install-ml` not run) and the YuNet face detector (no model file). |
-| 5-8 | Not started |
+| 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
+| 5 Tool layer + guardrails | Plan shown to the user; waiting for the go |
+| 6-8 | Not started |
 
 ### Catalog facts (corrects earlier counts in this file)
 - The user imported the test copies by hand on 2026-11-21. They are in the catalog as `D:\darkroom_test\TEST_2457-37.jpg` ...
@@ -103,12 +104,19 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
   final mask is re-saved as a small single-channel PNG. The intermediate file is left in `outputs\photoshop`.
 - 4 specks: tiny disconnected regions in the mask; a clean-up step (drop regions under a size threshold) is not implemented.
 
-### Next step (needs the user's go)
-- Phase 4 gate report, then Phase 5 (tool layer + guardrails). The live wrong-catalog test required before Phase 5 is done.
-- Still open in Phase 4: ONNX mask backend run on GPU 1 (needs the user's model path and approval for `make install-ml`, a
-  large download) and the YuNet face detector (needs the user's model file). Both are unit-tested with fakes only.
-- Not verified: Select Subject with the mode set to Cloud (the refusal is covered by unit tests against the fake only; it
-  would need the user to switch the preference).
+### Phase 4 gate (user, 2026-11-21)
+- Accepted, pending the user's own visual check of the mask (`outputs\masks\TEST_2457-37_subject.png`).
+- DEFERRED until the user says so: ONNX mask backend run and the YuNet face detector. Do NOT run `make install-ml` and do
+  not download anything.
+
+### Phase 4 backlog (user request)
+- Speck clean-up: drop mask regions under a size threshold (the Select Subject mask had 4 specks).
+- Delete the large intermediate PNG that Photoshop writes into `outputs\photoshop` (62 MB) after each run, once the final
+  mask has been saved.
+
+### Next step
+Phase 5 - tool layer + guardrails. The plan has been shown; wait for the user's go before building. Show the exact
+Lightroom/Photoshop actions before the first live run of the tools. Do not push `dev`.
 
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 
