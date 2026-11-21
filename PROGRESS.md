@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: chat copy is back at its start values, but NOT through `darkroom revert` (no journal entry; edit still listed as pending); Part B and Muse/fast DEFERRED to Phase 8
+## CURRENT STATE — 2026-11-21: Phase 6 GATE: report written, waiting for the user's "proceed"; Phase 7 plan proposed, not started
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -16,7 +16,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
 | 5 Tool layer + guardrails | GATE ACCEPTED by the user on 2026-11-21, pending the user's visual checks of the mask and the background JPG. `apply_preset` stays unexposed until tested live. |
-| 6 LLM layer + agent | Built and unit-tested; text-only model tests passed on `primary`. Waiting for the user's go on the first image-carrying call (synthetic test picture). Not a gate yet. |
+| 6 LLM layer + agent | Built; live on `primary` (Qwen) only. AT THE GATE, waiting for "proceed". Muse/fast, the two-model GPU measurement and MCP over real stdio are deferred (see the gate report). |
 | 7-8 | Not started |
 
 ### Phase 6 (built 2026-11-21)
@@ -228,8 +228,52 @@ After-revert checks (2026-11-21, after the user reported the revert as done):
 - Timing after the fix, text-only tool call (no image): 1.07 s and 0.70 s with default thinking, 0.45 s with thinking off;
   same as the first measurement (0.84-1.01 s / 0.34-0.49 s). Not re-measured: an agent turn with a preview (earlier 2-6 s).
 
-Still owed before the Phase 6 gate: a real `darkroom revert` run on `TEST_2461-41.jpg` by the user (clears the pending
-entry and is the command's first live test); `darkroom chat`, `darkroom revert` and MCP over real stdio are
+`darkroom revert` run by the user (2026-11-21): "Reverted 1 setting(s)." Checks afterwards: journal has 1 `revert` entry
+(took back entry `9081556d...`, `IncrementalTemperature` -> 0); copy equals the recorded start values; nothing pending;
+master unchanged; SHA-256 unchanged. Limit of this live test: the value was already 0 when the command ran, so it proves
+the command path, the confirmation and the journal entry, not a visible change of a setting (that is unit-tested).
+
+### Phase 6 gate report (2026-11-21)
+Tested LIVE on `primary` (Qwen, LM Studio on 127.0.0.1):
+- `darkroom doctor`; `darkroom models test primary` (vision on the synthetic picture 5/5; 4/4 tool scenarios, 100 % valid
+  calls with and without thinking; prompt injection in a file name and a tool result ignored, guardrails held).
+- Thinking: about half of a tool call; `reasoning_effort: "none"` switches it off; other switches had no effect.
+- Photo vision check on one photo: the model misjudged brightness and clipping -> playbooks rely on measurements.
+- GPU: Select Subject with Qwen alone on GPU 0: no slowdown (7.6-8.3 s vs 8.1 s).
+- Agent run 1 (highlights -20) and run 2 (highlights -20 + `replace_background` 210/210/210, pause, undo by resumed
+  session): results as predicted from the numbers; all settings restored; originals unchanged.
+- `darkroom chat` once (temperature -10, "cooler"): measured cast moved as requested. `darkroom revert` once (see above).
+Unit-tested ONLY (fakes / local fake server): proxy settings ignored by the HTTP client; json_schema and prompt tool
+modes; bad-tool-call handling and the three-strikes stop; an obedient model following injected text (tool layer holds);
+latest-preview-only history; no re-measure after output-only passes; session-limited undo across sessions; revert of a
+non-zero value; interactive y/N confirmer; MCP handlers (list, call, CONFIRMATION_REQUIRED refusal); doctor's GPU rules.
+DEFERRED to Phase 8 (user decisions): profiles Muse (`glimmer`) and `fast` (untested; one inconclusive glimmer attempt);
+Part B, Select Subject with both models loaded (not run). To Phase 7: MCP over a real stdio client.
+Not covered at all yet: a gated action confirmed with a real "y" in chat; multi-pass lighting runs; HSL and crop through
+the agent; RAW files; the landscape playbook live; any photo other than `TEST_2459-39` and `TEST_2461-41`.
+Open items carried over: `replace_background` result should state that the output includes the copy's current edits and
+crop; read-only `list_presets` + live `apply_preset` test; RAW acceptance test; playbook number ranges are untuned.
+State left behind: virtual copies of `TEST_2459-39` and `TEST_2461-41` (both at start values); output files under
+`outputs\`, previews and logs (git-ignored); Lightroom, Photoshop and LM Studio (Qwen on GPU 0) running.
+
+### Phase 7 plan (PROPOSED, not started; needs the user's "proceed")
+1. Offline proof: run doctor, models test, an agent run and the MCP server while recording this process tree's
+   connections (Get-NetTCPConnection / socket audit hook); show that only 127.0.0.1 is contacted; prove that
+   opentelemetry-api, uvicorn, starlette and truststore open nothing.
+2. Dependency audit: `make audit` (pip-audit). Needs the user's OK first: it sends package names and versions to a
+   vulnerability database.
+3. Error paths: trigger every error code on purpose and review each message and next step; list any that cannot be
+   triggered.
+4. MCP client test: a real stdio client (the `mcp` package's own client, local process) lists tools, calls a read tool,
+   and gets the CONFIRMATION_REQUIRED refusal.
+5. `darkroom clean-outputs`: lists what it would remove (intermediates: hand-off TIFFs, working copies, masks, previews),
+   asks first, never removes final PSD/JPG results.
+6. Firewall script: prints the Windows Firewall commands for the user to review; runs nothing.
+7. README (setup, commands, safety rules, limits); `pip install -e .` check in a throwaway venv outside the repo (needs
+   the user's OK, since the rule is no second venv).
+8. `replace_background` result note (current edits and crop); `make quality`; PROGRESS.md; commit on `dev`; gate.
+
+Phase 6 gate: waiting for the user's "proceed"; `darkroom chat`, `darkroom revert` and MCP over real stdio are
 unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
