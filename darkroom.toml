@@ -83,6 +83,11 @@ onnx_input_height = 1024
 # model = "D:/models/face_detection_yunet.onnx"   # without it face analysis returns FACE_MODEL_MISSING
 score_threshold = 0.7
 
+[agent]
+# Briefing for `darkroom chat` when --playbook is not given: "portrait", "landscape", or "none"
+# (tools, measurements and safety limits only, no editing advice).
+default_playbook = "portrait"
+
 [gpu]
 min_free_mb = 3000          # doctor warns if a GPU that Photoshop uses has less free memory than this
 

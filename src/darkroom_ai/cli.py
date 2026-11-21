@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -249,7 +250,8 @@ def _chat(settings: Settings, args: argparse.Namespace) -> int:
             print("Select one photo in Lightroom, or pass --photo PATH.", file=sys.stderr)
             return EXIT_ERROR
         photo = selection.active
-    print(f"photo: {photo.file_name} | model: {profile.model} | playbook: {args.playbook}")
+    playbook = args.playbook or settings.agent.default_playbook
+    print(f"photo: {photo.file_name} | model: {profile.model} | playbook: {playbook}")
     llm = LocalLlmClient(profile, require_loaded=settings.llm.require_loaded)
     try:
         agent = Agent(
@@ -258,14 +260,21 @@ def _chat(settings: Settings, args: argparse.Namespace) -> int:
             profile,
             max_passes=settings.guardrails.max_passes,
             allowed_tools=CHAT_TOOLS,
-            playbook=args.playbook,
+            playbook=playbook,
             guardrails=settings.guardrails,
             on_event=lambda text: print(f"  {text}"),
         )
         report = agent.run(args.request, photo.id)
     finally:
         llm.close()
-    print(f"\n{report.final_message}")
+    if getattr(args, "summary_file", False):
+        log_dir = settings.paths.logs_dir.resolve()
+        log_dir.mkdir(parents=True, exist_ok=True)
+        target = log_dir / f"chat_summary_{time.strftime('%Y%m%d-%H%M%S')}.txt"
+        target.write_text(report.final_message, encoding="utf-8")
+        print(f"\nsummary: {len(report.final_message)} characters, saved to {target}")
+    else:
+        print(f"\n{report.final_message}")
     print(
         f"({report.passes} pass(es), {report.turns} turns, {report.seconds:.0f} s, "
         f"{report.images_sent} preview(s) sent to the local model; `darkroom chat` with "
@@ -387,7 +396,17 @@ def build_parser() -> argparse.ArgumentParser:
     chat = commands.add_parser("chat", help="let the local model edit one photo")
     chat.add_argument("request", help='what to do, e.g. "brighten the faces a little"')
     chat.add_argument("--photo", type=Path, default=None, help="file path of the photo")
-    chat.add_argument("--playbook", choices=PLAYBOOKS, default="portrait")
+    chat.add_argument(
+        "--playbook",
+        choices=PLAYBOOKS,
+        default=None,
+        help="briefing for the model (default: agent.default_playbook in darkroom.toml)",
+    )
+    chat.add_argument(
+        "--summary-file",
+        action="store_true",
+        help="write the model's summary to a file under logs/ and print only its length",
+    )
     chat.add_argument("--profile", default=None, help="model profile (default: the active one)")
 
     commands.add_parser("mcp", help="serve the tools over MCP (stdio)")

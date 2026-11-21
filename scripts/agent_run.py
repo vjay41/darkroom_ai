@@ -265,13 +265,16 @@ def undo_later(settings: Settings, state_file: Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--photo", type=Path, default=None)
-    parser.add_argument("--playbook", choices=PLAYBOOKS, default="portrait")
+    parser.add_argument(
+        "--playbook", choices=PLAYBOOKS, default=None, help="default: agent.default_playbook"
+    )
     parser.add_argument("--request", default=REQUEST)
     parser.add_argument("--tools", default=TOOLS, help="comma-separated tool names to offer")
     parser.add_argument("--pause", action="store_true", help="do not undo; save the state")
     parser.add_argument("--undo-state", type=Path, default=None, help="state file of a paused run")
     args = parser.parse_args()
     settings = load_config(None)
+    args.playbook = args.playbook or settings.agent.default_playbook
     if args.undo_state is not None:
         return undo_later(settings, args.undo_state)
     if args.photo is None:

@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: playbook-versus-none batch DONE, blind pairs revealed and undone; all copies at start values. Open: the user's decision on the default mode; glimmer/fast bake-off; 'y' test. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: default_playbook setting built; confirmation test (real y / n in darkroom chat) plan shown, waiting for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -805,6 +805,20 @@ Undo: `compare_modes.py undo-blind` took back all six pair copies through their 
 unchanged, file unchanged and nothing pending for each of the six. The six copies stay in the catalog at their start
 values.
 BATCH TOTALS: 22 runs (limit 24), 6 new virtual copies (limit 8), no stop rule triggered.
+
+User decisions after the batch (2026-11-21):
+- The default mode STAYS the playbook, now as a setting: `[agent] default_playbook = "portrait"` in `darkroom.toml`
+  ("portrait" | "landscape" | "none"), used by `darkroom chat` and `scripts/agent_run.py` when `--playbook` is not
+  given; `--playbook none` stays available. Unit test added (345 tests, `make quality` clean).
+- THE EVIDENCE FOR THIS CHOICE IS THIN (recorded at the user's request): the user chose "A" in all three blind pairs;
+  pair 3 had identical edits in both copies; and the measured clipping did not predict the user's preference (in pair 1
+  the preferred copy had 6.5 % clipped highlights against 0.14 %).
+- Another blind round LATER, not now: with a control pair of identical edits, no other pairs with identical edits,
+  lighting requests only, positions randomised.
+- `darkroom chat --summary-file` added: writes the model's summary to `logs\` and prints only its length (so a chat run
+  whose output is shared with the assistant does not show the summary).
+- Next: the confirmation test with a real y / n in `darkroom chat` (the user is at the keyboard; plan shown first), then
+  the Muse / fast bake-off plan and the acceptance report outline; each waits for the user's go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes

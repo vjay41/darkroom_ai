@@ -1074,3 +1074,34 @@ def test_a_no_change_call_does_not_count_as_a_pass(tmp_path: Path) -> None:
     assert report.stopped_because == "finished"
     # The model was told, as data, that nothing changed.
     assert "No change: the photo already has these values" in json.dumps(rig.llm.sent[2])
+
+
+def test_default_playbook_is_a_setting(tmp_path: Path) -> None:
+    assert settings_for(tmp_path).agent.default_playbook == "portrait"
+    chosen = parse_settings(
+        {
+            "llm": {
+                "active_profile": "m",
+                "profiles": {"m": {"base_url": "http://127.0.0.1:1/v1", "model": "x"}},
+            },
+            "agent": {"default_playbook": "none"},
+        }
+    )
+    assert chosen.agent.default_playbook == "none"
+    with pytest.raises(DarkroomError) as caught:
+        parse_settings(
+            {
+                "llm": {
+                    "active_profile": "m",
+                    "profiles": {"m": {"base_url": "http://127.0.0.1:1/v1", "model": "x"}},
+                },
+                "agent": {"default_playbook": "wedding"},
+            }
+        )
+    assert caught.value.code is ErrorCode.CONFIG_INVALID
+    args = cli.build_parser().parse_args(["chat", "Brighten"])
+    assert args.playbook is None and args.summary_file is False  # the setting decides
+    args = cli.build_parser().parse_args(
+        ["chat", "Brighten", "--playbook", "none", "--summary-file"]
+    )
+    assert args.playbook == "none" and args.summary_file is True

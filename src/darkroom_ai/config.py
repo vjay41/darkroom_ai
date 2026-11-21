@@ -173,8 +173,18 @@ class PathSettings(_Section):
     models_dir: Path = Path("models")
 
 
+PlaybookName = Literal["portrait", "landscape", "none"]
+
+
+class AgentSettings(_Section):
+    """How the agent is briefed. "none" gives the model tools, measurements and limits only."""
+
+    default_playbook: PlaybookName = "portrait"
+
+
 class Settings(_Section):
     llm: LlmSettings
+    agent: AgentSettings = AgentSettings()
     lightroom: LightroomSettings = LightroomSettings()
     photoshop: PhotoshopSettings = PhotoshopSettings()
     guardrails: GuardrailSettings = GuardrailSettings()
