@@ -16,8 +16,14 @@ from darkroom_ai.tools.registry import ToolRegistry
 JOURNAL_FILE = "journal.jsonl"
 
 
-def build_tool_context(settings: Settings, *, confirmer: Confirmer | None = None) -> ToolContext:
-    """Connect the tools to the real apps. Nothing is contacted until a tool is called."""
+def build_tool_context(
+    settings: Settings, *, confirmer: Confirmer | None = None, session: str | None = None
+) -> ToolContext:
+    """Connect the tools to the real apps. Nothing is contacted until a tool is called.
+
+    `session` resumes an earlier journal session (for a script that pauses between a run and
+    its undo). It is chosen by the program that builds the context, never by a model.
+    """
     lightroom = LightroomClient.from_settings(settings, load_bridge_file())
     photoshop = PhotoshopClient.from_settings(settings)
     masks = build_mask_provider(
@@ -26,7 +32,7 @@ def build_tool_context(settings: Settings, *, confirmer: Confirmer | None = None
     return ToolContext(
         settings=settings,
         lightroom=lightroom,
-        journal=JsonlJournal(settings.paths.logs_dir.resolve() / JOURNAL_FILE),
+        journal=JsonlJournal(settings.paths.logs_dir.resolve() / JOURNAL_FILE, session=session),
         confirmer=confirmer or DenyAll(),
         photoshop=photoshop,
         masks=masks,

@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: undo limited to the session, `darkroom revert` added; second agent run (replace_background) plan shown, waiting for the go
+## CURRENT STATE — 2026-11-21: Phase 6: second agent run stage 1 DONE and PAUSED (edit NOT undone); waiting for the user's go on stage 2 (undo)
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -137,8 +137,26 @@ User decisions after the first run (2026-11-21) and what was built:
   unset for `primary`), so the model used its default thinking: 306 of 385 tokens.
 - 304 tests pass, `make quality` clean.
 
-Still owed: `replace_background` as a second agent run with RGB 210/210/210 and a pause before the undo (plan shown,
-waiting for the go); profiles `glimmer` and `fast` (the user will
+Second agent run, stage 1 (2026-11-21, `primary`, portrait, `TEST_2459-39.jpg`, session `097de950...`; tools offered:
+`adjust_lighting`, `adjust_white_balance`, `replace_background`; request: balance the lighting if the measurements call for
+it, then replace the background with solid light grey RGB 210/210/210):
+- Turn 1 (5.6 s, 732 tokens, 499 thinking): `adjust_lighting` highlights -20 (applied -20, not clamped).
+  Highlights clipped 1.245 % -> 0.172 %, p50 0.567 -> 0.555.
+- Turn 2 (2.3 s, 304 tokens, 110 thinking): `replace_background` colour [210, 210, 210]; 13.8 s; mask by
+  photoshop-select-subject, 5568 x 3712, coverage 44.715 %, 1 region, 0 specks. New files in `outputs\photoshop`:
+  `background-20261121-095404-f40b4c_copy_darkroom.psd`, `..._copy_darkroom.jpg`, `..._copy_mask.png`.
+- Turn 3 (3.2 s, 358 tokens, 95 thinking): finished. 2 passes, 3 turns, 3 previews (one per request), 26.7 s in total.
+- As predicted: exposure and white balance untouched, highlights -20, one background call with the right colour.
+- PAUSED: `Highlights2012` is -20 on the virtual copy `7F5FB162-...` (NOT undone). Master settings and original SHA-256
+  unchanged. State for the undo: `logs\agent_run_state.json` (git-ignored). Model summary (866 characters) in
+  `logs\agent_run_20261121-095422.txt`, not read by the assistant.
+- Stage 2 (needs the user's go): `poetry run python scripts/agent_run.py --undo-state logs/agent_run_state.json`.
+- `build_tool_context(session=...)` lets a script resume a journal session (for this pause); a model cannot set it.
+- Noted, not fixed: after `replace_background` the loop re-measures and sends a new preview although nothing changed in
+  Lightroom (one wasted preview and turn input). Not verified by numbers: the composite's background colour and the output
+  files' contents (the user is looking at them).
+
+Still owed: stage 2 (undo + checks); profiles `glimmer` and `fast` (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
 Earlier note (done): a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its
