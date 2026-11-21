@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6 built; vision test passed on `primary`; waiting for the go on the first TEST_ photo preview
+## CURRENT STATE — 2026-11-21: Phase 6: photo vision check and GPU conflict measurement done on `primary`; waiting for the user
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -60,7 +60,41 @@ real stdio client (handlers are unit-tested); GPU conflict measurement (Select S
 Vision test DONE (2026-11-21, `primary`, synthetic picture only): 5 of 5 fields correct (square/red, circle/blue, 47),
 8.2 s, request 14 kB to 127.0.0.1:1234. GPU 0 used 26731 MB before, 26783 MB after (+52 MB); GPU 1 unchanged at 26 MB.
 
-Needs the user's go next: a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its
+Thinking time (2026-11-21, `primary`, text-only tool call, two runs each): about 62 of 110 completion tokens are thinking;
+0.84-1.01 s with it, 0.34-0.49 s without. `reasoning_effort: "none"` switches it off (0 reasoning tokens, same tool call);
+`"low"` trims it to about 50 tokens. `enable_thinking: false`, `chat_template_kwargs` and `/no_think` had NO effect.
+Proposed, not built: a per-profile `reasoning_effort` setting ("none" for tool-call turns).
+
+Photo vision check (`scripts/vision_photo_check.py`, `D:\darkroom_test\TEST_2459-39.jpg`; the existing virtual copy, at its
+start values, was analysed; no edit, no new copy): preview 1024 x 683 JPEG, 164 kB, request 219 kB to 127.0.0.1:1234, no
+file name / metadata / numbers sent. 1.5 s; 133 completion tokens, 84 of them thinking.
+| Field | Model | Measured | |
+|---|---|---|---|
+| brightness | bright | balanced (mean 136 of 255, median 145) | disagree |
+| mean 0-255 | 185 | 136.3 | off by +49 |
+| highlights clipped | no | yes (1.25 %, almost all in the red channel) | disagree |
+| shadows clipped | no | no (0.57 %) | agree |
+| colour cast | none | no noticeable cast | agree |
+Conclusion (one photo only): the model's eye for absolute brightness and clipping is not reliable; the agent must lean on the
+measured numbers, which it already gets in every pass. The category limits (50 / 95 / 160 / 205) are my own choice.
+
+GPU conflict measurement (`scripts/gpu_conflict.py`, `TEST_2457-37.jpg`, model loaded on GPU 0, Photoshop auto-started in 5.6 s,
+mode Device before and after):
+| | Time | GPU 0 used MB (before / peak / after) | GPU 1 used MB (before / peak / after) |
+|---|---|---|---|
+| cold run | 8.3 s | 27469 / 28336 / 28337 | 38 / 3268 / 147 |
+| warm run | 7.6 s | 28337 / 28518 / 28411 | 147 / 3268 / 147 |
+Baseline without a model in use: 8.1 s. Mask coverage 69.937 % both times (identical to the baseline), 1 region, 0 specks.
+Photoshop holds a context on BOTH GPUs: about +0.9 GB stays on GPU 0 while it is open, and Select Subject's working memory
+(about 3.2 GB peak) showed up on GPU 1. No slowdown, no failure. The model answered afterwards (1.06 s and 0.72 s, correct
+tool call). Original SHA-256 unchanged; documents closed without saving; Photoshop left running. GPU 0 ended at 28.3 of
+32.6 GB (4.3 GB free), which is BELOW the 6 GB `min_free_mb` threshold, so `doctor` will now warn while Photoshop is open
+although the measurement shows no problem; the threshold may be too cautious (open decision).
+Left behind: `outputs\masks\TEST_2457-37_subject-2.png`, `-3.png`, copies in `outputs\photoshop`, one preview in `previews`.
+
+Still owed: profiles `glimmer` and `fast` (after the user confirms LM Studio's auto-unload); the first agent run.
+
+Earlier note (done): a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its
 brightness statement, and the GPU conflict measurement with Photoshop running. Still owed: profiles `glimmer` and `fast`.
 
 Earlier note (done): on the user's go, send the synthetic test picture (512 x 384 JPEG, 10 kB: red square, blue circle, "47") to
