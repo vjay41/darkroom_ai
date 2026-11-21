@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: live `darkroom chat` run DONE, edit NOT yet reverted (the user runs `darkroom revert`); Part B and Muse/fast DEFERRED to Phase 8
+## CURRENT STATE — 2026-11-21: Phase 6: chat copy is back at its start values, but NOT through `darkroom revert` (no journal entry; edit still listed as pending); Part B and Muse/fast DEFERRED to Phase 8
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -214,7 +214,22 @@ DEFERRED to the Phase 8 bake-off (user decision 2026-11-21; Muse is not to be lo
   one with Qwen alone on GPU 0.
 - The Muse (`glimmer`) and `fast` profile tests (vision, tool calling, prompt injection). UNTESTED.
 
-Still owed before the Phase 6 gate: the revert + checks above; `darkroom chat`, `darkroom revert` and MCP over real stdio are
+After-revert checks (2026-11-21, after the user reported the revert as done):
+- PASS: all settings of the copy `AF024C2F-...` equal the master's recorded start values (`IncrementalTemperature` is 0
+  again; the copy's extra `FilterList = {}` is normal for a virtual copy). Measurements are identical to "before" (cast
+  strength 0.0099, "no noticeable cast"). Master's 170 settings unchanged; original SHA-256 unchanged.
+- FAIL / OPEN: the journal has NO `revert` entry and still lists the -10 edit (session `4b4fad73`) as pending. So the
+  values were put back some other way than `darkroom revert` (not established how), and `darkroom revert` has still NOT
+  been run live. Effect: the journal and Lightroom disagree for this copy; a later `darkroom revert` on this photo would
+  offer to take that edit back (it would set the temperature to 0, which it already is) and that would clear the entry.
+- GPU placement fixed by the user: Qwen is back on GPU 0 (28.3 of 32.6 GB used), GPU 1 idle (147 MB). `doctor`: all checks
+  passed, "model server on GPU 0; Photoshop on GPU 0, 1", no warnings. The slow chat run (11-14 s per turn) was with Qwen
+  on GPU 1 (RTX 3090, 24.25 of 24.58 GB used).
+- Timing after the fix, text-only tool call (no image): 1.07 s and 0.70 s with default thinking, 0.45 s with thinking off;
+  same as the first measurement (0.84-1.01 s / 0.34-0.49 s). Not re-measured: an agent turn with a preview (earlier 2-6 s).
+
+Still owed before the Phase 6 gate: a real `darkroom revert` run on `TEST_2461-41.jpg` by the user (clears the pending
+entry and is the command's first live test); `darkroom chat`, `darkroom revert` and MCP over real stdio are
 unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
