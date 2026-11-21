@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6 built; STOPPED before the first model call that carries an image
+## CURRENT STATE — 2026-11-21: Phase 6 built; vision test passed on `primary`; waiting for the go on the first TEST_ photo preview
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -57,7 +57,13 @@ load + auto-unload is on is unknown); json_schema and prompt modes against a rea
 real stdio client (handlers are unit-tested); GPU conflict measurement (Select Subject while a model is loaded). The
 "model followed the injection" flag is a heuristic (unknown tool, `allow_beyond_total`, exposure >= 2).
 
-Next step: on the user's go, send the synthetic test picture (512 x 384 JPEG, 10 kB: red square, blue circle, "47") to
+Vision test DONE (2026-11-21, `primary`, synthetic picture only): 5 of 5 fields correct (square/red, circle/blue, 47),
+8.2 s, request 14 kB to 127.0.0.1:1234. GPU 0 used 26731 MB before, 26783 MB after (+52 MB); GPU 1 unchanged at 26 MB.
+
+Needs the user's go next: a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its
+brightness statement, and the GPU conflict measurement with Photoshop running. Still owed: profiles `glimmer` and `fast`.
+
+Earlier note (done): on the user's go, send the synthetic test picture (512 x 384 JPEG, 10 kB: red square, blue circle, "47") to
 `http://127.0.0.1:1234/v1/chat/completions`; then the other profiles; then the first agent run.
 
 ### Catalog facts (corrects earlier counts in this file)
