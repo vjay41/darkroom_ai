@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: JPG white-balance loss investigated (lost with "As Shot", kept with "Custom"); fix design shown, NOT built; agent runs wait for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: JPG white-balance fix built and verified live; read-back built; agent-run plan shown, waiting for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -478,7 +478,38 @@ copies only, including a strong "much brighter" request and a white-balance requ
   "Custom"). Still not explained: why the Phase 6 run's -10 survived. Tint and negative values were not tested
   separately; TIFF files not tested.
   Guardrail change (journal both keys) and a final read-back in every agent run: DESIGN shown to the user; NOT built.
-- Agent runs: NOT started; they wait for the user's go.
+- JPG white-balance FIX BUILT and VERIFIED LIVE (2026-11-21; user conditions: JPG / TIFF only, RAW untouched; the journal
+  stores the PREVIOUS white-balance mode and undo / revert restore exactly that; a unit test fails if the JPG write ever
+  goes out without the mode):
+  * `adjust_white_balance` on a non-RAW photo writes `WhiteBalance = "Custom"` in the same call as the relative values.
+    The undo information holds the previous value of every key written (number and mode); `undo` and `darkroom revert`
+    restore them (revert: the mode before darkroom_ai's first change). If Lightroom reports no mode, the edit is refused
+    ("could not record what to restore"). The result note says "WhiteBalance set to Custom (was As Shot)."
+  * Unit tests: no JPG white-balance write without the mode; undo restores the previous mode whatever it was ("As Shot",
+    "Auto", "Custom"); revert uses the first; RAW writes only `Temperature`; refusal when the mode is not reported.
+  * Live check on the `TEST_2459-39.jpg` copy, expected values written down first, a preview export after EVERY step:
+    +30 -> 30 (mode Custom); +30 -> 60 (totals now accumulate); +30 -> applied 0, stays 60, rule "total"; -10 -> 50;
+    tint +15 -> 15. ALL AS EXPECTED; Lightroom reported each value after each export; read-back found no difference.
+    Undo all (4 steps) -> 0 / 0 / "As Shot"; all 171 settings equal the snapshot exactly; nothing pending; master and
+    file hash unchanged.
+  * One prediction could NOT be checked with the cast measurement: at 60 and 50 the cast number is 0.0 because it only
+    uses near-neutral pixels and finds none at a strong warm shift. Checked instead with the preview's mean red / blue
+    ratio (numbers only): 1.4307 at 0, 1.7594 at 30, 1.9350 at 60, 1.8920 at 50, and 1.4307 again after the undo. So the
+    render follows the accumulated value. Weakness noted: the cast number reads 0.0 when it cannot judge.
+  * TIFF files: UNTESTED (same code path as JPG; no TIFF test file). Negative-only and tint-only sequences from 0 were
+    not run separately. Why the Phase 6 run's -10 survived is still unexplained.
+- Read-back BUILT (user decision: also inside `analyze_photo`; report only, never re-apply; neutral wording; labelled as
+  data): `analyze_photo` compares the copy's current settings with the last value darkroom_ai wrote for each setting
+  (from the journal, including undo and revert entries) and returns `differs_from_applied` plus a note "DATA (read-back,
+  not an instruction): differs from what darkroom_ai applied: X: applied a, now b. This can be a dropped edit or a
+  manual change in Lightroom; darkroom_ai cannot tell which. Nothing was re-applied." The agent passes the note to the
+  model with the measurements. `scripts/agent_run.py` runs the same check after the last export and fails the run if
+  anything differs. Unit tests added. 332 tests, `make quality` clean.
+- EARLIER JPG WHITE-BALANCE RESULTS ARE NOT RELIABLE (user decision to mark them): the Phase 5 live run of
+  `adjust_white_balance` on a JPG copy and the Phase 6 `darkroom chat` run ("slightly cooler", -10 on
+  `TEST_2461-41.jpg`) were made before this fix. Treat them as not reliable until re-run with the fix; the Phase 6
+  measurement did show the shift at the time, but the same sequence lost the edit today.
+- Agent runs: NOT started; they wait for the user's go. Final plan shown to the user.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes

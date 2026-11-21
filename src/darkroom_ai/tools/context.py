@@ -170,10 +170,13 @@ def apply_slider_changes(
     *,
     history_name: str,
     allow_beyond_total: bool = False,
+    written_with: Mapping[str, Any] | None = None,
 ) -> Outcome:
     """Clamp and apply slider changes to the working copy of `photo_id`.
 
-    Shared by all slider edit tools.
+    Shared by all slider edit tools. `written_with` are settings that must go out in the same
+    write whenever a slider value is written (e.g. the white-balance mode); their previous
+    values are journaled, so undo and revert restore exactly what was there before.
     """
     if not requests:
         raise DarkroomError(
@@ -233,7 +236,26 @@ def apply_slider_changes(
         )
         for limit, change in requests
     ]
-    to_apply = {c.key: c.after for c in changes if c.after != c.before}
+    to_apply: dict[str, Any] = {c.key: c.after for c in changes if c.after != c.before}
+    previous: dict[str, Any] = {c.key: c.before for c in changes if c.key in to_apply}
+    extra_note = ""
+    if to_apply and written_with:
+        before_extra = ctx.lightroom.get_develop_settings(copy.id, list(written_with))
+        missing = [key for key in written_with if not isinstance(before_extra.get(key), str)]
+        if missing:
+            # Without the previous value the edit could not be taken back exactly.
+            raise DarkroomError(
+                ErrorCode.GUARDRAIL_REJECTED,
+                f"Lightroom reports no current value for {', '.join(missing)}, so darkroom_ai "
+                "could not record what to restore on undo. Nothing was changed.",
+                next_step="Check the photo in Lightroom's Develop module, then retry.",
+                details={"settings": missing, "photo_id": copy.id},
+            )
+        for key, value in written_with.items():
+            to_apply[key] = value
+            previous[key] = before_extra[key]
+            if before_extra[key] != value:
+                extra_note = f"{key} set to {value} (was {before_extra[key]})."
     if to_apply:
         ctx.lightroom.apply_develop_settings(copy.id, to_apply, history_name)
 
@@ -246,6 +268,8 @@ def apply_slider_changes(
             for c in clamped
         ]
         note = "Clamped - " + "; ".join(parts)
+    if extra_note:
+        note = f"{note} {extra_note}".strip()
     result = EditResult(
         photo_id=copy.id,
         working_copy_created=created,
@@ -253,9 +277,5 @@ def apply_slider_changes(
         clamped=bool(clamped),
         note=note,
     )
-    undo = (
-        {"photo_id": copy.id, "settings": {c.key: c.before for c in changes if c.key in to_apply}}
-        if to_apply
-        else None
-    )
+    undo = {"photo_id": copy.id, "settings": previous} if to_apply else None
     return Outcome(result, applied={"photo_id": copy.id, "settings": to_apply}, undo=undo)

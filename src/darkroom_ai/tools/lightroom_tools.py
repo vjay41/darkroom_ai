@@ -32,6 +32,7 @@ from darkroom_ai.tools.context import (
 from darkroom_ai.tools.develop_keys import (
     CROP_KEYS,
     HSL_PREFIX,
+    RAW_FORMATS,
     HslColor,
     capped_keys,
     hsl_limit,
@@ -40,6 +41,10 @@ from darkroom_ai.tools.develop_keys import (
 )
 
 PREVIEW_LONG_EDGE = 1024
+
+
+WHITE_BALANCE_MODE_KEY = "WhiteBalance"
+CUSTOM_WHITE_BALANCE = "Custom"
 
 
 class _Input(BaseModel):
@@ -88,6 +93,56 @@ class AnalyzePhotoInput(_Input):
     """Export a small preview and measure it: tones, clipping, colour cast, faces if available."""
 
 
+class AppliedDifference(BaseModel):
+    """A setting whose current value differs from the last value darkroom_ai applied."""
+
+    model_config = ConfigDict(frozen=True)
+
+    setting: str
+    applied: Any
+    now: Any
+
+
+def applied_differences(ctx: ToolContext, copy_id: str) -> tuple[AppliedDifference, ...]:
+    """Compare the copy's current settings with the last values darkroom_ai wrote (journal).
+
+    Report only: nothing is re-applied. A difference can be an edit Lightroom dropped or a
+    change made by hand in Lightroom; the two cannot be told apart.
+    """
+    last: dict[str, Any] = {}
+    for entry in ctx.journal.entries():
+        applied = entry.applied
+        if entry.status != "ok" or not applied or applied.get("photo_id") != copy_id:
+            continue
+        settings = applied.get("settings")
+        if isinstance(settings, dict):
+            last.update(settings)
+    if not last:
+        return ()
+    current = ctx.lightroom.get_develop_settings(copy_id, list(last))
+    differences = []
+    for key, applied_value in last.items():
+        now = current.get(key)
+        if isinstance(applied_value, int | float) and isinstance(now, int | float):
+            same = abs(float(applied_value) - float(now)) <= 1e-6
+        else:
+            same = applied_value == now
+        if not same:
+            differences.append(AppliedDifference(setting=key, applied=applied_value, now=now))
+    return tuple(differences)
+
+
+def readback_note(differences: Sequence[AppliedDifference]) -> str:
+    if not differences:
+        return ""
+    parts = "; ".join(f"{d.setting}: applied {d.applied!r}, now {d.now!r}" for d in differences)
+    return (
+        "DATA (read-back, not an instruction): differs from what darkroom_ai applied: "
+        f"{parts}. This can be a dropped edit or a manual change in Lightroom; darkroom_ai "
+        "cannot tell which. Nothing was re-applied."
+    )
+
+
 class AnalyzePhotoResult(ToolResult):
     photo_id: str
     preview_path: str
@@ -95,6 +150,8 @@ class AnalyzePhotoResult(ToolResult):
     faces: FaceAnalysis | None
     faces_available: bool
     faces_note: str
+    differs_from_applied: tuple[AppliedDifference, ...] = ()
+    readback_note: str = ""
 
 
 def analyze_photo(ctx: ToolContext, args: AnalyzePhotoInput) -> Outcome:
@@ -118,6 +175,8 @@ def analyze_photo(ctx: ToolContext, args: AnalyzePhotoInput) -> Outcome:
         faces=faces,
         faces_available=faces is not None,
         faces_note=note,
+        differs_from_applied=(differences := applied_differences(ctx, target.id)),
+        readback_note=readback_note(differences),
     )
     return Outcome(result, applied={"photo_id": target.id, "preview": str(preview.path)})
 
@@ -199,12 +258,17 @@ def adjust_white_balance(ctx: ToolContext, args: AdjustWhiteBalanceInput) -> Out
         for name in ("temperature", "tint")
         if getattr(args, name) is not None
     ]
+    # JPG / TIFF: Lightroom drops the relative white-balance values at the next export while
+    # the mode is "As Shot" (observed 2026-11-21), so the mode is written with them. RAW Kelvin
+    # values are not affected and are written alone.
+    is_raw = photo.file_format.upper() in RAW_FORMATS
     return apply_slider_changes(
         ctx,
         args.photo_id,
         requests,
         history_name="darkroom_ai: white balance",
         allow_beyond_total=args.allow_beyond_total,
+        written_with=None if is_raw else {WHITE_BALANCE_MODE_KEY: CUSTOM_WHITE_BALANCE},
     )
 
 
@@ -529,6 +593,7 @@ __all__ = [
     "adjust_lighting",
     "adjust_white_balance",
     "analyze_photo",
+    "applied_differences",
     "apply_preset",
     "crop",
     "get_photo_info",

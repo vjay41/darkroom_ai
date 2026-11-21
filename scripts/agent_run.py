@@ -29,7 +29,7 @@ from darkroom_ai.errors import DarkroomError
 from darkroom_ai.llm.client import LocalLlmClient
 from darkroom_ai.tools.context import ToolContext
 from darkroom_ai.tools.factory import build_tool_context
-from darkroom_ai.tools.lightroom_tools import pending_edits
+from darkroom_ai.tools.lightroom_tools import applied_differences, pending_edits
 from darkroom_ai.tools.registry import ToolRegistry
 
 REQUEST = "Balance the lighting and correct the white balance if the measurements call for it."
@@ -207,6 +207,14 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
         print(f"model summary: {len(report.final_message)} characters, saved to {summary_file}")
     after_run = dict(lightroom.get_develop_settings(copy_id))
     print("settings changed by the run:", differences(state["start"], after_run) or "none")
+    # Final read-back after the last export: does every applied edit still hold?
+    lost = applied_differences(context, copy_id)
+    for item in lost:
+        print(
+            f"  differs from what darkroom_ai applied: {item.setting}: applied "
+            f"{item.applied!r}, now {item.now!r}"
+        )
+    check("read-back: every applied edit still holds after the last export", not lost)
     master_now = dict(lightroom.get_develop_settings(photo.id))
     check("master's settings unchanged", not differences(state["master_start"], master_now))
     check("original file SHA-256 unchanged", sha256(args.photo) == state["sha256"])

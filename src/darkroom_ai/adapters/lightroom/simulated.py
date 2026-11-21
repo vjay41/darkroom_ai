@@ -35,6 +35,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "Shadows2012": 0,
     "Whites2012": 0,
     "Blacks2012": 0,
+    "WhiteBalance": "As Shot",
     "IncrementalTemperature": 0,
     "IncrementalTint": 0,
     "Temperature": 5500,

@@ -388,7 +388,7 @@ def test_undo_last_all_and_nothing(rig: Rig) -> None:
 
     last = rig.call("undo", photo_id=MASTER)
     assert last["undone_steps"] == 1
-    assert last["restored"] == {"IncrementalTemperature": 0}
+    assert last["restored"] == {"IncrementalTemperature": 0, "WhiteBalance": "As Shot"}
     assert rig.value(copy_id, "Exposure2012") == pytest.approx(0.8)
 
     everything = rig.call("undo", photo_id=MASTER, scope="all")
@@ -710,3 +710,125 @@ def test_playbooks_put_lighting_before_white_balance_for_raw() -> None:
         text = load_playbook(name)
         assert "lighting changes BEFORE white-balance changes" in text
         assert "do not repeat it" in text
+
+
+# -- JPG white balance is written together with its mode; read-back -------------------------------
+
+
+def _capture_writes(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    writes: list[dict[str, Any]] = []
+    real = rig.lightroom.apply_develop_settings
+
+    def recording(photo_id: str, settings: Any, history_name: str = "edit") -> Any:
+        writes.append(dict(settings))
+        return real(photo_id, settings, history_name)
+
+    monkeypatch.setattr(rig.lightroom, "apply_develop_settings", recording)
+    return writes
+
+
+def test_jpg_white_balance_is_never_written_without_its_mode(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    writes = _capture_writes(rig, monkeypatch)
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)
+    rig.call("adjust_white_balance", photo_id=MASTER, tint=-5)
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=10, tint=5)
+    rig.call("adjust_lighting", photo_id=MASTER, exposure=0.2)
+    relative = [w for w in writes if "IncrementalTemperature" in w or "IncrementalTint" in w]
+    assert len(relative) == 3
+    for write in relative:
+        assert write.get("WhiteBalance") == "Custom", write  # the rule this test protects
+    assert "WhiteBalance" not in writes[-1]  # a lighting edit does not touch the mode
+
+
+def test_white_balance_undo_restores_the_previous_mode_exactly(rig: Rig) -> None:
+    first = rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)
+    copy_id = first["photo_id"]
+    assert "WhiteBalance set to Custom (was As Shot)" in first["note"]
+    assert rig.value(copy_id, "WhiteBalance") == "Custom"
+    entry = rig.journal.entries()[-1]
+    assert entry.undo is not None
+    assert entry.undo["settings"] == {"IncrementalTemperature": 0, "WhiteBalance": "As Shot"}
+
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)
+    assert rig.journal.entries()[-1].undo["settings"]["WhiteBalance"] == "Custom"  # type: ignore[index]
+    rig.call("undo", photo_id=MASTER)  # the second edit: mode stays Custom, value back to 10
+    assert (rig.value(copy_id, "IncrementalTemperature"), rig.value(copy_id, "WhiteBalance")) == (
+        10,
+        "Custom",
+    )
+    rig.call("undo", photo_id=MASTER)  # the first edit: the PREVIOUS mode comes back
+    assert (rig.value(copy_id, "IncrementalTemperature"), rig.value(copy_id, "WhiteBalance")) == (
+        0,
+        "As Shot",
+    )
+
+
+def test_previous_mode_is_restored_whatever_it_was_and_revert_uses_the_first(rig: Rig) -> None:
+    from darkroom_ai.tools.revert import apply_revert, plan_revert
+
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.1)["photo_id"]
+    rig.lightroom.settings[copy_id]["WhiteBalance"] = "Auto"  # not "As Shot"
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)
+    rig.call("undo", photo_id=MASTER)
+    assert rig.value(copy_id, "WhiteBalance") == "Auto"  # nothing is hard-coded
+
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)
+    rig.journal.session = "later-session"
+    rig.call("adjust_white_balance", photo_id=MASTER, tint=5)
+    plan = plan_revert(rig.context, MASTER)
+    assert plan.settings["WhiteBalance"] == "Auto"  # the mode before darkroom_ai's first change
+    apply_revert(rig.context, plan)
+    assert rig.value(copy_id, "WhiteBalance") == "Auto"
+    assert rig.value(copy_id, "IncrementalTemperature") == 0
+    assert rig.value(copy_id, "IncrementalTint") == 0
+
+
+def test_raw_white_balance_is_written_without_the_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rig = Rig(tmp_path, file_format="RAW")
+    writes = _capture_writes(rig, monkeypatch)
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=300)
+    assert writes[-1] == {"Temperature": 5800}
+
+
+def test_white_balance_refused_when_the_mode_is_not_reported(rig: Rig) -> None:
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.1)["photo_id"]
+    del rig.lightroom.settings[copy_id]["WhiteBalance"]
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert "could not record what to restore" in caught.value.message
+    assert rig.value(copy_id, "IncrementalTemperature") == 0
+
+
+def test_analyze_photo_reports_differences_without_reapplying(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    copy_id = rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)["photo_id"]
+    rig.call("adjust_lighting", photo_id=MASTER, exposure=0.3)
+    clean = rig.call("analyze_photo", photo_id=MASTER)
+    assert clean["differs_from_applied"] == [] and clean["readback_note"] == ""
+
+    # The value changes behind darkroom_ai's back (dropped by Lightroom, or changed by hand).
+    rig.lightroom.settings[copy_id]["IncrementalTemperature"] = 0
+    writes = _capture_writes(rig, monkeypatch)
+    result = rig.call("analyze_photo", photo_id=MASTER)
+    assert result["differs_from_applied"] == [
+        {"setting": "IncrementalTemperature", "applied": 10.0, "now": 0}
+    ]
+    note = result["readback_note"]
+    assert note.startswith(
+        "DATA (read-back, not an instruction): differs from what darkroom_ai applied"
+    )
+    assert "applied 10.0, now 0" in note
+    assert "cannot tell which" in note and "Nothing was re-applied" in note
+    assert writes == []  # report only
+    assert rig.value(copy_id, "IncrementalTemperature") == 0
+
+    # After an undo the journal's last written value is the restored one: no false alarm.
+    rig.lightroom.settings[copy_id]["IncrementalTemperature"] = 10
+    rig.call("undo", photo_id=MASTER, scope="all")
+    assert rig.call("analyze_photo", photo_id=MASTER)["differs_from_applied"] == []

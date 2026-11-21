@@ -119,9 +119,10 @@ def analysis_text(analysis: dict[str, Any]) -> str:
     tones = dict(numbers.get("tones") or {})
     tones.pop("histogram", None)
     numbers["tones"] = tones
-    return json.dumps(
-        {"analysis": numbers, "faces_available": analysis.get("faces_available")}, default=str
-    )
+    data: dict[str, Any] = {"analysis": numbers, "faces_available": analysis.get("faces_available")}
+    if analysis.get("readback_note"):
+        data["readback"] = analysis["readback_note"]
+    return json.dumps(data, default=str)
 
 
 class Agent:
