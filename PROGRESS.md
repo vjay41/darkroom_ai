@@ -1581,3 +1581,8 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   works with either plug-in. Test added. The test photo's working copy still has the 9 masks until cleaned (Lightroom: Develop > Reset on
   that virtual copy, or delete its masks).
 - Lesson for skills: verify an undo with list_masks / get_develop_parameters on every key the edit reported as changed, not a sample.
+- LIVE PASS on a clean photo (after Develop > Reset, plug-in 0.9.1): list_masks 0 -> apply_preset "Polished Portrait" (before.MaskGroupBasedCorrections =
+  empty list, 9 masks added: Facial Skin, Body Skin, Eyebrows, Eye Sclera, Iris and Pupil, Lips, Teeth, Facial Hair, Hair) -> undo x1 ->
+  list_masks 0. Gap 5 (presets) closed. Not yet known: whether a mask preset replaces or merges with a photo's existing hand-made masks
+  (on a photo that already had the same 9 masks the count stayed 9 and undo restored them exactly).
+- apply_preset is NOT confirmation-gated (single photo, virtual copy, undoable); Hermes' remark about a confirmation prompt was wrong.
