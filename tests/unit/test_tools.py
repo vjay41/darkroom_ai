@@ -1068,3 +1068,13 @@ def test_preset_that_changes_the_crop_is_taken_back(tmp_path: Path) -> None:
     assert "CropLeft" in caught.value.message
     assert rig.value(copy_id, "CropLeft") == 0
     assert rig.value(copy_id, "Contrast2012") == 0
+
+
+def test_undoing_a_preset_that_adds_masks_removes_them(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    got = rig.call("apply_preset", photo_id=MASTER, preset_name="Masked Look")
+    copy_id = got["photo_id"]
+    assert rig.call("list_masks", photo_id=copy_id)["count"] == 1
+    assert "MaskGroupBasedCorrections" in got["before"]  # so that undo can empty it again
+    rig.call("undo", photo_id=copy_id)
+    assert rig.call("list_masks", photo_id=copy_id)["count"] == 0

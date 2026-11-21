@@ -766,13 +766,17 @@ def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
 
     copy, created = working_copy(ctx, args.photo_id)
     change = ctx.lightroom.apply_preset(copy.id, matches[0].uuid)
+    # A list-valued setting the photo did not have (masks) is missing from "before": undoing the
+    # preset must set it to an empty list, or what the preset added would stay.
+    restore = dict(change.before)
+    for key, value in change.after.items():
+        if key not in restore and isinstance(value, list):
+            restore[key] = []
 
     protected = sorted(PRESET_PROTECTED_KEYS & set(change.after))
     if protected:
-        if change.before:
-            ctx.lightroom.apply_develop_settings(
-                copy.id, change.before, "darkroom_ai: preset taken back"
-            )
+        if restore:
+            ctx.lightroom.apply_develop_settings(copy.id, restore, "darkroom_ai: preset taken back")
         raise DarkroomError(
             ErrorCode.GUARDRAIL_REJECTED,
             f"The preset '{matches[0].name}' also changes {', '.join(protected)} (framing or "
@@ -792,9 +796,7 @@ def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
         after = float(change.after[key])
         original = float(originals.get(key) or 0.0)
         if abs(after - original) > limit.total + 1e-6:
-            ctx.lightroom.apply_develop_settings(
-                copy.id, change.before, "darkroom_ai: preset taken back"
-            )
+            ctx.lightroom.apply_develop_settings(copy.id, restore, "darkroom_ai: preset taken back")
             raise DarkroomError(
                 ErrorCode.GUARDRAIL_REJECTED,
                 f"The preset '{matches[0].name}' would set {limit.name} to {after:+g}, which is "
@@ -816,7 +818,7 @@ def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
     return Outcome(
         result,
         applied={"photo_id": copy.id, "preset": matches[0].name, "settings": change.after},
-        undo={"photo_id": copy.id, "settings": change.before} if change.before else None,
+        undo={"photo_id": copy.id, "settings": restore} if restore else None,
     )
 
 

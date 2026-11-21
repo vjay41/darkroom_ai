@@ -1571,3 +1571,13 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   running command, counters, last error; get_app_status shows a new state `busy` with how long and what to clear. Python maps
   COMMAND_TIMEOUT to LR_COMMAND_FAILED ("check state before repeating"). UNVERIFIED live; a truly hung Lua task cannot be killed
   from inside Lightroom, only refused around.
+
+## 2026-11-21 - Presets live (plug-in 0.9.0 -> 0.9.1)
+- LIVE: apply_preset "Polished Portrait" worked (393 presets listed; changed LuminanceAdjustmentRed/SaturationAdjustmentRed + 9 adaptive
+  masks); Hermes judged the preview; bridge_status facts shown (24 handled, 0 failed). Plug-in 0.9.0 confirmed running.
+- BUG found by reading the result: undo restored only the 2 global keys; the 9 masks (MaskGroupBasedCorrections) stayed, because a key the
+  photo did not have was missing from "before". Hermes' check only compared 3 global values and reported "nothing left applied".
+  Fix (0.9.1): Lua returns an empty list as "before" for a missing list-valued key; Python also derives the restore map itself, so it
+  works with either plug-in. Test added. The test photo's working copy still has the 9 masks until cleaned (Lightroom: Develop > Reset on
+  that virtual copy, or delete its masks).
+- Lesson for skills: verify an undo with list_masks / get_develop_parameters on every key the edit reported as changed, not a sample.

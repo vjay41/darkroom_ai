@@ -70,6 +70,7 @@ class SimulatedLightroom:
         ("Twin", "preset-3", {"Contrast2012": 5}),
         ("Twin", "preset-4", {"Contrast2012": 6}),
         ("Cropped Look", "preset-5", {"Contrast2012": 8, "CropLeft": 0.1}),
+        ("Masked Look", "preset-6", {"MaskGroupBasedCorrections": [{"CorrectionName": "Sky"}]}),
     )
 
     def __init__(self, files_dir: Path, *, file_format: str = "JPG") -> None:
@@ -323,7 +324,12 @@ class SimulatedLightroom:
         self._copy_only(photo_id)
         name, uuid, new = next(p for p in self.PRESETS if p[1] == preset_uuid)
         current = self.settings[photo_id]
-        before = {k: current.get(k, 0) for k in new if current.get(k, 0) != new[k]}
+        # Like the plug-in: a list-valued setting the photo did not have counts as an empty list.
+        before = {
+            k: current.get(k, [] if isinstance(new[k], list) else 0)
+            for k in new
+            if current.get(k, [] if isinstance(new[k], list) else 0) != new[k]
+        }
         current.update(new)
         return PresetChange(
             preset=PresetInfo(name=name, uuid=uuid),

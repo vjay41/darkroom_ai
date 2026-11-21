@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.9.0"
+local PLUGIN_VERSION = "0.9.1"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -906,7 +906,13 @@ function Commands.write.apply_preset(params, ctx)
 	local before, after = {}, {}
 	for key, value in pairs(afterAll) do
 		if comparable(value) ~= comparable(beforeAll[key]) then
-			before[key] = beforeAll[key]
+			local previous = beforeAll[key]
+			if previous == nil and type(value) == "table" then
+				-- The photo had none of this (for example no masks): "before" is an empty list, so
+				-- undoing the preset removes what it added instead of leaving it in place.
+				previous = list({})
+			end
+			before[key] = previous
 			after[key] = value
 		end
 	end
