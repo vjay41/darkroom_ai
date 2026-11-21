@@ -471,7 +471,7 @@ class ListDevelopParametersInput(BaseModel):
 
     panel: str | None = Field(
         default=None,
-        description="One panel: basic, detail, lens, geometry, effects, color_grading, calibration.",
+        description="Panel: basic, detail, lens, geometry, effects, color_grading, calibration.",
     )
 
 
