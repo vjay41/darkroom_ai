@@ -89,7 +89,10 @@ OWN_TOOLS = (
 
 def parameter_limit(guardrails: GuardrailSettings, key: str) -> Limit:
     """The limit for a listed parameter (`guardrails` is kept so limits can become configurable)."""
-    _panel, low, high, _note = DEVELOP_PARAMETERS[key]
+    _panel, low, high, note = DEVELOP_PARAMETERS[key]
     del guardrails
     span = float(high) - float(low)
-    return Limit(key, key, float(low), float(high), round(span * PER_PASS_SHARE, 4))
+    # A toggle (0 = off, 1 = on) has to be able to switch in one step; a quarter step would leave
+    # it at 0.25, which is neither state.
+    step = span if note.startswith("toggle") else round(span * PER_PASS_SHARE, 4)
+    return Limit(key, key, float(low), float(high), step)

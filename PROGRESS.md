@@ -1586,3 +1586,10 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   list_masks 0. Gap 5 (presets) closed. Not yet known: whether a mask preset replaces or merges with a photo's existing hand-made masks
   (on a photo that already had the same 9 masks the count stayed 9 and undo restored them exactly).
 - apply_preset is NOT confirmation-gated (single photo, virtual copy, undoable); Hermes' remark about a confirmation prompt was wrong.
+
+## 2026-11-21 - next live checks
+- Pushed 9 commits (origin/dev up to 7f04bb3). Found before the lens test: toggle parameters (LensProfileEnable, AutoLateralCA) were limited to a
+  quarter step per call (a "+1" would stop at 0.25); toggles now switch fully in one step. Test added.
+- Order per PRD: live-check lens toggles + delete_mask (needs the user to paste one prompt), then P1c compatibility layer, P6 soak, P7 skills
+  (Hermes already carries a darkroom-ai-lightroom skill v1.2.0 that Hermes itself keeps updating; one wrong line: "each write triggers a
+  confirmation prompt" - only gated actions do), P8 deploy kit; Photoshop tools are OUT of PRD v1 (user wants them later: add as a post-v1 phase).

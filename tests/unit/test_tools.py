@@ -1078,3 +1078,13 @@ def test_undoing_a_preset_that_adds_masks_removes_them(tmp_path: Path) -> None:
     assert "MaskGroupBasedCorrections" in got["before"]  # so that undo can empty it again
     rig.call("undo", photo_id=copy_id)
     assert rig.call("list_masks", photo_id=copy_id)["count"] == 0
+
+
+def test_toggle_parameters_switch_fully_in_one_step() -> None:
+    from darkroom_ai.config import GuardrailSettings
+    from darkroom_ai.tools.develop_parameters import parameter_limit
+
+    guard = GuardrailSettings()
+    assert parameter_limit(guard, "LensProfileEnable").per_pass == 1.0
+    assert parameter_limit(guard, "AutoLateralCA").per_pass == 1.0
+    assert parameter_limit(guard, "Texture").per_pass == 50.0  # sliders keep the quarter-range step
