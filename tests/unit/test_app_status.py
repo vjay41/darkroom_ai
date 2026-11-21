@@ -29,13 +29,21 @@ class FakeProcesses:
 
 
 def _registry(
-    tmp_path: Path, processes: FakeProcesses, *, photoshop_exe: Path | None = None
+    tmp_path: Path,
+    processes: FakeProcesses,
+    *,
+    photoshop_exe: Path | None = None,
+    lightroom_exe: Path | None = None,
 ) -> ToolRegistry:
     settings = make_settings(tmp_path)
-    if photoshop_exe is not None:
-        settings = settings.model_copy(
-            update={"apps": AppsSettings(photoshop_exe=str(photoshop_exe))}
-        )
+    if photoshop_exe is not None or lightroom_exe is not None:
+        # Only override what the test names; never depend on what is installed on this machine.
+        overrides: dict[str, str] = {}
+        if photoshop_exe is not None:
+            overrides["photoshop_exe"] = str(photoshop_exe)
+        if lightroom_exe is not None:
+            overrides["lightroom_exe"] = str(lightroom_exe)
+        settings = settings.model_copy(update={"apps": AppsSettings(**overrides)})
     context = ToolContext(
         settings=settings,
         lightroom=FakeLightroom(tmp_path),
@@ -73,7 +81,8 @@ def test_ensure_starts_only_a_missing_app_and_waits_for_it(
 
 def test_missing_program_file_is_reported_not_started(tmp_path: Path) -> None:
     processes = FakeProcesses({"Lightroom.exe": False})
-    got = _registry(tmp_path, processes).call("ensure_apps_running", {"app": "lightroom"})
+    registry = _registry(tmp_path, processes, lightroom_exe=tmp_path / "no" / "Lightroom.exe")
+    got = registry.call("ensure_apps_running", {"app": "lightroom"})
     assert got["started"] is False and got["status"]["state"] == "not_installed"
     assert processes.started == []
 

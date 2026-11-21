@@ -1694,3 +1694,9 @@ Verify: the next confirmation must show a prompt that waits for the user. Not ye
 profiles/darkroom/skills/photo/darkroom-ai-lightroom/references/mask-tools.md: six stale statements fixed (confirmation claim, create_mask signature, ADOBE_FEATURE_UNAVAILABLE
 blame, scale "unverified" -> EV/4 verified, colour/depth reason, gradient/radial/luminance direction verified). Hermes' other additions kept. CRLF kept.
 Backup: mask-tools.md.bak-pre-claude-20261121 (same folder). Aborted if the file had changed since the diff was shown (checked by compare).
+
+### 2026-11-21 19:50 - Windows `make quality` result and fix
+First Windows run: ruff, format, mypy (59 files, incl. the ctypes code in runtime.py) all clean; 346 passed, 8 skipped (luac not set), 1 failed:
+test_app_status::test_missing_program_file_is_reported_not_started. Cause: the test relied on the DEFAULT Lightroom path not existing; on this machine Lightroom is
+installed there, so the code (correctly) went on to "start" it via the fake. Product code was right; test was machine-dependent. Fix: the test now points
+apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass); needs one more Windows `make quality` run.
