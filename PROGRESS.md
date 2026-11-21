@@ -1593,3 +1593,11 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
 - Order per PRD: live-check lens toggles + delete_mask (needs the user to paste one prompt), then P1c compatibility layer, P6 soak, P7 skills
   (Hermes already carries a darkroom-ai-lightroom skill v1.2.0 that Hermes itself keeps updating; one wrong line: "each write triggers a
   confirmation prompt" - only gated actions do), P8 deploy kit; Photoshop tools are OUT of PRD v1 (user wants them later: add as a post-v1 phase).
+
+### Live pass 2026-11-21 18:35 - lens toggles + delete_mask (Hermes, DSC_2411-1.jpg working copy, D7500 18-140mm)
+- PASSED: LensProfileEnable and AutoLateralCA 0 -> 1 applied unclamped in one step (toggle fix confirmed live), read back 1/1; `undo` restored 0/0
+  (read back). `create_mask` (subject) 0 -> 1, `inspect_masks` showed it, `delete_mask` 1 -> 0, final inspect empty. Working copy left as found.
+- NOT verified: that Lightroom actually APPLIED a lens profile. The key flipped and reverted, but a visible change could not be seen (source JPEG
+  already clean) and the profile name/setup was not read. Next check: read LensProfileName / LensProfileSetup after enabling, and render a 100% crop.
+- Observation: `create_mask` subject returned `Tools: {}` for the new mask (AI masks may fill in after inference); not an error, but inspect again
+  after a short wait before adjusting it.
