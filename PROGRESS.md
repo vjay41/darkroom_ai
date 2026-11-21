@@ -1683,3 +1683,9 @@ Numeric check done by Claude from the saved analyze renders (no image viewed; lu
   created in Lightroom (not a read problem). What the person saw is unknown. Manual run earlier: Return in the Person Mask Options panel works.
 - Draft of a corrected Hermes skill reference (references/mask-tools.md, which still says "no geometry parameters"): outputs/mask-tools.proposed.md
   (git-ignored). NOT applied: waiting for the user's go-ahead. The original file has CRLF line endings; keep them when applying.
+
+### 2026-11-21 19:40 - Hermes approvals set to manual (decision)
+Finding: darkroom profile had no `approvals.mode`, so Hermes ran smart mode; its auxiliary model (local qwen) auto-answered every MCP confirmation (7 of 7, 2-6 s,
+incl. the people-mask prompt at 19:31:29, answered 19:31:33) -> the "ask before" rule was not reaching the user. Fix: `approvals.mode: manual` added to
+profiles/darkroom/config.yaml (backup config.yaml.bak-pre-approvals-manual-20261121, CRLF kept, YAML parses, deny list unchanged). Needs a NEW Hermes session.
+Verify: the next confirmation must show a prompt that waits for the user. Not yet verified live. Earlier "confirmed" write tests were auto-approved.
