@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21 09:25: Phase 5 live run PASSED; waiting at the Phase 5 GATE
+## CURRENT STATE — 2026-11-21 09:40: Phase 5 gate accepted; Phase 6 plan shown, waiting for the user's go
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -15,8 +15,9 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
-| 5 Tool layer + guardrails | Built; live run PASSED on 2026-11-21 (8 tools, on a virtual copy of `TEST_2459-39.jpg`). `apply_preset` is built but NOT exposed to the tools/LLM until it is tested live. Waiting at the GATE. |
-| 6-8 | Not started |
+| 5 Tool layer + guardrails | GATE ACCEPTED by the user on 2026-11-21, pending the user's visual checks of the mask and the background JPG. `apply_preset` stays unexposed until tested live. |
+| 6 LLM layer + agent | Plan shown to the user; waiting for the go |
+| 7-8 | Not started |
 
 ### Catalog facts (corrects earlier counts in this file)
 - The user imported the test copies by hand on 2026-11-21. They are in the catalog as `D:\darkroom_test\TEST_2457-37.jpg` ...
@@ -168,7 +169,21 @@ total cap against the original and separate JPG / RAW white-balance scales; clam
 - Left behind: virtual copy `darkroom_ai 20261121-0849..` of `TEST_2459-39.jpg` (settings back at the start values), 13
   journal lines in `logs\journal.jsonl` (git-ignored), previews and outputs (git-ignored).
 
+### Test material and catalog (user, 2026-11-21)
+- Three RAW test files are in the catalog under the test root: `D:\darkroom_test\raw\RAW_DSC00480.ARW`, `RAW_DSC00481.ARW`,
+  `RAW_DSC00482.ARW` (Sony ARW). They are copies; the originals are in `D:\DCIM`, which is OFF LIMITS.
+- Catalog now: 84 images = 67 gallery (off limits) + 10 test JPG copies + 1 stray SDK picture + 3 RAW + 3 virtual copies
+  (user's count). Earlier counts in this file are stale.
+- No action has been taken on the RAW files yet.
+
+### Phase 5 gate (user, 2026-11-21)
+Accepted, pending the user's own visual checks of the mask and of the background JPG.
+
 ### Backlog (user requests)
+- RAW acceptance test on the three ARW test files: white balance `Temperature` in Kelvin, export to 16-bit TIFF,
+  highlight/shadow limits on RAW, and the rule "RAW only when the file is RAW or the user says so".
+- A clean-outputs command that ASKS FIRST and never removes finals (final PSD/JPG results).
+- `replace_background` must state in its result that the output includes the copy's current edits and crop.
 - Presets, AFTER this live run: (1) a read-only `list_presets` tool (preset folders and names); (2) a live test of
   `apply_preset` with a name from that list, checking that undo restores EVERY setting the preset changed; (3) design question
   to raise then: presets can exceed the per-pass limits - propose how they interact with guardrails and confirmation.
@@ -176,7 +191,10 @@ total cap against the original and separate JPG / RAW white-balance scales; clam
 - Deferred until the user says so: ONNX mask backend, YuNet face detector (`make install-ml` not run; nothing downloaded).
 
 ### Next step
-Phase 5 gate: wait for the user's "proceed". Then Phase 6 (LLM layer + agent); the user loads the model in LM Studio first.
+Phase 6 - LLM layer + agent. The plan has been shown; wait for the user's go. Rules from the user: LM Studio endpoint
+127.0.0.1 only; images go only to the local model; Claude does NOT view the user's photos (numeric checks or the grayscale
+mask only); nothing is downloaded; no `make install-ml` without asking. The plan includes the Qwen vision test, a tool-calling
+test per profile, and detection of a GPU conflict between LM Studio and Photoshop. Do not push `dev`.
 
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 
