@@ -1,0 +1,453 @@
+"""Lightroom tools: info, analysis, lighting, white balance, HSL, crop, presets, undo.
+
+All edits go to a virtual copy (created on first use), are clamped to the configured limits, and
+are recorded with the values needed to undo them.
+"""
+
+from __future__ import annotations
+
+import uuid
+from typing import Any, Literal, Self
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from darkroom_ai.adapters.lightroom.models import PhotoInfo
+from darkroom_ai.errors import DarkroomError, ErrorCode
+from darkroom_ai.imaging.analysis import ImageAnalysis, analyze
+from darkroom_ai.imaging.faces import FaceAnalysis, analyze_faces
+from darkroom_ai.imaging.io import load_image
+from darkroom_ai.tools.context import (
+    EditResult,
+    Outcome,
+    ToolContext,
+    ToolResult,
+    apply_slider_changes,
+    check_process_version,
+    original_values,
+    resolve_copy,
+    working_copy,
+)
+from darkroom_ai.tools.develop_keys import (
+    CROP_KEYS,
+    HSL_PREFIX,
+    HslColor,
+    capped_keys,
+    hsl_limit,
+    lighting_limits,
+    white_balance_limits,
+)
+
+PREVIEW_LONG_EDGE = 1024
+
+
+class _Input(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    photo_id: str = Field(min_length=1, description="Catalog id of the photo or its working copy.")
+
+
+# -- get_photo_info -------------------------------------------------------------------------------
+
+
+class GetPhotoInfoInput(_Input):
+    """Read facts about a photo and its current basic settings. Changes nothing."""
+
+
+class PhotoInfoResult(ToolResult):
+    photo: PhotoInfo
+    working_copy_id: str | None
+    settings: dict[str, Any]
+    process_version: str
+
+
+def get_photo_info(ctx: ToolContext, args: GetPhotoInfoInput) -> Outcome:
+    photo = ctx.lightroom.get_photo(args.photo_id)
+    copy = resolve_copy(ctx, args.photo_id)
+    limits = {
+        **lighting_limits(ctx.settings.guardrails),
+        **white_balance_limits(ctx.settings.guardrails, photo.file_format),
+    }
+    keys = [limit.key for limit in limits.values()]
+    raw = ctx.lightroom.get_develop_settings(copy.id, [*keys, "ProcessVersion"])
+    settings = {name: raw.get(limit.key) for name, limit in limits.items()}
+    result = PhotoInfoResult(
+        photo=photo,
+        working_copy_id=copy.id if copy.is_virtual_copy else None,
+        settings=settings,
+        process_version=str(raw.get("ProcessVersion", "")),
+    )
+    return Outcome(result)
+
+
+# -- analyze_photo --------------------------------------------------------------------------------
+
+
+class AnalyzePhotoInput(_Input):
+    """Export a small preview and measure it: tones, clipping, colour cast, faces if available."""
+
+
+class AnalyzePhotoResult(ToolResult):
+    photo_id: str
+    preview_path: str
+    analysis: ImageAnalysis
+    faces: FaceAnalysis | None
+    faces_available: bool
+    faces_note: str
+
+
+def analyze_photo(ctx: ToolContext, args: AnalyzePhotoInput) -> Outcome:
+    target = resolve_copy(ctx, args.photo_id)
+    preview = ctx.lightroom.export_preview(
+        target.id, f"analyze-{uuid.uuid4().hex[:12]}", PREVIEW_LONG_EDGE
+    )
+    pixels = load_image(preview.path)
+    faces: FaceAnalysis | None = None
+    note = ""
+    try:
+        faces = analyze_faces(pixels, ctx.faces)
+    except DarkroomError as exc:
+        if exc.code is not ErrorCode.FACE_MODEL_MISSING:
+            raise
+        note = f"[{exc.code.value}] {exc.message} {exc.next_step}"
+    result = AnalyzePhotoResult(
+        photo_id=target.id,
+        preview_path=str(preview.path),
+        analysis=analyze(pixels),
+        faces=faces,
+        faces_available=faces is not None,
+        faces_note=note,
+    )
+    return Outcome(result, applied={"photo_id": target.id, "preview": str(preview.path)})
+
+
+# -- adjust_lighting ------------------------------------------------------------------------------
+
+
+class AdjustLightingInput(_Input):
+    """Change exposure and tone by the given amounts (relative to the current values).
+
+    Values beyond the per-pass or total limits are clamped; the result lists what was applied.
+    """
+
+    exposure: float | None = Field(default=None, description="Change in EV, e.g. 0.4 or -0.3.")
+    contrast: float | None = Field(default=None, description="Change on the -100..100 scale.")
+    highlights: float | None = None
+    shadows: float | None = None
+    whites: float | None = None
+    blacks: float | None = None
+    allow_beyond_total: bool = Field(
+        default=False,
+        description="Go beyond the total limit for this photo. Needs the user's confirmation.",
+    )
+
+    @model_validator(mode="after")
+    def _something_requested(self) -> Self:
+        names = ("exposure", "contrast", "highlights", "shadows", "whites", "blacks")
+        if all(getattr(self, name) is None for name in names):
+            raise ValueError("give at least one of: " + ", ".join(names))
+        return self
+
+
+def adjust_lighting(ctx: ToolContext, args: AdjustLightingInput) -> Outcome:
+    limits = lighting_limits(ctx.settings.guardrails)
+    requests = [
+        (limit, float(getattr(args, name)))
+        for name, limit in limits.items()
+        if getattr(args, name) is not None
+    ]
+    return apply_slider_changes(
+        ctx,
+        args.photo_id,
+        requests,
+        history_name="darkroom_ai: lighting",
+        allow_beyond_total=args.allow_beyond_total,
+    )
+
+
+# -- adjust_white_balance -------------------------------------------------------------------------
+
+
+class AdjustWhiteBalanceInput(_Input):
+    """Change white balance by the given amounts.
+
+    JPG/TIFF: both values are on Lightroom's relative -100..100 scale (positive temperature =
+    warmer, positive tint = more magenta). RAW: temperature is in Kelvin (untested).
+    """
+
+    temperature: float | None = None
+    tint: float | None = None
+
+    @model_validator(mode="after")
+    def _something_requested(self) -> Self:
+        if self.temperature is None and self.tint is None:
+            raise ValueError("give temperature, tint or both")
+        return self
+
+
+def adjust_white_balance(ctx: ToolContext, args: AdjustWhiteBalanceInput) -> Outcome:
+    photo = ctx.lightroom.get_photo(args.photo_id)
+    limits = white_balance_limits(ctx.settings.guardrails, photo.file_format)
+    requests = [
+        (limits[name], float(getattr(args, name)))
+        for name in ("temperature", "tint")
+        if getattr(args, name) is not None
+    ]
+    return apply_slider_changes(
+        ctx, args.photo_id, requests, history_name="darkroom_ai: white balance"
+    )
+
+
+# -- adjust_hsl -----------------------------------------------------------------------------------
+
+
+class HslAdjustment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    color: HslColor
+    hue: float | None = None
+    saturation: float | None = None
+    luminance: float | None = None
+
+    @model_validator(mode="after")
+    def _something_requested(self) -> Self:
+        if self.hue is None and self.saturation is None and self.luminance is None:
+            raise ValueError("give hue, saturation or luminance")
+        return self
+
+
+class AdjustHslInput(_Input):
+    """Change hue, saturation or luminance of single colours by the given amounts."""
+
+    adjustments: list[HslAdjustment] = Field(min_length=1, max_length=8)
+
+
+def adjust_hsl(ctx: ToolContext, args: AdjustHslInput) -> Outcome:
+    requests = []
+    seen: set[str] = set()
+    for adjustment in args.adjustments:
+        for channel in HSL_PREFIX:
+            value = getattr(adjustment, channel)
+            if value is None:
+                continue
+            limit = hsl_limit(ctx.settings.guardrails, channel, adjustment.color)
+            if limit.key in seen:
+                raise DarkroomError(
+                    ErrorCode.GUARDRAIL_REJECTED,
+                    f"{channel} of {adjustment.color} is given more than once.",
+                )
+            seen.add(limit.key)
+            requests.append((limit, float(value)))
+    return apply_slider_changes(ctx, args.photo_id, requests, history_name="darkroom_ai: HSL")
+
+
+# -- crop -----------------------------------------------------------------------------------------
+
+
+class CropInput(_Input):
+    """Set the crop box as fractions of the frame (0 = left/top edge, 1 = right/bottom edge)."""
+
+    left: float = Field(ge=0.0, le=1.0)
+    top: float = Field(ge=0.0, le=1.0)
+    right: float = Field(ge=0.0, le=1.0)
+    bottom: float = Field(ge=0.0, le=1.0)
+    angle: float = Field(default=0.0, ge=-45.0, le=45.0, description="Rotation in degrees.")
+
+    @model_validator(mode="after")
+    def _box_is_valid(self) -> Self:
+        if self.right <= self.left or self.bottom <= self.top:
+            raise ValueError("right must be greater than left and bottom greater than top")
+        return self
+
+
+class CropResult(ToolResult):
+    photo_id: str
+    working_copy_created: bool
+    before: dict[str, Any]
+    after: dict[str, Any]
+    kept_fraction: float
+
+
+def crop(ctx: ToolContext, args: CropInput) -> Outcome:
+    kept = (args.right - args.left) * (args.bottom - args.top)
+    minimum = ctx.settings.guardrails.min_crop_fraction
+    if kept < minimum:
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"This crop keeps {kept:.0%} of the frame; the minimum is {minimum:.0%}. "
+            "Nothing was changed.",
+            details={"kept_fraction": round(kept, 4), "minimum": minimum},
+        )
+    copy, created = working_copy(ctx, args.photo_id)
+    before = ctx.lightroom.get_develop_settings(copy.id, list(CROP_KEYS))
+    wanted = {
+        "CropLeft": args.left,
+        "CropTop": args.top,
+        "CropRight": args.right,
+        "CropBottom": args.bottom,
+        "CropAngle": args.angle,
+    }
+    change = ctx.lightroom.apply_develop_settings(copy.id, wanted, "darkroom_ai: crop")
+    result = CropResult(
+        photo_id=copy.id,
+        working_copy_created=created,
+        before=change.before,
+        after=change.after,
+        kept_fraction=round(kept, 4),
+    )
+    return Outcome(
+        result,
+        applied={"photo_id": copy.id, "settings": wanted},
+        undo={"photo_id": copy.id, "settings": {k: before.get(k) for k in CROP_KEYS}},
+    )
+
+
+# -- apply_preset ---------------------------------------------------------------------------------
+
+
+class ApplyPresetInput(_Input):
+    """Apply one of Lightroom's develop presets by its exact name."""
+
+    preset_name: str = Field(min_length=1)
+
+
+class ApplyPresetResult(ToolResult):
+    photo_id: str
+    working_copy_created: bool
+    preset: str
+    changed: dict[str, Any]
+    changed_count: int
+
+
+def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
+    wanted = args.preset_name.strip().lower()
+    presets = ctx.lightroom.list_presets()
+    matches = [p for p in presets if p.name.strip().lower() == wanted]
+    if not matches:
+        similar = sorted(p.name for p in presets if wanted in p.name.lower())[:8]
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"There is no develop preset named '{args.preset_name}'. Nothing was changed.",
+            next_step="Use the exact preset name as shown in Lightroom."
+            + (f" Similar names: {', '.join(similar)}." if similar else ""),
+            details={"similar": similar},
+        )
+    if len(matches) > 1:
+        folders = sorted(p.folder for p in matches)
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"Several presets are named '{args.preset_name}' (in: {', '.join(folders)}). "
+            "Nothing was changed.",
+            details={"folders": folders},
+        )
+
+    copy, created = working_copy(ctx, args.photo_id)
+    change = ctx.lightroom.apply_preset(copy.id, matches[0].uuid)
+
+    # A preset can set anything, so check its result against the total limits and take it back
+    # if it goes beyond them.
+    caps = capped_keys(ctx.settings.guardrails)
+    touched = {key: change.before.get(key) for key in caps if key in change.after}
+    originals = original_values(ctx, copy.id, touched)
+    for key, limit in caps.items():
+        if key not in change.after or limit.total is None:
+            continue
+        after = float(change.after[key])
+        original = float(originals.get(key) or 0.0)
+        if abs(after - original) > limit.total + 1e-6:
+            ctx.lightroom.apply_develop_settings(
+                copy.id, change.before, "darkroom_ai: preset taken back"
+            )
+            raise DarkroomError(
+                ErrorCode.GUARDRAIL_REJECTED,
+                f"The preset '{matches[0].name}' would set {limit.name} to {after:+g}, which is "
+                f"more than {limit.total:g} away from the original ({original:+g}). The preset "
+                "was taken back; nothing is changed.",
+                details={"setting": key, "after": after, "original": original},
+            )
+    result = ApplyPresetResult(
+        photo_id=copy.id,
+        working_copy_created=created,
+        preset=matches[0].name,
+        changed=change.after,
+        changed_count=len(change.after),
+    )
+    return Outcome(
+        result,
+        applied={"photo_id": copy.id, "preset": matches[0].name, "settings": change.after},
+        undo={"photo_id": copy.id, "settings": change.before} if change.before else None,
+    )
+
+
+# -- undo -----------------------------------------------------------------------------------------
+
+
+class UndoInput(_Input):
+    """Take back darkroom_ai's edits on a photo: the last one, or all of them."""
+
+    scope: Literal["last", "all"] = "last"
+
+
+class UndoResult(ToolResult):
+    photo_id: str
+    undone_steps: int
+    restored: dict[str, Any]
+    note: str = ""
+
+
+def undo(ctx: ToolContext, args: UndoInput) -> Outcome:
+    copy = resolve_copy(ctx, args.photo_id)
+    entries = list(ctx.journal.entries())
+    already = {
+        str(entry_id)
+        for entry in entries
+        if entry.tool == "undo" and entry.status == "ok" and entry.applied
+        for entry_id in entry.applied.get("undone", [])
+    }
+    pending = [
+        entry
+        for entry in entries
+        if entry.undoable
+        and entry.undo is not None
+        and entry.undo.get("photo_id") == copy.id
+        and entry.undo.get("settings")
+        and entry.id not in already
+    ]
+    if not pending:
+        result = UndoResult(
+            photo_id=copy.id, undone_steps=0, restored={}, note="There is nothing to undo."
+        )
+        return Outcome(result)
+
+    chosen = pending if args.scope == "all" else pending[-1:]
+    restore: dict[str, Any] = {}
+    for entry in reversed(chosen):  # the oldest "before" value of each setting wins
+        assert entry.undo is not None
+        restore.update(entry.undo["settings"])
+    check_process_version(ctx.lightroom.get_develop_settings(copy.id, ["ProcessVersion"]))
+    ctx.lightroom.apply_develop_settings(copy.id, restore, "darkroom_ai: undo")
+    result = UndoResult(photo_id=copy.id, undone_steps=len(chosen), restored=restore)
+    return Outcome(
+        result,
+        applied={"photo_id": copy.id, "undone": [e.id for e in chosen], "settings": restore},
+    )
+
+
+__all__ = [
+    "AdjustHslInput",
+    "AdjustLightingInput",
+    "AdjustWhiteBalanceInput",
+    "AnalyzePhotoInput",
+    "ApplyPresetInput",
+    "CropInput",
+    "EditResult",
+    "GetPhotoInfoInput",
+    "UndoInput",
+    "adjust_hsl",
+    "adjust_lighting",
+    "adjust_white_balance",
+    "analyze_photo",
+    "apply_preset",
+    "crop",
+    "get_photo_info",
+    "undo",
+]

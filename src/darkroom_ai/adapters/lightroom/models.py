@@ -79,3 +79,17 @@ class CommandList(_Result):
     plugin_version: str
     read: tuple[str, ...] = ()
     write: tuple[str, ...] = ()
+
+
+class PresetInfo(_Result):
+    name: str
+    uuid: str
+    folder: str = ""
+
+
+class PresetChange(_Result):
+    """A develop preset applied to a photo: every setting it changed, before and after."""
+
+    preset: PresetInfo
+    before: dict[str, Any] = Field(default_factory=dict)
+    after: dict[str, Any] = Field(default_factory=dict)

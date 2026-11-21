@@ -100,6 +100,22 @@ def mask_metrics(mask: Mask) -> MaskMetrics:
     )
 
 
+def remove_specks(mask: Mask, min_fraction: float = MIN_REGION_FRACTION) -> tuple[Mask, int]:
+    """Black out subject regions smaller than `min_fraction` of the image.
+
+    Returns the cleaned mask and how many regions were removed.
+    """
+    binary = (mask > 0.5).astype(np.uint8)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    threshold = min_fraction * mask.size
+    small = [i for i in range(1, count) if stats[i, cv2.CC_STAT_AREA] < threshold]
+    if not small:
+        return mask, 0
+    cleaned = mask.copy()
+    cleaned[np.isin(labels, small)] = 0.0
+    return cleaned, len(small)
+
+
 def _finish(mask: Mask, image_shape: tuple[int, ...], out_path: Path, provider: str) -> MaskResult:
     if mask.shape != tuple(image_shape[:2]):
         raise DarkroomError(

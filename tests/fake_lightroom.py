@@ -19,6 +19,7 @@ WRITE_COMMANDS = {
     "apply_settings",
     "export_preview",
     "export_tiff",
+    "apply_preset",
 }
 
 
@@ -213,7 +214,7 @@ class FakeLightroomPlugin:
     def _cmd_list_commands(self, _: dict[str, Any]) -> dict[str, Any]:
         names = sorted(name[5:] for name in dir(self) if name.startswith("_cmd_"))
         return {
-            "plugin_version": "0.2.0",
+            "plugin_version": "0.3.0",
             "read": [name for name in names if name not in WRITE_COMMANDS],
             "write": [name for name in names if name in WRITE_COMMANDS],
         }
@@ -305,3 +306,25 @@ class FakeLightroomPlugin:
             raise PluginError("FILE_EXISTS", "Refused: a file with this name already exists")
         self.tiffs.append(path)
         return {"path": path, "bit_depth": 16, "color_space": params.get("color_space", "sRGB")}
+
+    PRESETS = (
+        {"name": "Soft Warm", "uuid": "preset-1", "folder": "User Presets"},
+        {"name": "Hard Push", "uuid": "preset-2", "folder": "User Presets"},
+    )
+    PRESET_SETTINGS: dict[str, dict[str, Any]] = {  # noqa: RUF012
+        "preset-1": {"Exposure": 0.4, "Contrast": 10},
+        "preset-2": {"Exposure": 4.5},
+    }
+
+    def _cmd_list_presets(self, _: dict[str, Any]) -> dict[str, Any]:
+        return {"presets": list(self.PRESETS)}
+
+    def _cmd_apply_preset(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        preset = next((p for p in self.PRESETS if p["uuid"] == params.get("preset_uuid")), None)
+        if preset is None:
+            raise PluginError("PRESET_NOT_FOUND", "No develop preset with that id")
+        new = self.PRESET_SETTINGS[preset["uuid"]]
+        before = {k: photo.settings.get(k) for k in new if photo.settings.get(k) != new[k]}
+        photo.settings.update(new)
+        return {"preset": preset, "before": before, "after": {k: new[k] for k in before}}

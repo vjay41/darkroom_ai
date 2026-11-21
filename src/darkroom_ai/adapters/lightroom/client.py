@@ -22,6 +22,8 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     PhotoInfo,
     PingInfo,
+    PresetChange,
+    PresetInfo,
     PreviewFile,
     Selection,
     SettingsChange,
@@ -254,7 +256,7 @@ class LightroomClient:
         details = {"command": command, "plugin_code": code}
         if code == "WRONG_CATALOG":
             return DarkroomError(ErrorCode.LR_WRONG_CATALOG, text or None, details=details)
-        if code in ("PHOTO_OUTSIDE_ROOT", "NOT_A_VIRTUAL_COPY", "FILE_EXISTS"):
+        if code in ("PHOTO_OUTSIDE_ROOT", "NOT_A_VIRTUAL_COPY", "FILE_EXISTS"):  # refusals
             return DarkroomError(
                 ErrorCode.GUARDRAIL_REJECTED,
                 text or None,
@@ -378,3 +380,11 @@ class LightroomClient:
             timeout_s=self._export_timeout_s,
         )
         return self._typed(ExportedTiff, "export_tiff", data)
+
+    def list_presets(self) -> tuple[PresetInfo, ...]:
+        data = self.call("list_presets").get("presets") or []
+        return tuple(self._typed(PresetInfo, "list_presets", item) for item in data)
+
+    def apply_preset(self, photo_id: str, preset_uuid: str) -> PresetChange:
+        data = self.call("apply_preset", {"photo_id": photo_id, "preset_uuid": preset_uuid})
+        return self._typed(PresetChange, "apply_preset", data)

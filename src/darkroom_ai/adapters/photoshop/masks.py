@@ -13,7 +13,7 @@ from pathlib import Path
 from darkroom_ai.adapters.photoshop.client import PhotoshopClient, unique_path
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.imaging.io import load_mask, save_mask_png
-from darkroom_ai.imaging.masks import MaskResult, mask_metrics
+from darkroom_ai.imaging.masks import MaskResult, mask_metrics, remove_specks
 
 DEVICE_MODE = "imageProcessingModeDevice"
 
@@ -54,6 +54,11 @@ class PhotoshopSelectSubjectProvider:
             with contextlib.suppress(DarkroomError):
                 photoshop.close_document(working)
 
-        mask = load_mask(raw_png)
+        mask, _removed = remove_specks(load_mask(raw_png))
         save_mask_png(mask, out_path)
+        # The PNG Photoshop writes is large (tens of MB) and only an intermediate: remove it and
+        # the working copy now that the final mask is saved. Both are our own files.
+        for leftover in (raw_png, working):
+            with contextlib.suppress(OSError):
+                leftover.unlink()
         return MaskResult(path=out_path, provider=self.name, metrics=mask_metrics(mask))

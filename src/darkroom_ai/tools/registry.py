@@ -1,0 +1,130 @@
+"""The tool registry: one list of typed tools, shared by the agent and the MCP server.
+
+Every call goes through `ToolRegistry.call`, which validates the arguments, runs the tool and
+writes exactly one journal entry (also for failures).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import Any
+
+from pydantic import BaseModel, ValidationError
+
+from darkroom_ai.errors import DarkroomError, ErrorCode
+from darkroom_ai.tools import background, lightroom_tools
+from darkroom_ai.tools.context import Outcome, ToolContext
+
+
+@dataclass(frozen=True)
+class Tool:
+    name: str
+    description: str
+    input_model: type[BaseModel]
+    handler: Callable[[ToolContext, Any], Outcome]
+    writes: bool
+
+    def schema(self) -> dict[str, Any]:
+        """Name, description and JSON schema of the arguments (for the model)."""
+        parameters = self.input_model.model_json_schema()
+        parameters.pop("title", None)
+        parameters.pop("description", None)
+        return {"name": self.name, "description": self.description, "parameters": parameters}
+
+
+def _tool(
+    name: str, model: type[BaseModel], handler: Callable[[ToolContext, Any], Outcome], writes: bool
+) -> Tool:
+    description = " ".join((model.__doc__ or "").split())
+    return Tool(name, description, model, handler, writes)
+
+
+TOOLS: tuple[Tool, ...] = (
+    _tool(
+        "get_photo_info",
+        lightroom_tools.GetPhotoInfoInput,
+        lightroom_tools.get_photo_info,
+        writes=False,
+    ),
+    _tool(
+        "analyze_photo",
+        lightroom_tools.AnalyzePhotoInput,
+        lightroom_tools.analyze_photo,
+        writes=False,
+    ),
+    _tool(
+        "adjust_lighting",
+        lightroom_tools.AdjustLightingInput,
+        lightroom_tools.adjust_lighting,
+        writes=True,
+    ),
+    _tool(
+        "adjust_white_balance",
+        lightroom_tools.AdjustWhiteBalanceInput,
+        lightroom_tools.adjust_white_balance,
+        writes=True,
+    ),
+    _tool("adjust_hsl", lightroom_tools.AdjustHslInput, lightroom_tools.adjust_hsl, writes=True),
+    _tool("crop", lightroom_tools.CropInput, lightroom_tools.crop, writes=True),
+    _tool(
+        "apply_preset", lightroom_tools.ApplyPresetInput, lightroom_tools.apply_preset, writes=True
+    ),
+    _tool(
+        "replace_background",
+        background.ReplaceBackgroundInput,
+        background.replace_background,
+        writes=True,
+    ),
+    _tool("undo", lightroom_tools.UndoInput, lightroom_tools.undo, writes=True),
+)
+
+
+class ToolRegistry:
+    def __init__(self, context: ToolContext, tools: tuple[Tool, ...] = TOOLS) -> None:
+        self._context = context
+        self._tools = {tool.name: tool for tool in tools}
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        return tuple(self._tools)
+
+    def schemas(self) -> list[dict[str, Any]]:
+        return [tool.schema() for tool in self._tools.values()]
+
+    def call(self, name: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
+        """Validate, run and journal one tool call. Returns the result as plain JSON data."""
+        journal = self._context.journal
+        raw_args = dict(arguments)
+        tool = self._tools.get(name)
+        if tool is None:
+            error = DarkroomError(
+                ErrorCode.LLM_BAD_TOOL_CALL,
+                f"There is no tool named '{name}'.",
+                details={"known_tools": list(self._tools)},
+            )
+            journal.record(name, raw_args, status="error", error=error.to_dict())
+            raise error
+        try:
+            args = tool.input_model.model_validate(raw_args)
+        except ValidationError as exc:
+            problems = [
+                f"{'.'.join(str(part) for part in err['loc']) or '(arguments)'}: {err['msg']}"
+                for err in exc.errors()
+            ]
+            error = DarkroomError(
+                ErrorCode.LLM_BAD_TOOL_CALL,
+                f"The arguments for '{name}' are not valid: " + "; ".join(problems),
+                details={"problems": problems},
+            )
+            journal.record(name, raw_args, status="error", error=error.to_dict())
+            raise error from exc
+
+        try:
+            outcome = tool.handler(self._context, args)
+        except DarkroomError as exc:
+            journal.record(name, raw_args, status="error", error=exc.to_dict())
+            raise
+        entry = journal.record(name, raw_args, applied=outcome.applied, undo=outcome.undo)
+        result = outcome.result.model_copy(update={"journal_id": entry.id})
+        return result.model_dump(mode="json")

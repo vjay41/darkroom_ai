@@ -27,7 +27,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.2.0"
+local PLUGIN_VERSION = "0.3.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 
@@ -247,6 +247,25 @@ function Commands.read.list_snapshots(params, ctx)
 	return { snapshots = list(snapshots(findPhoto(ctx, params.photo_id))) }
 end
 
+-- Develop presets known to Lightroom (name, uuid, folder). Read-only.
+local function allPresets()
+	local result = {}
+	for _, folder in ipairs(LrApplication.developPresetFolders() or {}) do
+		for _, preset in ipairs(folder:getDevelopPresets() or {}) do
+			result[#result + 1] = { preset = preset, name = preset:getName(), uuid = preset:getUuid(), folder = folder:getName() }
+		end
+	end
+	return result
+end
+
+function Commands.read.list_presets()
+	local result = {}
+	for _, item in ipairs(allPresets()) do
+		result[#result + 1] = { name = item.name, uuid = item.uuid, folder = item.folder }
+	end
+	return { presets = list(result) }
+end
+
 --------------------------------------------------------------------------------
 -- Write commands (only run when the open catalog is the configured catalog)
 
@@ -435,6 +454,51 @@ function Commands.write.apply_settings(params, ctx)
 	end)
 	local after = pick(photo:getDevelopSettings(), keys)
 	return { before = before, after = after }
+end
+
+-- Applies a develop preset (by uuid) to a VIRTUAL COPY and reports every setting it changed,
+-- with the values before and after, so the change can be checked against the limits and undone.
+function Commands.write.apply_preset(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	if type(params.preset_uuid) ~= "string" or params.preset_uuid == "" then
+		fail("INVALID_PARAMS", "preset_uuid is required")
+	end
+	local chosen
+	for _, item in ipairs(allPresets()) do
+		if item.uuid == params.preset_uuid then
+			chosen = item
+		end
+	end
+	if not chosen then
+		fail("PRESET_NOT_FOUND", "No develop preset with that id")
+	end
+
+	local function comparable(value)
+		if type(value) == "table" then
+			local ok, text = pcall(Json.encode, value)
+			return ok and text or tostring(value)
+		end
+		return value
+	end
+
+	local beforeAll = photo:getDevelopSettings()
+	withWrite(ctx, "darkroom_ai: apply preset " .. chosen.name, function()
+		photo:applyDevelopPreset(chosen.preset)
+	end)
+	local afterAll = photo:getDevelopSettings()
+
+	local before, after = {}, {}
+	for key, value in pairs(afterAll) do
+		if comparable(value) ~= comparable(beforeAll[key]) then
+			before[key] = beforeAll[key]
+			after[key] = value
+		end
+	end
+	return {
+		preset = { name = chosen.name, uuid = chosen.uuid, folder = chosen.folder },
+		before = before,
+		after = after,
+	}
 end
 
 -- Exports a JPEG preview into the configured preview folder only (never an arbitrary path).

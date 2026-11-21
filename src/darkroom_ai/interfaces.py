@@ -18,6 +18,8 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     PhotoInfo,
     PingInfo,
+    PresetChange,
+    PresetInfo,
     PreviewFile,
     Selection,
     SettingsChange,
@@ -70,6 +72,10 @@ class LightroomAdapter(Protocol):
 
     def export_tiff(self, photo_id: str, name: str, color_space: str = ...) -> ExportedTiff: ...
 
+    def list_presets(self) -> tuple[PresetInfo, ...]: ...
+
+    def apply_preset(self, photo_id: str, preset_uuid: str) -> PresetChange: ...
+
 
 class PhotoshopAdapter(Protocol):
     """What the tools need from Photoshop. Works only on copies inside its work folder."""
@@ -104,6 +110,8 @@ class PhotoshopAdapter(Protocol):
     def add_fill_layer_below(
         self, path: Path, rgb: tuple[int, int, int], name: str = ...
     ) -> None: ...
+
+    def add_image_layer_below(self, path: Path, image: Path, name: str = ...) -> None: ...
 
     def layers(self, path: Path) -> tuple[LayerInfo, ...]: ...
 

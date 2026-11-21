@@ -227,6 +227,16 @@ class PhotoshopClient:
             args=[name, str(rgb[0]), str(rgb[1]), str(rgb[2])],
         )
 
+    def add_image_layer_below(self, path: Path, image: Path, name: str = "background") -> None:
+        """Add a picture (a working copy inside the work folder) as the new bottom layer.
+
+        The picture is scaled to cover the document and centre-cropped.
+        """
+        source = self._inside_work_dir(image)
+        self.run_script(
+            read_jsx("add_image_layer_below.jsx"), document=path, args=[str(source), name]
+        )
+
     def layers(self, path: Path) -> tuple[LayerInfo, ...]:
         """Layers from top to bottom, with whether each has a layer mask."""
         data = self._script_json("layers_info.jsx", path)

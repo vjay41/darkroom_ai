@@ -96,8 +96,30 @@ class PhotoshopSettings(_Section):
 
 
 class GuardrailSettings(_Section):
+    """Limits for edits. Per-pass limits bound one tool call; totals bound the change against
+    the photo's original values. Values beyond a limit are clamped and reported."""
+
     max_passes: int = Field(default=3, ge=1, le=10)
+    # Exposure, in EV.
     exposure_ev_per_pass: float = Field(default=1.5, gt=0.0, le=5.0)
+    exposure_ev_total: float = Field(default=3.0, gt=0.0, le=5.0)
+    # Contrast, highlights, shadows, whites, blacks (Lightroom scale -100..100).
+    tone_per_pass: float = Field(default=50.0, gt=0.0, le=100.0)
+    # White balance. JPG/TIFF use Lightroom's relative -100..100 sliders; RAW uses Kelvin.
+    wb_relative_per_pass: float = Field(default=30.0, gt=0.0, le=100.0)
+    wb_kelvin_per_pass: float = Field(default=1000.0, gt=0.0, le=10000.0)  # RAW: untested
+    wb_tint_raw_per_pass: float = Field(default=30.0, gt=0.0, le=150.0)  # RAW: untested
+    # HSL sliders (Lightroom scale -100..100).
+    hsl_per_pass: float = Field(default=30.0, gt=0.0, le=100.0)
+    # A crop must keep at least this share of the frame.
+    min_crop_fraction: float = Field(default=0.25, gt=0.0, le=1.0)
+
+
+class BackgroundSettings(_Section):
+    """Where replace_background may take a picture from: this one folder, nothing else."""
+
+    dir: Path = Path("backgrounds")
+    max_file_mb: float = Field(default=50.0, gt=0.0, le=1000.0)
 
 
 MaskBackend = Literal["photoshop", "onnx", "synthetic"]
@@ -137,6 +159,7 @@ class Settings(_Section):
     photoshop: PhotoshopSettings = PhotoshopSettings()
     guardrails: GuardrailSettings = GuardrailSettings()
     masks: MaskSettings = MaskSettings()
+    backgrounds: BackgroundSettings = BackgroundSettings()
     faces: FaceSettings = FaceSettings()
     paths: PathSettings = PathSettings()
 

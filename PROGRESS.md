@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21 08:35: Phase 4 gate accepted; Phase 5 plan shown, waiting for the user's go
+## CURRENT STATE — 2026-11-21 09:10: Phase 5 built; live run waits for the user's go
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -15,7 +15,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
-| 5 Tool layer + guardrails | Plan shown to the user; waiting for the go |
+| 5 Tool layer + guardrails | BUILT and unit-tested with fakes (268 tests). NOT yet run against Lightroom/Photoshop: the live run (one call per tool on a TEST_ virtual copy) waits for the user's go and one plug-in reload. |
 | 6-8 | Not started |
 
 ### Catalog facts (corrects earlier counts in this file)
@@ -114,9 +114,37 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 - Delete the large intermediate PNG that Photoshop writes into `outputs\photoshop` (62 MB) after each run, once the final
   mask has been saved.
 
-### Next step
-Phase 5 - tool layer + guardrails. The plan has been shown; wait for the user's go before building. Show the exact
-Lightroom/Photoshop actions before the first live run of the tools. Do not push `dev`.
+### Phase 5 - tool layer + guardrails (built 2026-11-21, no app contact)
+User decisions: no import of results into the catalog; NO `run_photoshop_script` in v1 (no arbitrary script runner; add a
+narrow typed tool if a gap appears); backgrounds = solid colour or a picture from ONE configured folder; limits accepted with a
+total cap against the original and separate JPG / RAW white-balance scales; clamped results report requested vs applied.
+
+- Nine tools in one registry (`tools/registry.py`), each with a pydantic input model that gives the JSON schema:
+  `get_photo_info`, `analyze_photo`, `adjust_lighting`, `adjust_white_balance`, `adjust_hsl`, `crop`, `apply_preset`,
+  `replace_background`, `undo`. Unknown fields and bad values -> `LLM_BAD_TOOL_CALL`. Every call writes one journal entry
+  (also failures).
+- Virtual copies only: an edit on a master creates ONE virtual copy and reuses it (also across sessions, via the journal).
+  The plug-in refuses develop edits on masters as a second line.
+- Limits (`safety/guardrails.py`, `[guardrails]`): per pass (exposure 1.5 EV, tone 50, HSL 30, JPG white balance 30 on the
+  -100..100 scale, RAW 1000 K / tint 30 - RAW UNTESTED), total against the ORIGINAL value (exposure 3 EV; the original is the
+  first "before" value in the journal), slider range. Values are clamped, and every change reports requested, applied,
+  before, after, original and which limit applied. Going beyond the total needs `allow_beyond_total` AND a Confirmer saying
+  yes; the default Confirmer refuses, the model cannot confirm for itself.
+- White balance: JPG/TIFF -> `IncrementalTemperature` / `IncrementalTint`; RAW/DNG -> `Temperature` (Kelvin) / `Tint`.
+- `crop`: box as fractions + angle; refused if it keeps less than 25% of the frame. Setting names UNVERIFIED in Lightroom.
+- `apply_preset`: by exact name; plug-in commands `list_presets` / `apply_preset` (build 0.3.0) report every changed setting
+  before/after; a preset that breaks the total limit is taken back and refused. UNVERIFIED in Lightroom.
+- `replace_background`: virtual copy -> 16-bit TIFF -> mask provider -> Photoshop mask + background -> new PSD + JPG in
+  `outputs\photoshop`; no import. Background picture: plain file name in `[backgrounds] dir` only (no path, no URL, real
+  image, size limit); Photoshop gets a copy of it. New JSX `add_image_layer_below` UNVERIFIED in Photoshop.
+- `undo`: last step or all, by re-applying the journaled "before" values.
+- Phase 4 backlog done here: speck clean-up (`remove_specks`) in the Select Subject provider, and the 62 MB intermediate PNG
+  plus the provider's working copy are deleted after the final mask is saved.
+- `tools/factory.py` wires the real adapters; `scripts/tools_live.py` is the live run (not executed yet).
+
+### Next step (needs the user's go)
+Live run of `scripts/tools_live.py` on a virtual copy of ONE `TEST_` photo: the exact actions were shown to the user. Needs
+one "Reload Plug-in" first (build 0.3.0 for the preset commands). Then the Phase 5 gate report. Do not push `dev`.
 
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 
