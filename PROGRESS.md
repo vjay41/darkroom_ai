@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 GATE: report written; `README.new.md` (untracked) waits for the user's go; waiting for "proceed" to Phase 8. Do not push.
+## CURRENT STATE — 2026-11-21: Phase 7 gate ACCEPTED; README committed; Phase 8 plan shown, waiting for the user's go. Nothing pushed; the user decides when.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -17,7 +17,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
 | 5 Tool layer + guardrails | GATE ACCEPTED by the user on 2026-11-21, pending the user's visual checks of the mask and the background JPG. `apply_preset` stays unexposed until tested live. |
 | 6 LLM layer + agent | GATE ACCEPTED by the user on 2026-11-21 with the listed deferrals (Muse/fast and the two-model GPU measurement to Phase 8). |
-| 7 Hardening | AT THE GATE (2026-11-21), waiting for "proceed"; README waits for the user's go to commit |
+| 7 Hardening | GATE ACCEPTED by the user on 2026-11-21 |
 | 8 Acceptance | Not started |
 
 ### Phase 6 (built 2026-11-21)
@@ -446,7 +446,12 @@ own connect path is not seen by the audit hook; the error codes that only unit t
 Open / carried to Phase 8: `glimmer` and `fast` profiles; Select Subject with two models loaded; RAW acceptance test;
 `list_presets` + live `apply_preset`; ONNX mask backend and YuNet (deferred by the user); playbook ranges untuned;
 a gated action confirmed with a real "y" in chat; HSL / crop / landscape playbook through the agent.
-Waiting for: the user's go to replace `README.md` with `README.new.md`; the user's "proceed" for Phase 8.
+README approved by the user with three edits (the intro says darkroom_ai itself makes no internet connections and that
+Lightroom, Photoshop and the model server are separate programs; `make install` / `make audit` use the network; a
+different Lightroom version gives a doctor warning) and committed as `README.md`; `README.new.md` removed.
+Phase 7 gate ACCEPTED. Before any push: the user wants the tracked-files secrets list, `git remote -v` and the
+repository's visibility, and decides when to push. Phase 8 plan shown; waiting for the go before touching Lightroom
+or Photoshop.
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error
