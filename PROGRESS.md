@@ -1494,3 +1494,12 @@ P1 status (2026-11-21 15:10): `pre-mcp-pivot` tag created locally (9d1bd93). Leg
 ## Windows gate for P1 (2026-11-21 15:39)
 `make quality` on Windows 11, Python 3.13.14, in-project .venv: ruff clean, format clean, mypy strict clean (52 files), pytest 294 passed, 8 skipped (need DARKROOM_LUAC), 0 failed. The one Linux-only failure (Windows path test) does not occur on Windows, as expected. P1 pushed to origin/dev with tag pre-mcp-pivot (via IntelliJ). Test catalog is now D:\darkroom_test\test_catalog\test_catalog.lrcat (darkroom.local.toml, git-ignored); test photos: 118 Nikon JPG + 2 Sony ARW in D:\darkroom_test\photos.
 Still open: live check through Hermes (/reload-mcp, get_photo_info, get_preview on the test catalog); P1b; P1c.
+
+## Live results through Hermes (2026-11-21 16:37) - first end-to-end verification
+Hermes (Darkroom profile, qwen/qwen3.8-27b, LM Studio context raised to 131072 because Hermes requires >= 64K) called darkroom_ai over stdio MCP against the open test catalog (120 photos, D:\darkroom_test\test_catalog\test_catalog.lrcat):
+- list_catalog_photos / get_photo_metadata: camera, lens, focal length, aperture, shutter, ISO returned correctly after the LrTasks.pcall fix (plug-in 0.5.1). Sony ILCE-7M5 + FE 24-70mm F2.8 GM II (2 ARW), Nikon D7500 + 18-140mm (JPGs).
+- list_develop_parameters / get_develop_parameters: lens panel read for DSC_2411-1.jpg (profile off, CA off, defringe 0, vignette midpoint 50).
+- Earlier: get_selected_photos, find_photo, get_photo_info, get_preview, analyze_photo, create_virtual_copy, adjust_lighting, adjust_white_balance, undo all ran through Hermes. White balance on JPG survived the preview render (R/B 1.43 -> 1.26) in that sample.
+- Guardrail seen working: a photo outside D:\darkroom_test was refused (GUARDRAIL_REJECTED).
+Open: preview image reached Hermes' image cache (cache\images\img_*.jpg); not yet verified that the model sees it directly. Darkroom SOUL.md still says Nikon D7500/NEF (user also has a Sony ILCE-7M5 shooting ARW): fix with a shown diff in P7.
+Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
