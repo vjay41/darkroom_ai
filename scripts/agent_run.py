@@ -185,6 +185,7 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
             max_passes=settings.guardrails.max_passes,
             allowed_tools=tools,
             playbook=args.playbook,
+            guardrails=settings.guardrails,
             on_event=lambda text: print(f"  {text}"),
         )
         report = agent.run(args.request, photo.id)

@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-3, the clamp run and the dark-photo run done; design note (no hard-coded editing decisions) shown, waiting for sign-off; runs 4-7 wait for the go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: design note signed off; edit tools report measured before/after; `--playbook none` built; prompts shown; runs 4-7 wait for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -604,7 +604,29 @@ copies only, including a strong "much brighter" request and a white-balance requ
   * After the dark-photo run, no code: a design note was shown to the user (inventory of editing heuristics in code and
     prompts; a `--playbook none` mode; a playbook-vs-none comparison after run 7; Phase 9 as tools; a way for the model
     to see beforehand what an edit would do). Waiting for the user's sign-off.
-  * Runs 4, 5 (`--pause`), 6, 7: waiting for the user's go.
+  * DESIGN NOTE SIGNED OFF by the user (2026-11-21) with additions: the comparison runs each photo and request in both
+    modes at least twice and compares measurements across all runs (final clipped highlights / shadows, median, passes,
+    tool calls, clamps hit, repeated identical calls, time), with a few pairs left in place (`--pause`) for the user's
+    own look; the pass limit stays as a configurable safety bound stated to the model; in `none` mode the FACT stays
+    that the measurements are computed from the pixels and that the model's reading of a downscaled preview has been
+    unreliable in tests, while the "numbers win" ruling and every threshold and step size are dropped; item 5: only the
+    cheaper step (no `preview_edit` for now).
+  * BUILT (no Adobe contact; 339 tests, `make quality` clean):
+    - Slider edit tools (`adjust_lighting`, `adjust_white_balance`, `adjust_hsl`) return `measured`: the clipped
+      highlights and shadows and p05 / p50 / p95 BEFORE and AFTER the edit, from real preview renders (no prediction).
+      "Before" reuses the last valid measurement (from `analyze_photo` or the previous edit); otherwise it is measured
+      first. An edit that writes nothing (clamped to 0) measures nothing. `undo`, `revert` and `crop` invalidate the
+      stored measurement. Cost: one extra preview export per edit (two if nothing was measured before).
+    - `--playbook none` for `scripts/agent_run.py` and `darkroom chat` (default stays `portrait`): the system message
+      holds facts only (tools, relative sliders, the limits as numbers, the pass limit, what the measurements mean, the
+      fact about pixels vs the model's reading of the preview, data rules). No thresholds, step sizes, order of
+      operations or "stop when"; the cast's verdict words (`description`, `confidence`) are left out of the
+      measurements; the text after a pass is "You may make further edits or finish with your summary."
+    - What the model sees in each mode was printed for the user with the simulated Lightroom (no model call).
+    - Still present in BOTH modes and flagged as possible anchors: the example in the rules ("exposure 0.3 = +0.3 EV")
+      and in the exposure field's description ("e.g. 0.4 or -0.3").
+  * NOT yet run live: the measured before/after in edit tools, and `--playbook none`.
+  * Runs 4, 5 (`--pause`), 6, 7 with the final tools: waiting for the user's go, one at a time.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes

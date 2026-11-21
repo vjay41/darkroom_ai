@@ -832,3 +832,52 @@ def test_analyze_photo_reports_differences_without_reapplying(
     rig.lightroom.settings[copy_id]["IncrementalTemperature"] = 10
     rig.call("undo", photo_id=MASTER, scope="all")
     assert rig.call("analyze_photo", photo_id=MASTER)["differs_from_applied"] == []
+
+
+# -- edit tools report what they measured before and after ----------------------------------------
+
+
+def test_slider_edits_return_measured_before_and_after(rig: Rig) -> None:
+    first = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.5)
+    measured = first["measured"]
+    assert set(measured) == {"before", "after", "source"}
+    assert set(measured["before"]) == {
+        "highlights_clipped_pct",
+        "shadows_clipped_pct",
+        "p05",
+        "p50",
+        "p95",
+    }
+    assert measured["after"]["p50"] > measured["before"]["p50"]  # a real render, it got brighter
+    assert "real preview renders" in measured["source"]
+    # Nothing was measured beforehand: one render before and one after.
+    assert rig.lightroom.calls.count("export_preview") == 2
+
+    # The "after" of one edit is the "before" of the next: only one more render.
+    second = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.2)
+    assert second["measured"]["before"] == measured["after"]
+    assert rig.lightroom.calls.count("export_preview") == 3
+
+    # After analyze_photo its measurement is reused as "before".
+    rig.call("analyze_photo", photo_id=MASTER)
+    exports = rig.lightroom.calls.count("export_preview")
+    rig.call("adjust_white_balance", photo_id=MASTER, temperature=10)
+    assert rig.lightroom.calls.count("export_preview") == exports + 1
+
+    # An undo makes the last measurement stale: the next edit measures "before" again.
+    rig.call("undo", photo_id=MASTER)
+    exports = rig.lightroom.calls.count("export_preview")
+    rig.call("adjust_hsl", photo_id=MASTER, adjustments=[{"color": "orange", "saturation": -10}])
+    assert rig.lightroom.calls.count("export_preview") == exports + 2
+
+
+def test_an_edit_that_writes_nothing_measures_nothing(rig: Rig) -> None:
+    rig.call("adjust_lighting", photo_id=MASTER, exposure=1.5)
+    rig.call("adjust_lighting", photo_id=MASTER, exposure=1.5)
+    exports = rig.lightroom.calls.count("export_preview")
+    blocked = rig.call(
+        "adjust_lighting", photo_id=MASTER, exposure=1.0
+    )  # the 3 EV total is reached
+    assert change(blocked, "exposure")["applied_change"] == 0
+    assert blocked["measured"] is None
+    assert rig.lightroom.calls.count("export_preview") == exports

@@ -44,6 +44,7 @@ def apply_revert(ctx: ToolContext, plan: RevertPlan) -> JournalEntry:
     """Put the planned values back and record it. Call only after the person agreed."""
     check_process_version(ctx.lightroom.get_develop_settings(plan.copy.id, ["ProcessVersion"]))
     ctx.lightroom.apply_develop_settings(plan.copy.id, plan.settings, "darkroom_ai: revert")
+    ctx.measurements.pop(plan.copy.id, None)
     return ctx.journal.record(
         REVERT_TOOL,
         {"photo_id": plan.copy.id},

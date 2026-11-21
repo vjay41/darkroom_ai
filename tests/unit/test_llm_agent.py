@@ -954,8 +954,9 @@ def test_final_measurement_is_always_taken_after_the_last_pass(tmp_path: Path) -
     report = limited.agent.run("Keep brightening", MASTER)
     assert report.stopped_because == "max_passes" and report.ended_at_pass_limit is True
     assert len(limited.llm.sent) == 2  # two model turns only
-    # first look + after pass 1 + the final measurement after pass 2
-    assert limited.lightroom.calls.count("export_preview") == 3
+    # first look + after pass 1 + the final measurement after pass 2, plus one render inside each
+    # of the two edit tools (they report what they measured after the edit)
+    assert limited.lightroom.calls.count("export_preview") == 5
     assert report.final_measurement is not None
     assert set(report.final_measurement) >= {"highlights_pct", "p50", "cast", "cast_measurable"}
 
@@ -971,3 +972,57 @@ def test_final_measurement_is_always_taken_after_the_last_pass(tmp_path: Path) -
     # No edit at all: nothing to measure afterwards.
     idle = Rig(tmp_path / "c", [ChatReply("Nothing to do.")])
     assert idle.agent.run("Look at it", MASTER).final_measurement is None
+
+
+# -- --playbook none: tools, measurements and limits only ------------------------------------------
+
+ADVICE = (
+    "0.40",
+    "0.65",
+    "small steps",
+    "small set of changes",
+    "Stop as soon",
+    "Stop when",
+    "Continue only if",
+    "never from",
+    "noticeable",
+    "Do not crop",
+    "playbook",
+)
+
+
+def test_playbook_none_gives_facts_and_limits_but_no_editing_advice(tmp_path: Path) -> None:
+    settings = settings_for(tmp_path)
+    replies = [call("adjust_lighting", photo_id=MASTER, exposure=0.3), ChatReply("Done.")]
+    rig = Rig(tmp_path / "a", replies, playbook="none", guardrails=settings.guardrails)
+    report = rig.agent.run("Brighten", MASTER)
+    assert report.playbook == "none" and report.stopped_because == "finished"
+    everything = json.dumps(rig.llm.sent)
+    for phrase in ADVICE:
+        assert phrase not in everything, phrase
+    system = rig.llm.sent[0][0]["content"]
+    assert "You\ndecide what to do" in system or "decide what to do" in system
+    assert "exposure at most 1.5 EV per call and 3 EV in total" in system
+    assert "at most 3 passes" in system
+    assert "computed from the pixels" in system and "unreliable" in system
+    assert "Repeating a request does not get past a limit" in system
+    assert "DATA" in system and "UNKNOWN" in system
+    first = rig.llm.sent[0][1]["content"]
+    assert '"blue_yellow"' in first and '"description"' not in first  # numbers without a verdict
+    assert "You may make further edits or finish" in rig.llm.sent[1][-1]["content"]
+
+    guided = Rig(tmp_path / "b", replies)  # the default playbook still carries its advice
+    guided.agent.run("Brighten", MASTER)
+    assert "Portrait playbook" in guided.llm.sent[0][0]["content"]
+    assert "Continue only if" in guided.llm.sent[1][-1]["content"]
+    assert '"description"' in guided.llm.sent[0][1]["content"]
+    assert load_playbook("none") == ""
+
+
+def test_chat_and_parser_accept_playbook_none() -> None:
+    args = cli.build_parser().parse_args(["chat", "Brighten", "--playbook", "none"])
+    assert args.playbook == "none"
+    from darkroom_ai.agent.loop import PLAYBOOKS, limits_facts
+
+    assert PLAYBOOKS == ("portrait", "landscape", "none")
+    assert "set by the program" in limits_facts(None)

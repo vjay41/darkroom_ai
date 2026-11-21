@@ -25,6 +25,7 @@ from darkroom_ai.tools.context import (
     ToolResult,
     apply_slider_changes,
     check_process_version,
+    measured_summary,
     original_values,
     resolve_copy,
     working_copy,
@@ -160,6 +161,8 @@ def analyze_photo(ctx: ToolContext, args: AnalyzePhotoInput) -> Outcome:
         target.id, f"analyze-{uuid.uuid4().hex[:12]}", PREVIEW_LONG_EDGE
     )
     pixels = load_image(preview.path)
+    analysis = analyze(pixels)
+    ctx.measurements[target.id] = measured_summary(analysis)
     faces: FaceAnalysis | None = None
     note = ""
     try:
@@ -171,7 +174,7 @@ def analyze_photo(ctx: ToolContext, args: AnalyzePhotoInput) -> Outcome:
     result = AnalyzePhotoResult(
         photo_id=target.id,
         preview_path=str(preview.path),
-        analysis=analyze(pixels),
+        analysis=analysis,
         faces=faces,
         faces_available=faces is not None,
         faces_note=note,
@@ -363,6 +366,7 @@ def crop(ctx: ToolContext, args: CropInput) -> Outcome:
         "CropAngle": args.angle,
     }
     change = ctx.lightroom.apply_develop_settings(copy.id, wanted, "darkroom_ai: crop")
+    ctx.measurements.pop(copy.id, None)  # the last measurement no longer describes the photo
     result = CropResult(
         photo_id=copy.id,
         working_copy_created=created,
@@ -571,6 +575,7 @@ def undo(ctx: ToolContext, args: UndoInput) -> Outcome:
     restore = restore_values(chosen)
     check_process_version(ctx.lightroom.get_develop_settings(copy.id, ["ProcessVersion"]))
     ctx.lightroom.apply_develop_settings(copy.id, restore, "darkroom_ai: undo")
+    ctx.measurements.pop(copy.id, None)  # the last measurement no longer describes the photo
     result = UndoResult(photo_id=copy.id, undone_steps=len(chosen), restored=restore)
     return Outcome(
         result,

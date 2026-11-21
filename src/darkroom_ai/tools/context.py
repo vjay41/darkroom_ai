@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -12,7 +13,9 @@ from pydantic import BaseModel, ConfigDict
 from darkroom_ai.adapters.lightroom.models import PhotoInfo
 from darkroom_ai.config import Settings
 from darkroom_ai.errors import DarkroomError, ErrorCode
+from darkroom_ai.imaging.analysis import ImageAnalysis, analyze
 from darkroom_ai.imaging.faces import FaceDetector
+from darkroom_ai.imaging.io import load_image
 from darkroom_ai.imaging.masks import MaskProvider
 from darkroom_ai.interfaces import ActionJournal, LightroomAdapter, PhotoshopAdapter
 from darkroom_ai.safety.confirm import Confirmer, DenyAll, require_confirmation
@@ -33,6 +36,8 @@ class ToolContext:
     faces: FaceDetector | None = None
     # master photo id -> id of the virtual copy the tools work on
     working_copies: dict[str, str] = field(default_factory=dict)
+    # photo id -> the last measurement taken of it (valid until the next write to that photo)
+    measurements: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class ToolResult(BaseModel):
@@ -60,6 +65,8 @@ class EditResult(ToolResult):
     changes: tuple[ClampedChange, ...]
     clamped: bool
     note: str = ""
+    # Measured on real preview renders before and after this edit (None if nothing was written).
+    measured: dict[str, Any] | None = None
 
 
 # -- working copies -----------------------------------------------------------------------------
@@ -115,6 +122,32 @@ def resolve_copy(ctx: ToolContext, photo_id: str) -> PhotoInfo:
     if known is not None:
         return ctx.lightroom.get_photo(known)
     return _copy_from_journal(ctx, photo_id) or photo
+
+
+# -- measurements -------------------------------------------------------------------------------
+
+MEASURE_LONG_EDGE = 1024
+
+
+def measured_summary(analysis: ImageAnalysis) -> dict[str, Any]:
+    """The few tone numbers that show what an edit did (shares in percent, luma on 0..1)."""
+    return {
+        "highlights_clipped_pct": analysis.clipping.highlights_pct,
+        "shadows_clipped_pct": analysis.clipping.shadows_pct,
+        "p05": analysis.tones.p05,
+        "p50": analysis.tones.p50,
+        "p95": analysis.tones.p95,
+    }
+
+
+def measure(ctx: ToolContext, photo_id: str) -> dict[str, Any]:
+    """Export a preview of the photo as it is now and measure it (a real render, no prediction)."""
+    preview = ctx.lightroom.export_preview(
+        photo_id, f"measure-{uuid.uuid4().hex[:12]}", MEASURE_LONG_EDGE
+    )
+    summary = measured_summary(analyze(load_image(preview.path)))
+    ctx.measurements[photo_id] = summary
+    return summary
 
 
 # -- originals and slider edits -----------------------------------------------------------------
@@ -256,8 +289,21 @@ def apply_slider_changes(
             previous[key] = before_extra[key]
             if before_extra[key] != value:
                 extra_note = f"{key} set to {value} (was {before_extra[key]})."
+    measured: dict[str, Any] | None = None
     if to_apply:
+        # What the photo measured before this edit: the last measurement if it is still valid
+        # (a copy that was just created renders like its master), otherwise measure now.
+        before_measured = ctx.measurements.get(copy.id) or (
+            ctx.measurements.get(photo_id) if created else None
+        )
+        if before_measured is None:
+            before_measured = measure(ctx, copy.id)
         ctx.lightroom.apply_develop_settings(copy.id, to_apply, history_name)
+        measured = {
+            "before": before_measured,
+            "after": measure(ctx, copy.id),
+            "source": "measured on real preview renders before and after this edit",
+        }
 
     clamped = [c for c in changes if c.clamped]
     note = ""
@@ -276,6 +322,7 @@ def apply_slider_changes(
         changes=tuple(changes),
         clamped=bool(clamped),
         note=note,
+        measured=measured,
     )
     undo = {"photo_id": copy.id, "settings": previous} if to_apply else None
     return Outcome(result, applied={"photo_id": copy.id, "settings": to_apply}, undo=undo)
