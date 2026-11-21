@@ -19,13 +19,16 @@ from darkroom_ai.imaging.faces import FaceAnalysis, analyze_faces
 from darkroom_ai.imaging.io import load_image
 from darkroom_ai.safety.journal import JournalEntry
 from darkroom_ai.tools.context import (
+    MEASURED_SOURCE,
     EditResult,
     Outcome,
     ToolContext,
     ToolResult,
     apply_slider_changes,
     check_process_version,
+    measure,
     measured_summary,
+    measurement_before,
     original_values,
     resolve_copy,
     working_copy,
@@ -193,7 +196,9 @@ class AdjustLightingInput(_Input):
     Values beyond the per-pass or total limits are clamped; the result lists what was applied.
     """
 
-    exposure: float | None = Field(default=None, description="Change in EV, e.g. 0.4 or -0.3.")
+    exposure: float | None = Field(
+        default=None, description="Change in EV; positive brightens, negative darkens."
+    )
     contrast: float | None = Field(default=None, description="Change on the -100..100 scale.")
     highlights: float | None = None
     shadows: float | None = None
@@ -344,6 +349,8 @@ class CropResult(ToolResult):
     before: dict[str, Any]
     after: dict[str, Any]
     kept_fraction: float
+    # Measured on real preview renders before and after the crop.
+    measured: dict[str, Any] | None = None
 
 
 def crop(ctx: ToolContext, args: CropInput) -> Outcome:
@@ -365,14 +372,20 @@ def crop(ctx: ToolContext, args: CropInput) -> Outcome:
         "CropBottom": args.bottom,
         "CropAngle": args.angle,
     }
+    before_measured = measurement_before(ctx, copy.id, args.photo_id, created)
     change = ctx.lightroom.apply_develop_settings(copy.id, wanted, "darkroom_ai: crop")
-    ctx.measurements.pop(copy.id, None)  # the last measurement no longer describes the photo
+    measured = {
+        "before": before_measured,
+        "after": measure(ctx, copy.id),
+        "source": MEASURED_SOURCE,
+    }
     result = CropResult(
         photo_id=copy.id,
         working_copy_created=created,
         before=change.before,
         after=change.after,
         kept_fraction=round(kept, 4),
+        measured=measured,
     )
     return Outcome(
         result,

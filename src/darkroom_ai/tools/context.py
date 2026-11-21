@@ -150,6 +150,20 @@ def measure(ctx: ToolContext, photo_id: str) -> dict[str, Any]:
     return summary
 
 
+MEASURED_SOURCE = "measured on real preview renders before and after this edit"
+
+
+def measurement_before(
+    ctx: ToolContext, copy_id: str, photo_id: str, created: bool
+) -> dict[str, Any]:
+    """What the photo measures before an edit: the last valid measurement, else measure now.
+
+    A copy that was just created renders like its master, so the master's measurement counts.
+    """
+    known = ctx.measurements.get(copy_id) or (ctx.measurements.get(photo_id) if created else None)
+    return known if known is not None else measure(ctx, copy_id)
+
+
 # -- originals and slider edits -----------------------------------------------------------------
 
 
@@ -293,16 +307,12 @@ def apply_slider_changes(
     if to_apply:
         # What the photo measured before this edit: the last measurement if it is still valid
         # (a copy that was just created renders like its master), otherwise measure now.
-        before_measured = ctx.measurements.get(copy.id) or (
-            ctx.measurements.get(photo_id) if created else None
-        )
-        if before_measured is None:
-            before_measured = measure(ctx, copy.id)
+        before_measured = measurement_before(ctx, copy.id, photo_id, created)
         ctx.lightroom.apply_develop_settings(copy.id, to_apply, history_name)
         measured = {
             "before": before_measured,
             "after": measure(ctx, copy.id),
-            "source": "measured on real preview renders before and after this edit",
+            "source": MEASURED_SOURCE,
         }
 
     clamped = [c for c in changes if c.clamped]

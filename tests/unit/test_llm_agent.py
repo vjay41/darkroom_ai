@@ -1026,3 +1026,39 @@ def test_chat_and_parser_accept_playbook_none() -> None:
 
     assert PLAYBOOKS == ("portrait", "landscape", "none")
     assert "set by the program" in limits_facts(None)
+
+
+def test_no_example_numbers_in_rules_or_tool_text() -> None:
+    """Example values act as anchors for the model's step size: none in either mode."""
+    import re
+
+    from darkroom_ai.agent.loop import SYSTEM_FACTS, SYSTEM_RULES
+    from darkroom_ai.tools.registry import TOOLS
+
+    for text in (SYSTEM_RULES, SYSTEM_FACTS):
+        assert "for example" not in text and "e.g." not in text
+        assert "0.3" not in text
+        assert "changes relative to the current value" in text
+
+    def descriptions(node: Any) -> list[str]:
+        found: list[str] = []
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "description" and isinstance(value, str):
+                    found.append(value)
+                else:
+                    found.extend(descriptions(value))
+        elif isinstance(node, list):
+            for value in node:
+                found.extend(descriptions(value))
+        return found
+
+    for tool in TOOLS:
+        schema = tool.schema()
+        for text in [schema["description"], *descriptions(schema["parameters"])]:
+            assert "e.g." not in text and "for example" not in text.lower(), (tool.name, text)
+            # Scale and range definitions (such as -100..100 or 0-255) are facts, not examples.
+            leftovers = re.sub(r"-?\d+\.\.-?\d+|\b0-255\b|\(0 = [^)]*\)", "", text)
+            assert not re.search(r"\d", leftovers), (tool.name, text)
+    exposure = TOOLS[2].schema()["parameters"]["properties"]["exposure"]["description"]
+    assert exposure == "Change in EV; positive brightens, negative darkens."

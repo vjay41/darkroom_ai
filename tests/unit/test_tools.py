@@ -881,3 +881,15 @@ def test_an_edit_that_writes_nothing_measures_nothing(rig: Rig) -> None:
     assert change(blocked, "exposure")["applied_change"] == 0
     assert blocked["measured"] is None
     assert rig.lightroom.calls.count("export_preview") == exports
+
+
+def test_crop_returns_measured_before_and_after(rig: Rig) -> None:
+    result = rig.call("crop", photo_id=MASTER, left=0.1, top=0.1, right=0.9, bottom=0.9)
+    measured = result["measured"]
+    assert set(measured) == {"before", "after", "source"}
+    assert set(measured["after"]) == set(measured["before"])
+    # The "after" value is stored, so a following slider edit reuses it as its "before".
+    exports = rig.lightroom.calls.count("export_preview")
+    edit = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.2)
+    assert edit["measured"]["before"] == measured["after"]
+    assert rig.lightroom.calls.count("export_preview") == exports + 1
