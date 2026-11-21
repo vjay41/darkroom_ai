@@ -21,6 +21,7 @@ from darkroom_ai.interfaces import LightroomAdapter, PhotoshopAdapter
 from darkroom_ai.tools.develop_keys import CROP_KEYS, HSL_COLORS, HSL_PREFIX, lighting_limits
 
 Status = Literal["pass", "fail", "warn", "skip"]
+MASKS_KEY = "MaskGroupBasedCorrections"
 PROBE_STEP = 0.1  # Exposure change used by the write probe (EV)
 PROBE_TOLERANCE = 0.02
 
@@ -204,9 +205,14 @@ def run_selftest(
         meta = lightroom.get_metadata(target)
         return Probe(name="read metadata", status="pass", detail=meta.file_name)
 
-    def read_masks(photo: str) -> Probe:
-        lightroom.inspect_masks(photo)
-        return Probe(name="read masks", status="pass")
+    def read_masks() -> Probe:
+        # Reads the stored mask list from the develop settings: no Lightroom screen is needed.
+        # (inspect_masks needs the photo on screen in Develop; that is the mask tools' job, and
+        # a first live run failed with LR_BUSY_USER because the probe did not do the takeover.)
+        raw = lightroom.get_develop_settings(target, [MASKS_KEY])
+        found = raw.get(MASKS_KEY)
+        count = len(found) if isinstance(found, list) else 0
+        return Probe(name="read masks", status="pass", detail=f"{count} masks stored")
 
     def read_presets() -> Probe:
         return Probe(
@@ -219,22 +225,15 @@ def run_selftest(
 
     for name, action in (
         ("read metadata", read_metadata),
+        ("read masks", read_masks),
         ("list presets", read_presets),
         ("render a preview", render_preview),
     ):
         probes.append(_attempt(name, action))
 
-    # Masks are read on a virtual copy only (a master is never touched by the mask tools).
-    if lightroom.get_photo(target).is_virtual_copy:
-        probes.append(_attempt("read masks", lambda: read_masks(target)))
-
     # 6. Optional write probe on a virtual copy.
     wrote = False
     if not write:
-        if not lightroom.get_photo(target).is_virtual_copy:
-            probes.append(
-                Probe(name="read masks", status="skip", detail="Needs a virtual copy: use --write.")
-            )
         probes.append(
             Probe(
                 name="write probe",
@@ -257,7 +256,6 @@ def run_selftest(
             nonlocal wrote
             copy = lightroom.create_virtual_copy(target, f"darkroom_ai selftest {started}")
             wrote = True
-            probes.append(_attempt("read masks", lambda: read_masks(copy.id)))
             before = float(
                 lightroom.get_develop_settings(copy.id, ["Exposure2012"])["Exposure2012"]
             )

@@ -1730,3 +1730,10 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - LIVE selftest through Hermes (20:41, new gateway): get_capabilities and run_selftest both worked on the real Lightroom 15.2.1 / plug-in 0.9.1 / Photoshop 27.8.
   Result: all probes passed except "develop key map": MaskGroupBasedCorrections missing (1 of 39). FALSE POSITIVE in my drift check: Lightroom omits that key
   while a photo has no masks. Fixed (key no longer required; test added). 38 of 38 other keys read fine on the real catalog = the key map is intact for 15.2.1.
+
+### 2026-11-21 20:55 - Windows make quality green; write selftest run by the user
+- Windows `make quality` (user, 20:52): ruff, format, mypy (62 files) clean; 361 passed, 8 skipped (luac not set). The earlier machine-dependent failure is gone.
+- User ran the write selftest through Hermes with a real approval: 9/10 passed incl. the write probe (virtual copy, Exposure +0.1, restored to 0.00 - confirmed live).
+  The "read masks" probe failed LR_BUSY_USER: my probe called the raw inspect_masks, which needs the photo showing in Develop; only the mask TOOLS do the
+  takeover. Probe bug, not an Adobe problem. Fix: the probe reads MaskGroupBasedCorrections from the develop settings (no screen needed), runs read-only too.
+  Needs a connector restart (code changed) and one more selftest run to see 10/10.

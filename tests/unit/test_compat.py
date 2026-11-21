@@ -197,3 +197,15 @@ def test_capabilities_never_asks_a_photoshop_that_is_not_running(tmp_path: Path)
         processes=_Processes(True),
     )
     assert ToolRegistry(context).call("get_capabilities", {})["photoshop"]["status"] == "tested"
+
+
+def test_selftest_reads_masks_without_needing_the_lightroom_screen(tmp_path: Path) -> None:
+    lightroom = FakeLightroom(tmp_path)
+
+    def needs_the_screen(*_args: object, **_kwargs: object) -> None:
+        raise DarkroomError(ErrorCode.LR_BUSY_USER, "Develop shows no photo")
+
+    lightroom.inspect_masks = needs_the_screen  # type: ignore[method-assign,assignment]
+    report = run_selftest(lightroom, None, GuardrailSettings(), write=True)
+    probe = next(p for p in report.probes if p.name == "read masks")
+    assert probe.status == "pass" and not report.failed
