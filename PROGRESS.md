@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-2 of 7 done (run 2 did not exercise the clamp); waiting for the user's go on the next run. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-3 done; next the clamp run ("Increase the exposure by 3 stops"), waiting for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -546,7 +546,22 @@ copies only, including a strong "much brighter" request and a white-balance requ
     Read-back: every applied edit held. Undo: 3 steps; all 171 settings equal the start state; master and SHA-256
     unchanged; nothing pending. 3 previews (136-139 kB), 21.8 s.
   * Run 5 will leave its final edit in place at the user's request (`--pause`; the user reverts with `darkroom revert`).
-  * Runs 3-7: waiting for the user's go, one at a time.
+  * User decisions after run 2: add a clamp run ("Increase the exposure by 3 stops" on `TEST_2462-42.jpg`) and a
+    "much brighter" run on the darkest TEST_ photo by the earlier numbers; keep the playbook's cautious behaviour for
+    now and revisit after the dark-photo run; fix: always measure once more after the last pass and mark runs that end
+    at the pass limit. Order: 3, clamp run, dark-photo run, 4, 5 (`--pause`), 6, 7; report after each, wait for the go.
+    Darkest by the numbers taken so far: `TEST_2467-47.jpg` (p50 0.437; the others: 2461 0.553, 2459 0.567, 2462 0.585;
+    `TEST_2457-37.jpg` has not been measured for tones yet).
+  * FIX BUILT: after the last pass the agent always measures once more without another model turn; the report carries
+    `final_measurement` (clipped highlights and shadows, p50, cast, read-back differences) and `ended_at_pass_limit`.
+    Unit test added (335 tests, `make quality` clean).
+  * RUN 3 DONE (portrait playbook, HSL only, `TEST_2462-42.jpg` copy; request "Reduce the saturation of orange a
+    little."): turn 1 (2.2 s, 167 tokens, 79 thinking): `adjust_hsl` orange saturation -15, requested -15, applied -15,
+    no limit, empty note. Turn 2 (2.1 s, 215 tokens, 127 thinking): finished. One pass, 5.5 s, 2 previews. Final
+    measurement: clipped highlights 0.029 % (start 0.550 %), p50 0.592 (start 0.585), cast "no noticeable cast",
+    measurable. Read-back: the edit held after the export. Undo: 1 step; all 171 settings equal the start state; master
+    and SHA-256 unchanged; nothing pending. Summary (363 characters) in `logs\agent_run_20261121-130956.txt`.
+  * Next: the clamp run, then the dark-photo run, 4, 5, 6, 7; each waits for the user's go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
