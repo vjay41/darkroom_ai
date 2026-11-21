@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: runs 1-6 done (run 6: the playbook caused an unrequested lighting edit); run 7 waits for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-7 done; playbook-versus-none comparison plan shown, waiting for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -704,8 +704,28 @@ copies only, including a strong "much brighter" request and a white-balance requ
     - Findings: (1) the playbook caused an edit the user did not ask for; (2) "slightly warmer" was honoured in the
       setting (+100 K) but is not visible in the measurement; (3) the first turn's thinking was very long (5672
       tokens, 39 s) at a normal token rate, so it is the model deliberating, not a GPU problem.
-  * Run 7 (the Phase 6 "slightly cooler" request again): waiting for the user's go. The playbook-versus-none comparison
-    is a separate block afterwards.
+  * FIX after run 6 (user decision): the RAW line "make lighting changes BEFORE white-balance changes" is REMOVED from
+    both playbooks (it was the assistant's suggestion, was read as an instruction and caused the unrequested lighting
+    edit). The FACT is now stated without an order in the rules of the playbook mode and in the facts of the none mode:
+    "On a RAW copy, Lightroom reports white-balance numbers only after the copy's first edit. Until then a white-balance
+    request is refused, and the tool result says so." Unit test updated (344 tests, `make quality` clean).
+    For the comparison block the user also wants: the count "edits to something the request did not name", and the
+    request "Make the white balance slightly warmer" on the `RAW_DSC00481.ARW` copy in both modes.
+  * RUN 7 DONE (the Phase 6 request "Make this photo slightly cooler" on the `TEST_2461-41.jpg` copy, portrait playbook,
+    the same five tools as `darkroom chat`): turn 1 (3.7 s, 369 tokens, 273 thinking): `adjust_white_balance`
+    temperature -10 (applied -10; note "WhiteBalance set to Custom (was As Shot)."); nothing else was touched. Turn 2
+    (3.5 s): finished. One pass, 9.0 s, 2 previews.
+    The edit SURVIVED the agent's own export: the tool's "after" and the separate measurement after the pass agree
+    (clipped highlights 0.463 %, p50 0.566), the read-back after the last export found temperature -10 and mode
+    "Custom" in place, and the cast moved in the requested direction: blue_yellow +0.0084 -> -0.0281 ("no noticeable
+    cast" -> "cast towards blue/cool"), measurable. These are the same numbers the Phase 6 run measured after its
+    first export. Final measurement: clipped highlights 0.463 % (start 1.845 %), p50 0.566.
+    Undo: 1 step; all 171 settings equal the start state exactly, including the white-balance mode back to "As Shot";
+    master unchanged; SHA-256 unchanged; nothing pending. Summary (688 characters) in
+    `logs\agent_run_20261121-140929.txt`, not read.
+    With this the JPG white-balance path has been re-run with the fix through the agent (runs 5 and 7).
+  * ALL PLANNED AGENT RUNS DONE (1-7, the clamp run, the dark-photo run). The playbook-versus-none comparison plan was
+    shown to the user; waiting for the go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
