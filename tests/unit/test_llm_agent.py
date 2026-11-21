@@ -945,3 +945,29 @@ def test_rules_say_unknown_is_not_neutral() -> None:
     from darkroom_ai.agent.loop import SYSTEM_RULES
 
     assert "not measurable" in SYSTEM_RULES and "UNKNOWN" in SYSTEM_RULES
+
+
+def test_final_measurement_is_always_taken_after_the_last_pass(tmp_path: Path) -> None:
+    # A run that hits the pass limit: measured once more, without another model turn.
+    replies = [call("adjust_lighting", photo_id=MASTER, exposure=0.2) for _ in range(5)]
+    limited = Rig(tmp_path / "a", replies, max_passes=2)
+    report = limited.agent.run("Keep brightening", MASTER)
+    assert report.stopped_because == "max_passes" and report.ended_at_pass_limit is True
+    assert len(limited.llm.sent) == 2  # two model turns only
+    # first look + after pass 1 + the final measurement after pass 2
+    assert limited.lightroom.calls.count("export_preview") == 3
+    assert report.final_measurement is not None
+    assert set(report.final_measurement) >= {"highlights_pct", "p50", "cast", "cast_measurable"}
+
+    # A run the model finishes itself: the measurement after its last pass is reported too.
+    finished = Rig(
+        tmp_path / "b",
+        [call("adjust_lighting", photo_id=MASTER, exposure=0.2), ChatReply("Done.")],
+    )
+    report = finished.agent.run("Brighten", MASTER)
+    assert report.stopped_because == "finished" and report.ended_at_pass_limit is False
+    assert report.final_measurement is not None
+
+    # No edit at all: nothing to measure afterwards.
+    idle = Rig(tmp_path / "c", [ChatReply("Nothing to do.")])
+    assert idle.agent.run("Look at it", MASTER).final_measurement is None

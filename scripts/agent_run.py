@@ -203,6 +203,9 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
             f"stopped because: {report.stopped_because} | passes {report.passes} | turns "
             f"{report.turns} | previews sent {report.images_sent} | {report.seconds} s"
         )
+        if report.ended_at_pass_limit:
+            print("  ENDED AT THE PASS LIMIT: the model got no further turn after the last pass")
+        print(f"  final measurement (after the last pass): {json.dumps(report.final_measurement)}")
         for step in report.steps:
             print(
                 f"  turn {step.turn}: {step.tool} {json.dumps(step.arguments)} -> "

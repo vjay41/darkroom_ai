@@ -96,6 +96,9 @@ class AgentReport(BaseModel):
     steps: tuple[AgentStep, ...]
     final_message: str
     stopped_because: str  # "finished" | "max_passes" | "max_turns" | "bad_tool_calls"
+    ended_at_pass_limit: bool = False
+    # The measurement taken after the last pass (None if the run made no edit).
+    final_measurement: dict[str, Any] | None = None
     images_sent: int
     seconds: float
 
@@ -113,6 +116,20 @@ def load_playbook(name: str) -> str:
 def _short(data: Any, limit: int = 300) -> str:
     text = json.dumps(data, default=str)
     return text if len(text) <= limit else text[:limit] + "..."
+
+
+def measurement_summary(analysis: dict[str, Any]) -> dict[str, Any]:
+    """The few numbers a run report needs from an analyze_photo result."""
+    numbers = analysis.get("analysis") or {}
+    cast = numbers.get("color_cast") or {}
+    return {
+        "highlights_pct": (numbers.get("clipping") or {}).get("highlights_pct"),
+        "shadows_pct": (numbers.get("clipping") or {}).get("shadows_pct"),
+        "p50": (numbers.get("tones") or {}).get("p50"),
+        "cast_measurable": cast.get("measurable"),
+        "cast": cast.get("description"),
+        "differs_from_applied": analysis.get("differs_from_applied") or [],
+    }
 
 
 def analysis_text(analysis: dict[str, Any]) -> str:
@@ -242,6 +259,7 @@ class Agent:
         # A planning turn is one where the model sees new measurements (the first turn and the
         # turn after each pass); the other turns only follow up on a tool result.
         plan_next = True
+        final_analysis: dict[str, Any] | None = None
 
         while turn < self._max_turns:
             turn += 1
@@ -308,6 +326,9 @@ class Agent:
                 passes += 1
                 if passes >= self._max_passes:
                     stopped = "max_passes"
+                    # The model gets no further turn, but the result of the last pass is still
+                    # measured so that the report shows where the photo ended up.
+                    final_analysis = self._registry.call("analyze_photo", {"photo_id": photo_id})
                     break
                 if not lightroom_changed:
                     # Only new output files were made: no new measurement, no new preview.
@@ -323,6 +344,7 @@ class Agent:
                     continue
                 # Look again: new numbers and a new preview after the edits of this pass.
                 analysis = self._registry.call("analyze_photo", {"photo_id": photo_id})
+                final_analysis = analysis
                 text = (
                     f"Pass {passes} of {self._max_passes} is done. NEW MEASUREMENTS (data): "
                     f"{analysis_text(analysis)}\nContinue only if something still needs fixing; "
@@ -351,6 +373,8 @@ class Agent:
             steps=tuple(steps),
             final_message=final_message,
             stopped_because=stopped,
+            ended_at_pass_limit=stopped == "max_passes",
+            final_measurement=measurement_summary(final_analysis) if final_analysis else None,
             images_sent=self.images_sent,
             seconds=round(self._clock() - started, 1),
         )
