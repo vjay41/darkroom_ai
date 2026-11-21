@@ -1810,3 +1810,9 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Scratch folder `hermes/proposed/` removed from the repo (copy kept in outputs/, untracked).
 - Checked: no photos, catalogs, models, logs or local config are tracked (151 files); `darkroom.local.toml` is ignored.
 - Still to do before public: LICENSE/NOTICE, AGENTS.md, `darkroom deploy`, docs layout, README/PRD/PROGRESS cleanup of personal paths (P8).
+
+## P8 deploy kit (2026-11-22)
+- `darkroom deploy --hermes-profile DIR [--dry-run]`: plans first (checks, config diff, skills), asks before each write, backs up every file it replaces, never deletes, refuses without a person at the keyboard. Dry-run on the real profile: nothing to write (already deployed). 12 unit tests on a fake profile.
+- Added AGENTS.md, NOTICE (par4987 / Marcin Skalski, MIT text), docs/INSTALL.md, README rewritten for the MCP design with an honest status table; PROGRESS.md moved to docs/ (CLAUDE.md updated).
+- Release scan: history has no photos/catalogs/models/logs/secrets; 151 files tracked; test added for that.
+- Waiting on the user: LICENSE copyright holder name; whether PRD.md and this log ship publicly (this log is large and has personal names/paths); production catalog stays off the shipped allowlist.
