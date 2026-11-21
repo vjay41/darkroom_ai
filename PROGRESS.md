@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW steps 1-4 done (copy at its fresh-snapshot state); preset probe + scan done, apply_preset stays unexposed pending the user's decision; next RAW step 5. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW acceptance test DONE (steps 1-6, three files); preset probe done, apply_preset unexposed pending the user's decision; next: more agent runs, bake-off, 'y' test. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -340,8 +340,30 @@ plug-in call for step 3 and wait for the OK.
   brightness is very low (p50 0.008), i.e. a dark picture, so the cast numbers rest on few neutral pixels.
   GAP flagged: temperature and tint have NO total limit against the original (only exposure has one); with 3 passes a
   run can move 3000 K, and further runs more.
-- Steps 5 (16-bit TIFF export, after a free-space check on D:) and 6 (highlight / shadow limits on RAW), the other two
-  RAW files, and the final folder / hash check: NOT yet run.
+- Step 5 DONE: free space on D: checked first (over 1500 GB); `export_tiff` of the RAW copy wrote exactly one new file,
+  `outputs\handoff\rawtest-20261121-123902.tif`, in 1.0 s: 196 MB, 7008 x 4672 (the RAW size), 16/16/16 bits per
+  sample, uncompressed, profile "sRGB IEC61966-2.1". No Lightroom export preset is used or changed (the export settings
+  are passed in the call). Afterwards all 172 settings of the copy equalled the fresh snapshot exactly; master unchanged.
+- Step 6 DONE. Expected (written down before the run): highlights -80 -> clamped to -50 (per_pass), shadows +70 ->
+  clamped to +50 (per_pass). Actual: exactly that ("Clamped - highlights: asked -80, applied -50 (per_pass limit);
+  shadows: asked +70, applied +50 (per_pass limit)"). Preview statistics before -> with the edit -> after the undo:
+  clipped highlights 1.267 % -> 0.0 % -> 1.267 %; clipped shadows 34.2 % -> 9.4 % -> 34.2 %; p95 0.499 -> 0.351 -> 0.499.
+  After the undo all 172 settings equalled the fresh snapshot exactly; nothing pending; master unchanged.
+- The other two RAW files (`RAW_DSC00481.ARW`, `RAW_DSC00482.ARW`), each on a NEW virtual copy (they stay in the
+  catalog): on the fresh copy Lightroom reported no Temperature / Tint, and "+500 K" was REFUSED as expected with
+  `[GUARDRAIL_REJECTED] Lightroom reports no current value for temperature ... Nothing was changed.` (this is the live
+  test of the new guard). Exposure +0.3 applied and undone; no setting darkroom_ai wrote differs from the snapshot;
+  nothing pending; masters unchanged.
+- Final check: the RAW folder still holds only the three ARW files, no .xmp; all three SHA-256 hashes unchanged.
+- RAW acceptance test result: PASSED for lighting, Kelvin white balance with the per-pass clamp, journal undo with exact
+  restore, and 16-bit TIFF export. Open after the test:
+  (1) usability gap: on a fresh RAW virtual copy a white-balance request is refused until Lightroom reports numbers,
+      which happens some time after the copy's first edit (how long is not measured). Possible fix (not built, needs a
+      decision): let the tool make one harmless write and re-read, or tell the user to move the Temp slider once.
+  (2) temperature and tint have no total limit against the original;
+  (3) 4100 K / tint 9 are as reported by Lightroom, not independently verified;
+  (4) not covered: tint changes on RAW, the agent (model) editing a RAW file, "RAW only when the file is RAW or the user
+      says so" as an export rule, and the Photoshop hand-off from a RAW copy.
 
 Presets, user decisions (2026-11-21): first a read-only probe of whether the SDK exposes a preset's contents; if not,
 `apply_preset` stays unexposed. If yes: allowlist (a preset containing any setting outside the guardrail-covered set is
