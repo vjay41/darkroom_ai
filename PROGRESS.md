@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: JPG white-balance fix built and verified live; read-back built; agent-run plan shown, waiting for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent run 1 of 7 done; waiting for the user's go on run 2 ("Make it much brighter"). Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -509,7 +509,29 @@ copies only, including a strong "much brighter" request and a white-balance requ
   `adjust_white_balance` on a JPG copy and the Phase 6 `darkroom chat` run ("slightly cooler", -10 on
   `TEST_2461-41.jpg`) were made before this fix. Treat them as not reliable until re-run with the fix; the Phase 6
   measurement did show the shift at the time, but the same sequence lost the edit today.
-- Agent runs: NOT started; they wait for the user's go. Final plan shown to the user.
+- Colour-cast measurement (user request, built before any white-balance run; no Adobe contact): when there are too few
+  near-neutral pixels the cast is now `measurable: false` with `blue_yellow`, `green_magenta` and `strength` = null and a
+  `reason` ("only x % of the picture is near-neutral mid-tone; at least y % is needed. Unknown is not the same as
+  neutral."), never 0.0. The system rules tell the model that a null / "not measurable" measurement is UNKNOWN, not zero
+  and not neutral. Unit tests added (334 tests, `make quality` clean).
+- AGENT RUNS (user go 2026-11-21: one at a time, report after each and wait for the go; TEST_ files and RAW copies only;
+  plus a re-run of the Phase 6 "slightly cooler" request; `require_loaded` checked before each; a text-only call well
+  over 5 s means Qwen left GPU 0: stop and tell the user). Plan: 1 lighting on `TEST_2467-47.jpg`; 2 "Make it much
+  brighter" on `TEST_2462-42.jpg`; 3 HSL; 4 crop; 5 landscape playbook with lighting + "slightly cooler" on
+  `TEST_2457-37.jpg`; 6 RAW white balance on the `RAW_DSC00481.ARW` copy; 7 the Phase 6 "slightly cooler" request again.
+  * Before run 1: Qwen loaded, on GPU 0 (24.8 GB used, GPU 1 idle); text-only tool call 1.10 s / 0.69 s with thinking,
+    0.45 s without.
+  * RUN 1 DONE (portrait playbook, lighting only, `TEST_2467-47.jpg`, new virtual copy `7819611A-...` that stays in the
+    catalog; request "Fix the lighting. Work in small steps and check the numbers after each pass."):
+    turn 1 (5.6 s, 784 tokens, 545 thinking): `adjust_lighting` highlights -30, requested -30, applied -30, not clamped.
+    Turn 2 (2.9 s, 370 tokens, 148 thinking): finished. ONE pass (multi-pass not used: after the first pass the numbers
+    were inside the playbook ranges). Measurements before -> after: clipped highlights 7.615 % -> 0.138 % (red channel
+    6.822 % -> 0.051 %); p50 0.437 -> 0.411; p95 0.858 -> 0.804; shadows 0.066 % -> 0.071 %; cast "no noticeable cast"
+    (measurable) both times. Exposure untouched (p50 inside 0.40-0.65). 2 previews (209 kB, 206 kB), 10.0 s in total.
+    Read-back after the last export: every applied edit still holds. Undo: 1 step; all 170 settings equal the start
+    state (Lightroom itself added `FilterList`); master unchanged; SHA-256 unchanged; nothing pending. Summary (657
+    characters) in `logs\agent_run_20261121-130429.txt`, not read by the assistant.
+  * Runs 2-7: waiting for the user's go, one at a time.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
