@@ -1537,3 +1537,9 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
 - Live: catalog_summary and scan_folder OK (120 photos; 118 Nikon D7500 + 2 Sony ILCE-7M5; years 2023/2026; scan found 0 new). Bug found:
   ISO bands all "unknown" because Lightroom's ISO text is "ISO 200" -> parser now takes the first number. import_folder still unverified
   live (needs new files): test file D:\darkroom_test\import_test\IMPORT_TEST_1.jpg (a copy of DSC_2416-4.jpg) staged for it.
+- Live: Hermes DOES show elicitation as an approval prompt (agent.log: "surface=mcp-elicitation/darkroom_ai", wait ended
+  resolved=True choice=once) but answers "accept" without the form field, so the old check (needs proceed=true) refused every time and
+  import_folder returned CONFIRMATION_REQUIRED x3 (then Hermes' circuit breaker paused the server ~48 s). Fix: accept without the field
+  counts; explicit proceed=false/decline/cancel still refuse; raw answer logged to mcp-stderr.log. Error text now tells the model not to
+  retry in a loop and that a chat reply is not an approval. OPEN RISK: Hermes may auto-approve some prompts (2 s answers seen; it has
+  an "Auxiliary approval" LLM feature) - check Hermes approval mode so the model cannot approve its own actions.

@@ -35,7 +35,8 @@ INSTRUCTIONS = (
 )
 NO_CONFIRMATION_HERE = (
     "The request needed the person's go-ahead and did not get it (declined, no answer, or this "
-    "client cannot ask), so nothing was changed. Ask the person in the conversation, then retry."
+    "client cannot ask), so nothing was changed. Do NOT retry in a loop. Tell the person what was "
+    "refused; only their own answer to the approval prompt counts, not a reply in the chat."
 )
 MIME_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 

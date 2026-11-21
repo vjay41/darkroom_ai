@@ -72,3 +72,14 @@ def test_get_preview_returns_the_picture(tmp_path: Path) -> None:
     assert preview.is_error is not True
     images = [block for block in preview.content if block.type == "image"]
     assert len(images) == 1 and images[0].mime_type == "image/png" and images[0].data
+
+
+def test_accept_without_the_form_field_counts_but_explicit_false_does_not() -> None:
+    from darkroom_ai.mcp_confirm import _approved
+
+    assert _approved("accept", None) is True  # a plain allow/deny prompt (Hermes) answers like this
+    assert _approved("accept", {}) is True
+    assert _approved("accept", {"proceed": True}) is True
+    assert _approved("accept", {"proceed": False}) is False
+    assert _approved("decline", {"proceed": True}) is False
+    assert _approved("cancel", None) is False

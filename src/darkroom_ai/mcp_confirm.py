@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import sys
 from collections.abc import Mapping
 from typing import Any
 
@@ -30,6 +31,20 @@ _SCHEMA: dict[str, Any] = {
     },
     "required": ["proceed"],
 }
+
+
+def _approved(action: str, content: Mapping[str, Any] | None) -> bool:
+    """Only an explicit accept from the client counts.
+
+    Some clients (Hermes) show a plain allow/deny prompt and answer "accept" without returning the
+    form field, so a missing `proceed` is taken as the accept it is; an explicit `proceed: false`,
+    a decline, a cancel or anything else refuses.
+    """
+    if action != "accept":
+        return False
+    if content and "proceed" in content:
+        return bool(content["proceed"])
+    return True
 
 
 class ElicitationConfirmer:
@@ -66,9 +81,18 @@ class ElicitationConfirmer:
                 result = await session.elicit_form(
                     message=message, requested_schema=_SCHEMA, related_request_id=request_id
                 )
-            return result.action == "accept" and bool((result.content or {}).get("proceed"))
+            approved = _approved(result.action, result.content)
+            print(
+                f"darkroom_ai: confirmation answer action={result.action} "
+                f"content_keys={sorted(result.content or {})} approved={approved}",
+                file=sys.stderr,
+            )
+            return approved
 
         try:
             return anyio.from_thread.run(ask)
-        except Exception:  # timeout, closed connection, malformed answer: refuse
+        except Exception as exc:  # timeout, closed connection, malformed answer: refuse
+            print(
+                f"darkroom_ai: confirmation refused ({type(exc).__name__}: {exc})", file=sys.stderr
+            )
             return False
