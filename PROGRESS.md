@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error case 1 of 5 done (Lightroom is CLOSED right now); next: cases 2-5 with the user, pip-audit, firewall run
+## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error cases 1-2 of 5 done (the plug-in bridge is STOPPED right now); next: cases 3-5 with the user, pip-audit, firewall run
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -340,7 +340,15 @@ Item 3, live error cases (2026-11-21):
    the other checks still ran. `darkroom lightroom ping` -> same code and text, exit 2 after 21 s. Correct code and a
    usable next step. To improve in the message review: it waits the full 20 s connect deadline and says "did not answer in
    time" although nothing is listening; say "nothing is listening on the plug-in's port" when the connection is refused.
-2-5 (plug-in not loaded, wrong catalog, model unloaded, Photoshop dialog open): pending, one at a time.
+2. Plug-in bridge stopped (Lightroom open on the test catalog, no listener on ports 58763 / 58764): first run gave the
+   same text as case 1 ("did not answer 'ping' in time"), whose next step never mentioned starting the bridge. FIXED and
+   re-tested live: `[LR_NOT_REACHABLE] Nothing is listening on the Lightroom plug-in's local ports (58763 and 58764):
+   Lightroom Classic is closed, or the darkroom_ai bridge is not started (waited 20 s).` Next step: open Lightroom with the
+   test catalog, File > Plug-in Extras > "Start darkroom_ai Bridge", or enable the plug-in in the Plug-in Manager. This
+   message now also covers case 1 (not re-run with Lightroom closed). "Did not answer in time" remains for a plug-in
+   that listens but stays silent. Still waits the full 20 s connect deadline (kept: the plug-in needs time after a
+   restart). Unit test added (315 tests).
+3-5 (wrong catalog, model unloaded, Photoshop dialog open): pending, one at a time.
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error

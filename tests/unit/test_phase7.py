@@ -162,3 +162,26 @@ def test_mcp_over_real_stdio(tmp_path: Path) -> None:
     assert got["gated"].is_error is True
     assert got["gated"].content[0].text.startswith("[CONFIRMATION_REQUIRED]")
     assert got["unknown"].is_error is True
+
+
+def test_no_listener_message_names_the_bridge() -> None:
+    from darkroom_ai.adapters.lightroom.client import LightroomClient
+    from darkroom_ai.errors import DarkroomError, ErrorCode
+
+    def refuse(_host: str, _port: int, *, timeout_s: float) -> Any:
+        raise ConnectionRefusedError("refused")
+
+    client = LightroomClient(
+        host="127.0.0.1",
+        request_port=58763,
+        response_port=58764,
+        token="t",
+        connect_timeout_s=0.3,
+        connect=refuse,
+    )
+    with pytest.raises(DarkroomError) as caught:
+        client.call("ping")
+    assert caught.value.code is ErrorCode.LR_NOT_REACHABLE
+    assert "Nothing is listening" in caught.value.message
+    assert "58763" in caught.value.message
+    assert "Start darkroom_ai Bridge" in caught.value.next_step

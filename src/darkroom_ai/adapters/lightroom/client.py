@@ -39,6 +39,11 @@ Connector = Callable[..., Connection]
 _RECV_BYTES = 65536
 _CONNECT_RETRY_S = 0.25
 _HANDSHAKE_S = 2.0
+NO_LISTENER_NEXT_STEP = (
+    "Open Lightroom Classic with the test catalog, then choose File > Plug-in Extras > "
+    '"Start darkroom_ai Bridge". If that menu item is missing, add or enable the plug-in in '
+    "File > Plug-in Manager (`darkroom lightroom setup` shows the folder). Then retry."
+)
 # A connect that takes longer than this means the port was not listening yet, i.e. the plug-in is
 # in the middle of re-opening its two sockets and they would belong to different sessions.
 _SLOW_CONNECT_S = 0.25
@@ -66,6 +71,7 @@ class LightroomClient:
         connect: Connector = open_tcp,
     ) -> None:
         self._connect_timeout_s = connect_timeout_s
+        self._saw_listener = False  # did any connect succeed during the current call?
         self._reconnect_delay_s = reconnect_delay_s
         self._endpoint = (host, request_port, response_port)
         self._host = host
@@ -123,6 +129,7 @@ class LightroomClient:
             started = time.monotonic()
             try:
                 connection = self._connect(self._host, port, timeout_s=remaining)
+                self._saw_listener = True
                 return connection, time.monotonic() - started
             except ConnectionError:
                 time.sleep(min(_CONNECT_RETRY_S, max(0.0, deadline - time.monotonic())))
@@ -224,6 +231,7 @@ class LightroomClient:
     ) -> dict[str, Any]:
         """Send one command and return its result. Raises DarkroomError on any failure."""
         timeout = self._timeout_s if timeout_s is None else timeout_s
+        self._saw_listener = self._requests is not None and self._responses is not None
         try:
             # Connecting has its own deadline; the command's deadline starts once connected.
             requests, responses = self._ensure_connected(time.monotonic() + self._connect_timeout_s)
@@ -234,6 +242,16 @@ class LightroomClient:
             raise
         except OSError as exc:
             self.close()
+            if not self._saw_listener:
+                raise DarkroomError(
+                    ErrorCode.LR_NOT_REACHABLE,
+                    f"Nothing is listening on the Lightroom plug-in's local ports "
+                    f"({self._request_port} and {self._response_port}): Lightroom Classic is "
+                    f"closed, or the darkroom_ai bridge is not started (waited "
+                    f"{self._connect_timeout_s:g} s).",
+                    next_step=NO_LISTENER_NEXT_STEP,
+                    details={"command": command, "connect_timeout_s": self._connect_timeout_s},
+                ) from exc
             raise DarkroomError(
                 ErrorCode.LR_NOT_REACHABLE,
                 f"Lightroom did not answer '{command}' in time ({exc}).",
