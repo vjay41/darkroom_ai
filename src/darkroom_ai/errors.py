@@ -20,6 +20,7 @@ class ErrorCode(StrEnum):
     # Lightroom bridge plug-in
     LR_WRONG_CATALOG = "LR_WRONG_CATALOG"
     LR_COMMAND_FAILED = "LR_COMMAND_FAILED"
+    LR_BUSY_USER = "LR_BUSY_USER"
     # Photoshop adapter
     PS_COMMAND_FAILED = "PS_COMMAND_FAILED"
     # Local model server (PRD s8)
@@ -41,6 +42,13 @@ class ErrorCode(StrEnum):
 
 # code -> (default message, default next step)
 _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
+    ErrorCode.LR_BUSY_USER: (
+        "Lightroom is being used by the person, so darkroom_ai could not take over its Develop "
+        "view.",
+        "Ask the person to stop clicking in Lightroom and leave it on any screen, then call the "
+        "same tool again. darkroom_ai only takes over once Lightroom has been still for a few "
+        "seconds.",
+    ),
     ErrorCode.LR_NOT_REACHABLE: (
         "Lightroom Classic did not answer on its local plugin connection.",
         "Check that Lightroom Classic is open, the darkroom plugin is enabled in the Plug-in "

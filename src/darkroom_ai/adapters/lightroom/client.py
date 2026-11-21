@@ -288,6 +288,8 @@ class LightroomClient:
                 "Create a virtual copy first, or use a photo from that folder. Nothing changed.",
                 details=details,
             )
+        if code == "MASK_PHOTO_NOT_SHOWN":
+            return DarkroomError(ErrorCode.LR_BUSY_USER, text or None, details=details)
         if code == "UNAUTHORIZED":
             return DarkroomError(
                 ErrorCode.LR_COMMAND_FAILED,

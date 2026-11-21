@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from darkroom_ai.adapters.lightroom.models import MaskCreation, MaskValues
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult, resolve_copy, working_copy
+from darkroom_ai.tools.takeover import run_with_takeover, takeover_note
 
 MASKS_KEY = "MaskGroupBasedCorrections"
 AI_SUBTYPES = ("subject", "sky", "background", "objects", "people", "landscape")
@@ -116,7 +117,12 @@ class CreateMaskResult(ToolResult):
 def create_mask(ctx: ToolContext, args: CreateMaskInput) -> Outcome:
     copy, created = working_copy(ctx, args.photo_id)
     before = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY]).get(MASKS_KEY)
-    creation = ctx.lightroom.create_mask(copy.id, args.mask_type, args.subtype)
+    creation, waited = run_with_takeover(
+        ctx,
+        copy.id,
+        lambda: ctx.lightroom.create_mask(copy.id, args.mask_type, args.subtype),
+        what="create mask",
+    )
     if not creation.created:
         raise DarkroomError(
             ErrorCode.ADOBE_FEATURE_UNAVAILABLE,
@@ -135,7 +141,7 @@ def create_mask(ctx: ToolContext, args: CreateMaskInput) -> Outcome:
         masks=summarize_masks(after),
         mask_id=creation.mask_id,
         note="Mask created and selected. It has no adjustments yet: use set_mask_adjustments "
-        "with this mask_id (call inspect_masks if mask_id is empty).",
+        "with this mask_id (call inspect_masks if mask_id is empty)." + takeover_note(waited),
     )
     return Outcome(
         result,
@@ -194,7 +200,9 @@ class InspectMasksResult(ToolResult):
 
 def inspect_masks(ctx: ToolContext, args: InspectMasksInput) -> Outcome:
     copy = resolve_copy(ctx, args.photo_id)
-    seen = ctx.lightroom.inspect_masks(copy.id)
+    seen, _waited = run_with_takeover(
+        ctx, copy.id, lambda: ctx.lightroom.inspect_masks(copy.id), what="inspect masks"
+    )
     return Outcome(
         InspectMasksResult(photo_id=copy.id, selected_mask=seen.selected_mask, masks=seen.masks)
     )
@@ -240,14 +248,20 @@ def set_mask_adjustments(ctx: ToolContext, args: SetMaskAdjustmentsInput) -> Out
     copy = resolve_copy(ctx, args.photo_id)
     before_masks = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY]).get(MASKS_KEY)
     values = {key: _local_spec(key, change) for key, change in args.changes.items()}
-    got = ctx.lightroom.set_mask_values(copy.id, args.mask_id, values)
+    got, waited = run_with_takeover(
+        ctx,
+        copy.id,
+        lambda: ctx.lightroom.set_mask_values(copy.id, args.mask_id, values),
+        what="adjust mask",
+    )
     applied = {key: round(got.after[key] - got.before[key], 4) for key in got.after}
     result = SetMaskAdjustmentsResult(
         photo_id=copy.id,
         mask=got,
         requested_change=dict(args.changes),
         applied_change=applied,
-        note="Values are inside the mask only. Use get_preview to look at the result.",
+        note="Values are inside the mask only. Use get_preview to look at the result."
+        + takeover_note(waited),
     )
     previous = before_masks if isinstance(before_masks, list) else []
     return Outcome(
@@ -284,7 +298,12 @@ class MaskOperationResult(ToolResult):
 def _mask_operation(ctx: ToolContext, args: MaskTargetInput, operation: str) -> Outcome:
     copy = resolve_copy(ctx, args.photo_id)
     previous = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY]).get(MASKS_KEY)
-    got = ctx.lightroom.mask_operation(copy.id, args.mask_id, operation)
+    got, _waited = run_with_takeover(
+        ctx,
+        copy.id,
+        lambda: ctx.lightroom.mask_operation(copy.id, args.mask_id, operation),
+        what=f"{operation} mask",
+    )
     result = MaskOperationResult(
         photo_id=copy.id,
         operation=operation,

@@ -1519,3 +1519,7 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   the photo Lightroom shows. UNVERIFIED: invert_mask, delete_mask live.
 - Hermes has no select-photo tool; the plug-in selects the working copy itself. Rule for the user: do not click in Lightroom while a
   mask tool runs.
+- Takeover etiquette (tools/takeover.py, error LR_BUSY_USER): mask tools watch Lightroom's selection (read only) and take over
+  once it has been still for 4 s; they retry on their own for 45 s, then ask the person via the confirmer to stop using
+  Lightroom and retry once; if declined/unanswered they stop with LR_BUSY_USER and a plain next step. Plug-in error
+  MASK_PHOTO_NOT_SHOWN maps to LR_BUSY_USER. Limits: only selection changes are detectable, not other Lightroom use.

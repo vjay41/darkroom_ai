@@ -87,3 +87,12 @@ def offline_guard() -> Iterator[None]:
 
     yield
     patch.undo()
+
+
+@pytest.fixture(autouse=True)
+def _no_takeover_waiting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests never wait for Lightroom to calm down (tests/unit/test_takeover.py covers waiting)."""
+    from darkroom_ai.tools import takeover
+
+    monkeypatch.setattr(takeover, "STABLE_S", 0.0)
+    monkeypatch.setattr(takeover, "_sleep", lambda _seconds: None)
