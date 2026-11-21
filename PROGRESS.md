@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6 GATE: report written, waiting for the user's "proceed"; Phase 7 plan proposed, not started
+## CURRENT STATE — 2026-11-21: Phase 6 gate ACCEPTED; Phase 7 in progress: parts without Adobe contact done; waiting for the user's go on the parts that touch Lightroom / Photoshop and on the pip-audit command
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -16,8 +16,9 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
 | 5 Tool layer + guardrails | GATE ACCEPTED by the user on 2026-11-21, pending the user's visual checks of the mask and the background JPG. `apply_preset` stays unexposed until tested live. |
-| 6 LLM layer + agent | Built; live on `primary` (Qwen) only. AT THE GATE, waiting for "proceed". Muse/fast, the two-model GPU measurement and MCP over real stdio are deferred (see the gate report). |
-| 7-8 | Not started |
+| 6 LLM layer + agent | GATE ACCEPTED by the user on 2026-11-21 with the listed deferrals (Muse/fast and the two-model GPU measurement to Phase 8). |
+| 7 Hardening | In progress (see "Phase 7 progress") |
+| 8 Acceptance | Not started |
 
 ### Phase 6 (built 2026-11-21)
 User decisions: one model loaded at a time (JIT load / auto-unload if available, otherwise ask the user to switch); LM Studio
@@ -273,7 +274,43 @@ State left behind: virtual copies of `TEST_2459-39` and `TEST_2461-41` (both at 
    the user's OK, since the rule is no second venv).
 8. `replace_background` result note (current edits and crop); `make quality`; PROGRESS.md; commit on `dev`; gate.
 
-Phase 6 gate: waiting for the user's "proceed"; `darkroom chat`, `darkroom revert` and MCP over real stdio are
+### Phase 7 progress (2026-11-21)
+User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
+(Windows temp folder, 3.13, `--no-deps`, delete only that folder); offline proof also with a Windows Firewall outbound
+block that the user applies and removes; error cases to add: Lightroom closed, plug-in not loaded, wrong catalog, model
+unloaded, Photoshop dialog open; before any push list tracked files that could hold secrets; wait for the go before
+anything that touches Lightroom or Photoshop.
+
+Done WITHOUT Adobe contact:
+- `darkroom clean-outputs` (`cleanup.py`): lists previews, hand-off TIFFs, masks and Photoshop working copies, asks y/N,
+  never removes `*_darkroom.psd/.jpg` finals or unrecognised files. Unit-tested; NOT run on the real `outputs\` folder.
+- `replace_background` result carries a note: the PSD/JPG include the copy's current edits and crop.
+- MCP over REAL stdio: the `mcp` package's own client starts a server process (simulated Lightroom) and lists tools, calls
+  `get_photo_info` and `adjust_lighting`, gets `[CONFIRMATION_REQUIRED]` for a gated call, and an error for `revert`
+  (not a tool). In the test suite. Not yet done: the same against the real Lightroom.
+- `scripts/firewall_rules.ps1`: only prints `New-NetFirewallRule ... -Action Block` for the three Python program paths
+  (venv launcher, alias, and the real `python3.13.exe` image), a check, an optional "this should fail" line, and the removal.
+  A test checks firewall cmdlets appear only inside printed strings. Whether the rules block as intended is UNVERIFIED
+  until the user applies them.
+- `scripts/offline_proof.py`: audit hook on connect / sendto / bind / name lookups for everything in the process. Run
+  without Adobe: third-party imports (opentelemetry, uvicorn, starlette, truststore, mcp, httpx2, cv2), model list, text
+  model tests (4/4, 2/2), MCP server object: only 127.0.0.1 seen (2 connects, 4 lookups). PASS. Limits: child processes
+  are not seen by the hook (Photoshop worker, MCP child) and asyncio's own connect path is not covered by these events.
+- Throwaway venv: `%TEMP%\darkroom_install_check_932925ee`, Python 3.13.14, `pip install --no-deps -e .` succeeded
+  (pip fetched the build backend from the package index to build; the repository was not changed). Entry point
+  `darkroom = darkroom_ai.cli:main` registered and `darkroom.exe` created; `darkroom --version` there fails with
+  "No module named 'pydantic'", as expected with `--no-deps`. Folder deleted afterwards.
+- Tracked files that could hold secrets: none by name (.env, key, token, credential, bridge.json, local.toml patterns);
+  content matches are harmless (the `secrets` module import, a URL-password check, test file names). `bridge.json`
+  (token), `darkroom.local.toml`, logs, outputs and previews are git-ignored. Personal paths (not secrets) appear in
+  PROGRESS.md (test folder, catalog file name).
+- 310 tests pass, `make quality` clean.
+
+Waiting for the user's go: offline proof with Lightroom / Photoshop and under the firewall block; the five live error
+cases; MCP against the real Lightroom; `clean-outputs` on the real folder; pip-audit (command shown first). Then: review
+of every error message, README, gate.
+
+Phase 7: `darkroom chat`, `darkroom revert` and MCP over real stdio are
 unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 

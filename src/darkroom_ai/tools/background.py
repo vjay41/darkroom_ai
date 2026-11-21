@@ -49,6 +49,12 @@ class ReplaceBackgroundInput(BaseModel):
         return self
 
 
+OUTPUT_NOTE = (
+    "The PSD and JPG were made from the virtual copy as it is now: they include its current "
+    "edits and crop. Later edits or an undo in Lightroom do not change these files."
+)
+
+
 class ReplaceBackgroundResult(ToolResult):
     photo_id: str
     working_copy_created: bool
@@ -59,6 +65,7 @@ class ReplaceBackgroundResult(ToolResult):
     mask: MaskMetrics
     background: str
     seconds: float
+    note: str = OUTPUT_NOTE
 
 
 def _refuse(message: str, **details: object) -> DarkroomError:

@@ -5,6 +5,7 @@ darkroom models test [...]      test model profiles (vision, tool calling, promp
 darkroom chat "..." [...]       let the local model edit one photo; asks before anything gated
 darkroom mcp                    serve the tools over MCP (stdio)
 darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
+darkroom clean-outputs          remove intermediate files (never final results); asks first
 darkroom lightroom setup|ping   Lightroom plug-in setup and check
 """
 
@@ -26,6 +27,7 @@ from darkroom_ai.adapters.lightroom.bridge_file import (
 from darkroom_ai.adapters.lightroom.client import LightroomClient
 from darkroom_ai.adapters.photoshop.windows import photoshop_windows
 from darkroom_ai.agent.loop import PLAYBOOKS, Agent
+from darkroom_ai.cleanup import apply_cleanup, plan_cleanup
 from darkroom_ai.config import Settings, load_config
 from darkroom_ai.errors import DarkroomError
 from darkroom_ai.gpu import conflict_warnings, placement, read_gpus
@@ -269,6 +271,31 @@ def _revert(settings: Settings, photo_path: Path | None) -> int:
     return EXIT_OK
 
 
+# -- clean-outputs --------------------------------------------------------------------------------
+
+
+def _clean_outputs(settings: Settings) -> int:
+    """Human-only: remove intermediate files after showing the list and asking."""
+    plan = plan_cleanup(settings)
+    print(
+        f"{len(plan.finals)} final result(s) are kept (PSD/JPG ending in _darkroom); "
+        f"{len(plan.unknown)} unrecognised file(s) are kept."
+    )
+    if not plan.files:
+        print("Nothing to remove.")
+        return EXIT_OK
+    print(f"{len(plan.files)} file(s), {plan.megabytes:.0f} MB, would be removed:")
+    for category, paths in plan.remove.items():
+        size = sum(path.stat().st_size for path in paths) / 1_000_000
+        print(f"  {category}: {len(paths)} file(s), {size:.0f} MB, in {paths[0].parent}")
+    details = {category: f"{len(paths)} file(s)" for category, paths in plan.remove.items()}
+    if not AskUser().confirm("remove these intermediate files for good", details):
+        print("Nothing was removed.")
+        return EXIT_OK
+    print(f"Removed {apply_cleanup(plan)} file(s).")
+    return EXIT_OK
+
+
 # -- lightroom ------------------------------------------------------------------------------------
 
 
@@ -326,6 +353,9 @@ def build_parser() -> argparse.ArgumentParser:
         "revert", help="put a photo's copy back to its original values (asks first)"
     )
     revert.add_argument("--photo", type=Path, default=None, help="file path of the photo")
+    commands.add_parser(
+        "clean-outputs", help="remove intermediate files, never final results (asks first)"
+    )
 
     lightroom = commands.add_parser("lightroom", help="Lightroom plug-in setup and checks")
     lightroom_commands = lightroom.add_subparsers(dest="lightroom_command", required=True)
@@ -354,6 +384,8 @@ def main(argv: list[str] | None = None) -> int:
             return _chat(settings, args)
         if args.command == "revert":
             return _revert(settings, args.photo)
+        if args.command == "clean-outputs":
+            return _clean_outputs(settings)
         if args.command == "mcp":
             from darkroom_ai import mcp_server
 
