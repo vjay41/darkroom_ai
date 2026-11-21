@@ -1552,3 +1552,14 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   (before/after, big structures summarised); a preset that changes ProcessVersion/crop/aspect keys is taken back and refused
   (use the crop tool); total-limit check on exposure etc. unchanged; undo restores exactly the settings it changed.
   UNVERIFIED live: applyDevelopPreset on a virtual copy, undo of a preset that includes masks/curves tables.
+
+## 2026-11-21 - Plug-in robustness review (plug-in 0.8.1)
+- Problem seen by the user: after "Reload Plug-in", old work seemed to run in the middle of the restart. Cause (from code review; the
+  Lightroom log darkroom_ai.log was not readable from here): a reload leaves the OLD instance's tasks alive until they notice the new
+  instance id, so requests already queued in it, or ones the client had given up on, could still run (with old code) later.
+- Changes: requests carry `deadline` (Unix s) and expired ones are skipped (REQUEST_EXPIRED); queued requests of a superseded/stopped
+  instance are answered BRIDGE_RESTARTING instead of executed; more than 2 waiting -> BRIDGE_BUSY naming the running command; all
+  three map to LR_NOT_REACHABLE "Nothing was executed ... call again"; ping now returns `instance`; log lines carry the instance id and
+  per-command duration. Client never re-sends real commands (unchanged). Lua syntax-checked with Lua 5.4 (lupa) only.
+- Known limit: a command already running when the reload happens still finishes with the old code (cannot be aborted safely); its
+  response is lost, so check state (list_masks / get_develop_parameters) before repeating a write after a reload.

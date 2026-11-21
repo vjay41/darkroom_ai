@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.8.0"
+local PLUGIN_VERSION = "0.8.1"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -143,6 +143,7 @@ end
 function Commands.read.ping(_, ctx)
 	return {
 		plugin_version = PLUGIN_VERSION,
+		instance = ctx.instance,
 		protocol = PROTOCOL_VERSION,
 		lightroom_version = LrApplication.versionString(),
 		catalog_path = ctx.catalog_path,

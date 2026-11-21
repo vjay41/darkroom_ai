@@ -319,3 +319,20 @@ def test_catalog_listing_and_metadata_round_trip(
     meta = client.get_metadata(selection.active.id)
     assert meta.id == selection.active.id and meta.camera_model == "NIKON D7500"
     assert client.list_catalog(0, 10, path_contains="no-such-folder-xyz").total == 0
+
+
+def test_every_request_carries_the_time_the_client_stops_waiting(
+    plugin: FakeLightroomPlugin, client: LightroomClient
+) -> None:
+    before = time.time()
+    client.ping()
+    sent = [d for d in plugin.deadlines if d is not None]
+    assert sent and all(before < d < before + 600 for d in sent)
+
+
+@pytest.mark.parametrize("code", ["BRIDGE_RESTARTING", "BRIDGE_BUSY", "REQUEST_EXPIRED"])
+def test_plugin_restart_busy_and_expiry_replies_say_nothing_was_executed(code: str) -> None:
+    error = LightroomClient._error("set_mask_values", {"code": code, "message": "x"})
+    assert error.code is ErrorCode.LR_NOT_REACHABLE
+    assert "Nothing was executed" in error.next_step
+    assert error.details["plugin_code"] == code

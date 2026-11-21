@@ -201,6 +201,9 @@ class LightroomClient:
             "token": self._token,
             "command": command,
             "params": dict(params),
+            # When this client stops waiting (Unix seconds): the plug-in skips requests that
+            # reach it later, so a request that timed out is never run after the fact.
+            "deadline": time.time() + max(0.0, deadline - time.monotonic()) + 1.0,
         }
         requests.settimeout(max(0.01, deadline - time.monotonic()))
         requests.sendall((json.dumps(request, ensure_ascii=True) + "\n").encode("ascii"))
@@ -288,6 +291,14 @@ class LightroomClient:
                 text or None,
                 next_step="Edits are only made to virtual copies of photos in the allowed folder. "
                 "Create a virtual copy first, or use a photo from that folder. Nothing changed.",
+                details=details,
+            )
+        if code in ("BRIDGE_RESTARTING", "BRIDGE_BUSY", "REQUEST_EXPIRED"):
+            return DarkroomError(
+                ErrorCode.LR_NOT_REACHABLE,
+                f"The Lightroom plug-in did not run '{command}': {text or code} [{code}]",
+                next_step="Nothing was executed. Wait a few seconds (the plug-in may be restarting "
+                "or busy with an earlier request) and call the tool again.",
                 details=details,
             )
         if code == "MASK_PHOTO_NOT_SHOWN":

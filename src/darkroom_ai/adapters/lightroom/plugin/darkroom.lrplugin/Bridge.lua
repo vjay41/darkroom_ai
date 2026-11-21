@@ -33,6 +33,9 @@ local logger = LrLogger("darkroom_ai")
 logger:enable("logfile")
 
 local MAX_BUFFER = 4 * 1024 * 1024
+local MAX_WAITING = 2 -- requests allowed to wait behind the one being processed
+-- LrDate.currentTime() counts seconds from 2001-01-01; client deadlines are Unix seconds.
+local UNIX_OFFSET = 978307200
 local MIN_TOKEN_LENGTH = 32
 
 local Bridge = {}
@@ -96,7 +99,7 @@ local function errorResponse(id, code, message)
 end
 
 -- Runs inside an LrTasks task. Returns the response table for one decoded request.
-local function handleRequest(request, config)
+local function handleRequest(request, config, instance)
 	local id = type(request.id) == "string" and request.id or nil
 	if not id or type(request.command) ~= "string" then
 		return errorResponse(id, "BAD_REQUEST", "Request needs string fields 'id' and 'command'")
@@ -104,6 +107,17 @@ local function handleRequest(request, config)
 	if request.token ~= config.token then
 		logger:warn("rejected request with a wrong or missing token")
 		return errorResponse(id, "UNAUTHORIZED", "Missing or wrong token")
+	end
+
+	-- A request carries the time its client stops waiting. After that nobody can use the answer
+	-- (and the client may already have asked again), so it is not executed.
+	if type(request.deadline) == "number" and LrDate.currentTime() + UNIX_OFFSET > request.deadline then
+		logger:warn("[" .. instance .. "] skipped expired request for '" .. request.command .. "'")
+		return errorResponse(
+			id,
+			"REQUEST_EXPIRED",
+			"The client stopped waiting for this request before Lightroom reached it; nothing was executed"
+		)
 	end
 
 	local command = request.command
@@ -116,6 +130,7 @@ local function handleRequest(request, config)
 	local catalog = LrApplication.activeCatalog()
 	local catalogPath = catalog:getPath()
 	local ctx = {
+		instance = instance,
 		config = config,
 		catalog = catalog,
 		catalog_path = catalogPath,
@@ -134,23 +149,25 @@ local function handleRequest(request, config)
 	end
 
 	local params = type(request.params) == "table" and request.params or {}
+	local startedAt = LrDate.currentTime()
 	local ok, result = LrTasks.pcall(handler, params, ctx)
+	local took = string.format("%.1f s", LrDate.currentTime() - startedAt)
 	if ok then
-		logger:info("command '" .. command .. "' ok")
+		logger:info("[" .. instance .. "] command '" .. command .. "' ok (" .. took .. ")")
 		return { id = id, ok = true, result = result or {} }
 	end
 	if type(result) == "table" and result.code then
-		logger:warn("command '" .. command .. "' failed: " .. tostring(result.code))
+		logger:warn("[" .. instance .. "] command '" .. command .. "' failed: " .. tostring(result.code) .. " (" .. took .. ")")
 		return errorResponse(id, result.code, tostring(result.message))
 	end
-	logger:error("command '" .. command .. "' raised: " .. tostring(result))
+	logger:error("[" .. instance .. "] command '" .. command .. "' raised: " .. tostring(result) .. " (" .. took .. ")")
 	return errorResponse(id, "INTERNAL", tostring(result))
 end
 
 -- One listening session: bind both sockets, serve until a socket closes or the plug-in stops.
-local function runSession(config, active)
+local function runSession(config, active, instance)
 	LrFunctionContext.callWithContext("darkroom_ai_bridge_session", function(context)
-		local session = { closed = false, buffer = "", queue = {}, working = false }
+		local session = { closed = false, buffer = "", queue = {}, working = false, current = nil }
 		local sender
 
 		local function send(response)
@@ -169,9 +186,24 @@ local function runSession(config, active)
 			LrTasks.startAsyncTask(function()
 				while #session.queue > 0 and not session.closed do
 					local request = table.remove(session.queue, 1)
-					local ok, response = LrTasks.pcall(handleRequest, request, config)
-					if not ok then
-						response = errorResponse(request.id, "INTERNAL", tostring(response))
+					local response
+					if not active() then
+						-- A newer instance (plug-in reload) or a stop took over: do not run work
+						-- queued here with this instance's (possibly old) code.
+						response = errorResponse(
+							request.id,
+							"BRIDGE_RESTARTING",
+							"The Lightroom plug-in was restarting; nothing was executed, retry in a few seconds"
+						)
+					else
+						session.current = { command = request.command, since = LrDate.currentTime() }
+						local ok, handled = LrTasks.pcall(handleRequest, request, config, instance)
+						session.current = nil
+						if ok then
+							response = handled
+						else
+							response = errorResponse(request.id, "INTERNAL", tostring(handled))
+						end
 					end
 					local sent, sendError = pcall(send, response)
 					if not sent then
@@ -195,7 +227,23 @@ local function runSession(config, active)
 					end
 					if type(request) == "table" then
 						session.buffer = ""
-						session.queue[#session.queue + 1] = request
+						if #session.queue >= MAX_WAITING then
+							local busy = session.current
+							local what = busy and (" while running '" .. tostring(busy.command) .. "'") or ""
+							local reply = errorResponse(
+								type(request.id) == "string" and request.id or nil,
+								"BRIDGE_BUSY",
+								"The Lightroom plug-in is still busy" .. what .. "; nothing was executed"
+							)
+							local ok, text = pcall(Json.encode, reply)
+							if ok then
+								pcall(function()
+									sender:send(text .. "\n")
+								end)
+							end
+						else
+							session.queue[#session.queue + 1] = request
+						end
 					elseif #session.buffer + #piece <= MAX_BUFFER then
 						session.buffer = session.buffer .. piece
 					else
@@ -241,7 +289,7 @@ local function runSession(config, active)
 			onError = onError,
 		})
 
-		logger:info("listening on localhost ports " .. config.request_port .. " (requests) and " .. config.response_port .. " (responses)")
+		logger:info("[" .. instance .. "] listening on localhost ports " .. config.request_port .. " (requests) and " .. config.response_port .. " (responses)")
 
 		while active() and not session.closed do
 			LrTasks.sleep(0.2)
@@ -273,7 +321,7 @@ function Bridge.start()
 		bridge.stop = false
 		bridge.running = true
 		local generation = instance
-		logger:info("bridge starting (instance " .. instance .. ")")
+		logger:info("[" .. instance .. "] bridge starting")
 
 		local function active()
 			return not bridge.stop and prefs.activeInstance == instance
@@ -284,7 +332,7 @@ function Bridge.start()
 			-- as soon as the client reconnects.
 			local config, reason = loadConfig()
 			if config then
-				local ok, err = LrTasks.pcall(runSession, config, active)
+				local ok, err = LrTasks.pcall(runSession, config, active, instance)
 				if not ok then
 					logger:error("session ended with an error: " .. tostring(err))
 					LrTasks.sleep(2)
@@ -296,7 +344,7 @@ function Bridge.start()
 			LrTasks.sleep(0.3)
 		end
 		bridge.running = false
-		logger:info("bridge stopped (instance " .. generation .. ")")
+		logger:info("[" .. generation .. "] bridge stopped")
 	end, "darkroom_ai bridge")
 end
 

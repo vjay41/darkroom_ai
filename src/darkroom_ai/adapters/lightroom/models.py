@@ -14,6 +14,7 @@ class _Result(BaseModel):
 
 class PingInfo(_Result):
     plugin_version: str
+    instance: str | None = None  # which run of the plug-in answered (changes on every reload)
     protocol: int
     lightroom_version: str
     catalog_path: str

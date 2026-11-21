@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -86,6 +87,7 @@ class FakeLightroomPlugin:
         self.photos: dict[str, FakePhoto] = {"uuid-1": FakePhoto("uuid-1", "DSC_0001.jpg")}
         self.selected: list[str] = ["uuid-1"]
         self.commands: list[str] = []
+        self.deadlines: list[Any] = []
         self.exports: list[dict[str, Any]] = []
         self.tiffs: list[str] = []
         self._stop = threading.Event()
@@ -169,7 +171,15 @@ class FakeLightroomPlugin:
         request_id = request.get("id")
         command = request.get("command", "")
         self.commands.append(command)
+        self.deadlines.append(request.get("deadline"))
         try:
+            if (
+                isinstance(request.get("deadline"), int | float)
+                and request["deadline"] < time.time()
+            ):
+                raise PluginError(
+                    "REQUEST_EXPIRED", "The client stopped waiting; nothing was executed"
+                )
             if request.get("token") != self.token:
                 raise PluginError("UNAUTHORIZED", "Missing or wrong token")
             handler = getattr(self, f"_cmd_{command}", None)
