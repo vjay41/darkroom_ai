@@ -78,6 +78,8 @@ class SimulatedLightroom:
         self.photos: dict[str, dict[str, Any]] = {}
         self.settings: dict[str, dict[str, Any]] = {}
         self.calls: list[str] = []
+        # Mask subtypes this simulated Lightroom does not create (as the real one with "people").
+        self.refused_mask_subtypes: set[str] = set()
         self.add_photo("master-1", "TEST_0001.jpg", file_format=file_format)
 
     def add_photo(self, photo_id: str, file_name: str, *, file_format: str = "JPG") -> None:
@@ -186,6 +188,10 @@ class SimulatedLightroom:
         self.calls.append("create_mask")
         self._copy_only(photo_id)
         masks = list(self.settings[photo_id].get("MaskGroupBasedCorrections") or [])
+        if subtype in self.refused_mask_subtypes:
+            return MaskCreation(
+                created=False, masks_before=len(masks), masks_after=len(masks), waited_s=25.0
+            )
         mask_id = f"mask-{len(masks) + 1}"
         masks.append(
             {

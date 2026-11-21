@@ -1613,3 +1613,31 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   (b) people needs a person chosen / face detection finished; (c) wrong subtype for this build. The error code ADOBE_FEATURE_UNAVAILABLE and its
   "type not available" wording over-claims: the cause is unknown. Candidate routes: write the mask geometry into MaskGroupBasedCorrections
   directly, using a sample read from a mask the user draws by hand (exact schema, no guessing).
+
+## 2026-11-21 19:05 - mask creation fix (captured real Lightroom data, then built from it)
+Why the 4 refusals: LrDevelopController.createNewMask for gradient / radialGradient / rangeMask only ARMS a drawing tool; Lightroom adds the mask
+when a person drags or clicks. Confirmed by drawing each by hand in Lightroom 15.2.1 on the test photo (computer use; the photo was put back to
+its clean history state afterwards and the catalog re-read: no masks). People: Lightroom shows a person list, then a "Person Mask Options" panel
+that needs "Create Mask" pressed (the Return key worked, a click did not); AI-derived fields (InputDigest, MaskDigest, ModelVersion, InstanceBounds)
+make a people mask impossible to write as data.
+Stored format captured from the test catalog (Adobe_imageDevelopSettings, MaskGroupBasedCorrections):
+- Correction = {CorrectionID, CorrectionName "Mask n", CorrectionActive, CorrectionAmount 1, CorrectionReferenceX/Y, CorrectionSyncID, Local* sliders
+  (all 0, LocalCurveRefineSaturation 100), What "Correction", CorrectionMasks = {part}}.
+- Linear: part.What "Mask/Gradient", FullX/FullY (effect full; where the drag STARTED), ZeroX/ZeroY (effect gone; where it ENDED), fractions of the picture.
+- Radial: What "Mask/CircularGradient", Left/Top/Right/Bottom, Angle, Feather 50, Flipped true, Midpoint 50, Roundness 0, Version 2. The drag
+  went centre -> corner, so Left/Right = centre -/+ half width.
+- Luminance range: What "Mask/RangeMask", CorrectionRangeMask {Invert, LumRange "a b c d" (full range = 0 0 1 1), LuminanceDepthSampleInfo
+  (set by the sampling drag), SampleType 1, Type 2, Version 3}. Colour range / depth range NOT captured.
+- Every part also has MaskActive, MaskBlendMode 0, MaskID, MaskInverted, MaskName, MaskSyncID, MaskValue 1.
+Built (Python only; the Lua plug-in is unchanged, so only the connector needs a restart):
+- create_mask now WRITES gradient (start, end), radialGradient (center, radius_x, radius_y, feather, angle) and luminance range (luminance_range)
+  masks through the proven apply_settings route, reads them back (waits up to 6 s), reports the stored part and asks Lightroom for the mask id.
+  A write that does not stick raises LR_COMMAND_FAILED instead of claiming success. Undo restores the previous mask list.
+- UNVERIFIED until the live run: that Lightroom keeps a hand-built mask (it may drop it on recompute), that LumRange numbers mean (ramp-in start,
+  full start, full end, ramp-out end), that SampleType 0 without LuminanceDepthSampleInfo is accepted, and that Flipped=true is "effect inside".
+- People: if Lightroom's call makes no mask, the tool asks the person (approval prompt) to choose the person and press Create Mask, then re-counts.
+- Honest errors: ADOBE_FEATURE_UNAVAILABLE ("type not available") replaced by LR_COMMAND_FAILED, "cause not known; does not prove unavailable";
+  colour/depth range say plainly they cannot be created automatically yet.
+- list_develop_parameters now lists readable text settings (LensProfileName, LensProfileSetup, LensProfileFilename, LensProfileIsEmbedded,
+  ProfileName); get_develop_parameters reads any setting name (unknown names come back null).
+- 335 tests pass on Linux (+1 known Windows-path failure), ruff and mypy strict clean.

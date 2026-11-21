@@ -46,6 +46,7 @@ from darkroom_ai.tools.develop_keys import (
 from darkroom_ai.tools.develop_parameters import (
     DEVELOP_PARAMETERS,
     OWN_TOOLS,
+    READ_ONLY_TEXT,
     parameter_limit,
 )
 
@@ -488,6 +489,7 @@ class ParameterEntry(BaseModel):
 class ListDevelopParametersResult(ToolResult):
     parameters: tuple[ParameterEntry, ...]
     set_with_other_tools: str = OWN_TOOLS
+    readable_text_settings: dict[str, str] = Field(default_factory=lambda: dict(READ_ONLY_TEXT))
     note: str = (
         "set_develop_parameters changes a value by an amount you give (not to an absolute value), "
         "clamped to the range and to a per-call limit. Read the current value first."
@@ -505,7 +507,10 @@ def list_develop_parameters(ctx: ToolContext, args: ListDevelopParametersInput) 
 
 class GetDevelopParametersInput(_Input):
     """Read the current value of develop settings of a photo (or its working copy). Give the exact
-    Lightroom setting names, e.g. "Clarity2012"; leave names empty for all listed parameters."""
+    Lightroom setting names, e.g. "Clarity2012"; leave names empty for all listed parameters. Any
+    Lightroom develop setting name can be read, not only the listed ones: for example the text
+    settings in list_develop_parameters (readable_text_settings), such as LensProfileName, show
+    whether Lightroom found a lens profile."""
 
     names: list[str] = Field(default_factory=list, max_length=80)
 

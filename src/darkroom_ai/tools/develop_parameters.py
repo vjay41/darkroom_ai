@@ -79,6 +79,16 @@ DEVELOP_PARAMETERS: dict[str, tuple[str, float, float, str]] = {
     "BlueSaturation": ("calibration", -100, 100, ""),
 }
 
+# Text settings that can be READ (get_develop_parameters) but are not set through
+# set_develop_parameters. They tell whether Lightroom found and used a lens profile.
+READ_ONLY_TEXT: dict[str, str] = {
+    "LensProfileName": "name of the lens profile Lightroom chose (null if none)",
+    "LensProfileSetup": "how the profile was chosen: Default, Auto or Custom",
+    "LensProfileFilename": "file name of the lens profile in use",
+    "LensProfileIsEmbedded": "true when the file carries its own (embedded) lens correction",
+    "ProfileName": "the colour profile selected in Lightroom (for example Adobe Color)",
+}
+
 OWN_TOOLS = (
     "Exposure2012, Contrast2012, Highlights2012, Shadows2012, Whites2012, Blacks2012: "
     "adjust_lighting; "

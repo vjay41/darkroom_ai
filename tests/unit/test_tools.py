@@ -1088,3 +1088,138 @@ def test_toggle_parameters_switch_fully_in_one_step() -> None:
     assert parameter_limit(guard, "LensProfileEnable").per_pass == 1.0
     assert parameter_limit(guard, "AutoLateralCA").per_pass == 1.0
     assert parameter_limit(guard, "Texture").per_pass == 50.0  # sliders keep the quarter-range step
+
+
+# -- masks written as Lightroom's own stored data -------------------------------------------------
+
+
+def test_gradient_mask_is_written_in_lightroom_format_and_undoable(rig: Rig) -> None:
+    got = rig.call(
+        "create_mask",
+        photo_id=MASTER,
+        mask_type="gradient",
+        start=[0.5, 0.13],
+        end=[0.5, 0.46],
+    )
+    part = (
+        got["stored"]["CorrectionMasks"][0] if "CorrectionMasks" in got["stored"] else got["stored"]
+    )
+    assert part["What"] == "Mask/Gradient"
+    assert (part["FullX"], part["FullY"], part["ZeroX"], part["ZeroY"]) == (0.5, 0.13, 0.5, 0.46)
+    assert got["creation"]["created"] is True and got["mask_id"]
+    assert rig.call("list_masks", photo_id=got["photo_id"])["count"] == 1
+    assert rig.call("undo", photo_id=got["photo_id"])["undone_steps"] == 1
+    assert rig.call("list_masks", photo_id=got["photo_id"])["count"] == 0
+
+
+def test_radial_mask_box_comes_from_center_and_radius(rig: Rig) -> None:
+    got = rig.call(
+        "create_mask",
+        photo_id=MASTER,
+        mask_type="radialGradient",
+        center=[0.25, 0.7],
+        radius_x=0.15,
+        radius_y=0.2,
+    )
+    part = got["stored"]
+    assert part["What"] == "Mask/CircularGradient"
+    assert (round(part["Left"], 3), round(part["Right"], 3)) == (0.1, 0.4)
+    assert (round(part["Top"], 3), round(part["Bottom"], 3)) == (0.5, 0.9)
+    assert part["Feather"] == 50 and part["Flipped"] is True and part["Version"] == 2
+
+
+def test_luminance_range_mask_stores_the_four_values(rig: Rig) -> None:
+    got = rig.call(
+        "create_mask",
+        photo_id=MASTER,
+        mask_type="rangeMask",
+        subtype="luminance",
+        luminance_range=[0.2, 0.3, 0.7, 0.8],
+    )
+    stored = got["stored"]
+    assert stored["What"] == "Mask/RangeMask"
+    assert stored["CorrectionRangeMask"]["LumRange"] == "0.200000 0.300000 0.700000 0.800000"
+    assert stored["CorrectionRangeMask"]["Type"] == 2
+
+
+def test_written_masks_need_their_shape_and_reject_bad_shapes(rig: Rig) -> None:
+    bad: list[dict[str, Any]] = [
+        {"mask_type": "gradient", "start": [0.5, 0.1]},
+        {"mask_type": "gradient", "start": [0.5, 0.1], "end": [0.5, 0.1]},
+        {"mask_type": "gradient", "start": [0.5, 1.4], "end": [0.5, 0.2]},
+        {"mask_type": "radialGradient", "center": [0.5, 0.5], "radius_x": 0.2},
+        {"mask_type": "gradient", "start": [0.1, 0.1], "end": [0.2, 0.2], "feather": 10},
+        {"mask_type": "rangeMask", "subtype": "luminance", "luminance_range": [0.5, 0.2, 0.7, 0.8]},
+        {"mask_type": "rangeMask", "subtype": "luminance"},
+    ]
+    for arguments in bad:
+        with pytest.raises(DarkroomError) as caught:
+            rig.call("create_mask", photo_id=MASTER, **arguments)
+        assert caught.value.code is ErrorCode.LLM_BAD_TOOL_CALL, arguments
+
+
+def test_a_written_mask_that_does_not_stick_is_reported_not_claimed(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(rig.lightroom, "apply_develop_settings", lambda *a, **k: None)
+    with pytest.raises(DarkroomError) as caught:
+        rig.call(
+            "create_mask", photo_id=MASTER, mask_type="gradient", start=[0.5, 0.1], end=[0.5, 0.4]
+        )
+    assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
+    assert "not in the photo's settings" in caught.value.message
+
+
+def test_refused_mask_error_does_not_claim_the_type_is_unavailable(rig: Rig) -> None:
+    rig.lightroom.refused_mask_subtypes.update({"color", "sky"})
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("create_mask", photo_id=MASTER, mask_type="rangeMask", subtype="color")
+    assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
+    assert "cannot be created automatically" in caught.value.next_step
+    assert "does not prove" in caught.value.message
+    with pytest.raises(DarkroomError) as sky:
+        rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="sky")
+    assert sky.value.code is ErrorCode.LR_COMMAND_FAILED
+
+
+class FinishesThePeopleMask:
+    """Stands in for the person who presses 'Create Mask' in Lightroom, then answers."""
+
+    def __init__(self, rig: Rig) -> None:
+        self.rig = rig
+        self.asked: list[str] = []
+
+    def confirm(self, action: str, details: Any) -> bool:
+        self.asked.append(action)
+        copy = details["photo_id"]
+        settings = self.rig.lightroom.settings[copy]
+        settings["MaskGroupBasedCorrections"] = [
+            *(settings.get("MaskGroupBasedCorrections") or []),
+            {"CorrectionName": "Person 2", "CorrectionID": "p2", "CorrectionMasks": []},
+        ]
+        return True
+
+
+def test_people_mask_is_handed_to_the_person_and_then_checked(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.lightroom.refused_mask_subtypes.add("people")
+    person = FinishesThePeopleMask(rig)
+    rig.context.confirmer = person  # type: ignore[assignment]
+    got = rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="people")
+    assert got["creation"]["created"] is True and len(got["masks"]) == 1
+    assert "Create Mask" in person.asked[0]
+    assert "finished it in Lightroom" in got["note"]
+
+
+def test_people_mask_without_the_person_says_what_to_do(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.lightroom.refused_mask_subtypes.add("people")
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="people")
+    assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
+    assert "Create Mask" in caught.value.next_step
+
+
+def test_list_develop_parameters_names_the_readable_lens_profile_settings(rig: Rig) -> None:
+    listed = rig.call("list_develop_parameters")
+    assert "LensProfileName" in listed["readable_text_settings"]

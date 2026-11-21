@@ -96,3 +96,6 @@ def _no_takeover_waiting(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(takeover, "STABLE_S", 0.0)
     monkeypatch.setattr(takeover, "_sleep", lambda _seconds: None)
+    from darkroom_ai.tools import masks
+
+    monkeypatch.setattr(masks, "_sleep", lambda _seconds: None)
