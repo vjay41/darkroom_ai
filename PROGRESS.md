@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: `glimmer` / `fast` DEFERRED to Phase 8; live `darkroom chat` plan shown, waiting for the go
+## CURRENT STATE — 2026-11-21: Phase 6: doctor GPU rule changed; plan shown for the live `darkroom chat` run + Select Subject re-measurement with two models; waiting for the go
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -78,6 +78,9 @@ file name / metadata / numbers sent. 1.5 s; 133 completion tokens, 84 of them th
 Conclusion (one photo only): the model's eye for absolute brightness and clipping is not reliable; the agent must lean on the
 measured numbers, which it already gets in every pass. The category limits (50 / 95 / 160 / 205) are my own choice.
 
+NOTE (added later the same day): this measurement was taken with Qwen ALONE (one model loaded, on GPU 0, GPU 1 idle).
+The user now runs Qwen on GPU 0 and Muse (`glimmer`) on GPU 1; Photoshop's 3.2 GB Select Subject peak was on GPU 1, so the
+result does not carry over and a re-measurement with both models loaded is planned.
 GPU conflict measurement (`scripts/gpu_conflict.py`, `TEST_2457-37.jpg`, model loaded on GPU 0, Photoshop auto-started in 5.6 s,
 mode Device before and after):
 | | Time | GPU 0 used MB (before / peak / after) | GPU 1 used MB (before / peak / after) |
@@ -178,7 +181,17 @@ switching for now; Qwen stays the only loaded model).
   (26.7 GB before). Not pinned to GPU 0 as the user wants; LM Studio's GPU setting was not touched by the assistant.
   Gap: `doctor` does not warn in this case (it only warns when the model server is absent from the configured GPU).
 
-Still owed before the Phase 6 gate: a live `darkroom chat` run (plan shown, waiting for the go); `darkroom chat`, `darkroom revert` and MCP over real stdio are
+User update (2026-11-21): Qwen runs on GPU 0 (RTX 5090) and Muse on GPU 1 (RTX 3090); the user manages LM Studio's GPU
+allocation. Built for it:
+- `doctor`: where the model server runs is never a warning. The only GPU warning is low free memory (below
+  `gpu.min_free_mb`, 3000) on a GPU that Photoshop holds a context on; it says whether the model server uses that GPU too
+  and quotes the measurement with its limits (one photo, one model loaded). A new information line shows the placement
+  ("model server on GPU ...; Photoshop on GPU ...").
+- `gpu.llm_gpu_index` removed from the config and `darkroom.toml` (nothing uses it any more).
+- 305 tests pass, `make quality` clean. `doctor` live: no warnings (no model was loaded at that moment).
+
+Still owed before the Phase 6 gate: a live `darkroom chat` run with a white-balance request on `TEST_2461-41.jpg`, the
+Select Subject re-measurement with both models loaded (plan shown, waiting for the go); `darkroom chat`, `darkroom revert` and MCP over real stdio are
 unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 

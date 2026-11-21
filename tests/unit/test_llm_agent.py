@@ -16,7 +16,13 @@ from darkroom_ai import cli, mcp_server
 from darkroom_ai.agent.loop import Agent, load_playbook
 from darkroom_ai.config import ModelProfile, Settings, parse_settings
 from darkroom_ai.errors import DarkroomError, ErrorCode
-from darkroom_ai.gpu import GpuReport, conflict_warnings, parse_gpus, parse_processes
+from darkroom_ai.gpu import (
+    GpuReport,
+    conflict_warnings,
+    parse_gpus,
+    parse_processes,
+    placement,
+)
 from darkroom_ai.llm import selftest
 from darkroom_ai.llm.client import ChatReply, LocalLlmClient, RawToolCall
 from darkroom_ai.llm.tool_modes import ModelTurn, ToolCall, parse_reply, request_options
@@ -581,30 +587,28 @@ def test_gpu_parsing_and_conflict_warnings() -> None:
     gpus = parse_gpus(GPU_TEXT + "garbage line\n")
     assert [(g.index, g.free_mb) for g in gpus] == [(0, 5887), (1, 24550)]
 
-    separate = report_with(
-        ("C:\\LM Studio\\llama-server.exe", "GPU-aaa"), ("C:\\Adobe\\Photoshop.exe", "GPU-bbb")
-    )
-    assert conflict_warnings(separate, llm_gpu=0, min_free_mb=6000) == []
+    llama, photoshop = "C:\\LM Studio\\llama-server.exe", "C:\\Adobe\\Photoshop.exe"
+    # Where the model server runs is never a warning by itself.
+    for model_gpu in ("GPU-aaa", "GPU-bbb"):
+        assert conflict_warnings(report_with((llama, model_gpu)), min_free_mb=6000) == []
+    both = report_with((llama, "GPU-aaa"), (llama, "GPU-bbb"), (photoshop, "GPU-bbb"))
+    assert conflict_warnings(both, min_free_mb=6000) == []  # Photoshop's GPU has room
+    assert placement(both) == "model server on GPU 0, 1; Photoshop on GPU 1"
+    assert "Photoshop on no GPU" in placement(report_with((llama, "GPU-aaa")))
 
-    shared = report_with(
-        ("C:\\LM Studio\\llama-server.exe", "GPU-aaa"), ("C:\\Adobe\\Photoshop.exe", "GPU-aaa")
-    )
-    (warning,) = conflict_warnings(shared, llm_gpu=0, min_free_mb=6000)
-    assert "both use GPU 0" in warning and "5887 MB" in warning
-
-    roomy = report_with(
-        ("C:\\LM Studio\\llama-server.exe", "GPU-aaa"),
-        ("C:\\Adobe\\Photoshop.exe", "GPU-aaa"),
-        used0=10000,
-    )
-    (note,) = conflict_warnings(roomy, llm_gpu=0, min_free_mb=6000)
-    assert note.startswith("Note:")
-
-    wrong_gpu = report_with(("C:\\LM Studio\\llama-server.exe", "GPU-bbb"))
-    (pin,) = conflict_warnings(wrong_gpu, llm_gpu=0, min_free_mb=6000)
-    assert "not on GPU 0" in pin
+    # Low free memory on a GPU that Photoshop uses is the one warning.
+    shared = report_with((llama, "GPU-aaa"), (photoshop, "GPU-aaa"))
+    (warning,) = conflict_warnings(shared, min_free_mb=6000)
+    assert "Photoshop uses GPU 0" in warning and "only 5887 MB" in warning
+    assert "The model server uses this GPU too." in warning
+    alone = report_with((photoshop, "GPU-aaa"))
+    (warning,) = conflict_warnings(alone, min_free_mb=6000)
+    assert "The model server uses this GPU too." not in warning
+    assert conflict_warnings(shared, min_free_mb=3000) == []
+    roomy = report_with((llama, "GPU-aaa"), (photoshop, "GPU-aaa"), used0=10000)
+    assert conflict_warnings(roomy, min_free_mb=6000) == []
     assert conflict_warnings(
-        GpuReport((), (), error="nvidia-smi could not be run"), llm_gpu=0, min_free_mb=1
+        GpuReport((), (), error="nvidia-smi could not be run"), min_free_mb=1
     ) == ["nvidia-smi could not be run"]
 
 
@@ -649,7 +653,8 @@ def test_doctor_reports_each_part_without_touching_real_services(
     assert "Photoshop is not running (it is started when needed)" in out
     assert "model of the active profile is available" in out
     assert "GPU 0 NVIDIA GeForce RTX 5090" in out
-    assert "not on GPU 0 as configured" in out
+    assert "model server on GPU 1; Photoshop on no GPU (not running)" in out
+    assert "[warn] Photoshop uses" not in out  # a model server on GPU 1 is not a warning
     assert "1 problem(s) found" in out
 
 
@@ -715,8 +720,8 @@ def test_valid_call_rate_and_measured_note() -> None:
     assert selftest.valid_call_rate(results) == 0.75
     assert selftest.valid_call_rate([]) == 0.0
     shared = report_with(("x\\llama-server.exe", "GPU-aaa"), ("x\\Photoshop.exe", "GPU-aaa"))
-    (warning,) = conflict_warnings(shared, llm_gpu=0, min_free_mb=6000)
-    assert MEASURED in warning and "one photo" in warning
+    (warning,) = conflict_warnings(shared, min_free_mb=6000)
+    assert MEASURED in warning and "one photo, one model loaded" in warning
     assert (
         parse_settings(
             {

@@ -153,9 +153,8 @@ class FaceSettings(_Section):
 
 
 class GpuSettings(_Section):
-    """Which GPU the model server should be on, and when sharing a GPU becomes a warning."""
+    """When low free memory on a GPU that Photoshop uses becomes a warning in `doctor`."""
 
-    llm_gpu_index: int = Field(default=0, ge=0, le=15)
     min_free_mb: int = Field(default=3000, ge=0, le=100000)
 
 

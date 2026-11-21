@@ -80,8 +80,7 @@ onnx_input_height = 1024
 score_threshold = 0.7
 
 [gpu]
-llm_gpu_index = 0           # the model server should be pinned to this GPU (RTX 5090)
-min_free_mb = 3000          # doctor warns if the model server and Photoshop share a GPU below this
+min_free_mb = 3000          # doctor warns if a GPU that Photoshop uses has less free memory than this
 
 [paths]
 logs_dir = "logs"

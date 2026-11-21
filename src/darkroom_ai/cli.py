@@ -28,7 +28,7 @@ from darkroom_ai.adapters.photoshop.windows import photoshop_windows
 from darkroom_ai.agent.loop import PLAYBOOKS, Agent
 from darkroom_ai.config import Settings, load_config
 from darkroom_ai.errors import DarkroomError
-from darkroom_ai.gpu import conflict_warnings, read_gpus
+from darkroom_ai.gpu import conflict_warnings, placement, read_gpus
 from darkroom_ai.llm import selftest
 from darkroom_ai.llm.client import LocalLlmClient
 from darkroom_ai.tools.factory import build_tool_context
@@ -105,9 +105,9 @@ def _doctor(settings: Settings) -> int:
     report = read_gpus()
     for gpu in report.gpus:
         _line("ok", f"GPU {gpu.index} {gpu.name}: {gpu.used_mb} of {gpu.total_mb} MB used")
-    for warning in conflict_warnings(
-        report, llm_gpu=settings.gpu.llm_gpu_index, min_free_mb=settings.gpu.min_free_mb
-    ):
+    if not report.error:
+        _line("ok", placement(report))
+    for warning in conflict_warnings(report, min_free_mb=settings.gpu.min_free_mb):
         _line("warn", warning)
 
     print("\nAll checks passed." if not problems else f"\n{problems} problem(s) found.")

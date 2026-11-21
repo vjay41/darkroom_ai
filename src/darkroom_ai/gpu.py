@@ -14,8 +14,9 @@ TIMEOUT_S = 15
 MODEL_SERVER_HINTS = ("lm studio", "lmstudio", "lms.exe", "llama")
 PHOTOSHOP_HINTS = ("photoshop",)
 MEASURED = (
-    "Measured on 2026-11-21 (one photo): with 4.3 GB free on the shared GPU and Photoshop open, "
-    "Select Subject showed no slowdown (7.6-8.3 s vs 8.1 s) and the model kept answering."
+    "Measured on 2026-11-21 (one photo, one model loaded): with 4.3 GB free on a GPU shared "
+    "with the model server and Photoshop open, Select Subject showed no slowdown "
+    "(7.6-8.3 s vs 8.1 s; about 3.2 GB peak on the other GPU) and the model kept answering."
 )
 
 
@@ -104,32 +105,36 @@ def read_gpus() -> GpuReport:
     return GpuReport(gpus, processes)
 
 
-def conflict_warnings(report: GpuReport, *, llm_gpu: int, min_free_mb: int) -> list[str]:
-    """Plain warnings about the model server and Photoshop competing for one GPU."""
-    warnings: list[str] = []
+def placement(report: GpuReport) -> str:
+    """One line saying which GPUs the model server and Photoshop are on (information only)."""
+
+    def where(indexes: tuple[int, ...]) -> str:
+        return "GPU " + ", ".join(map(str, indexes)) if indexes else "no GPU (not running)"
+
+    return (
+        f"model server on {where(report.gpu_indexes_for(MODEL_SERVER_HINTS))}; "
+        f"Photoshop on {where(report.gpu_indexes_for(PHOTOSHOP_HINTS))}"
+    )
+
+
+def conflict_warnings(report: GpuReport, *, min_free_mb: int) -> list[str]:
+    """Warn only when a GPU that Photoshop holds a context on is short of free memory.
+
+    Where the model server runs is the user's choice and is never a warning by itself.
+    """
     if report.error:
         return [report.error]
+    warnings: list[str] = []
     model_gpus = report.gpu_indexes_for(MODEL_SERVER_HINTS)
-    photoshop_gpus = report.gpu_indexes_for(PHOTOSHOP_HINTS)
-    if model_gpus and llm_gpu not in model_gpus:
-        warnings.append(
-            f"The model server is on GPU {', '.join(map(str, model_gpus))}, not on GPU {llm_gpu} "
-            "as configured. Pin it to that GPU in the model server's settings."
-        )
-    shared = sorted(set(model_gpus) & set(photoshop_gpus))
-    for index in shared:
+    for index in report.gpu_indexes_for(PHOTOSHOP_HINTS):
         gpu = next(g for g in report.gpus if g.index == index)
-        if gpu.free_mb < min_free_mb:
-            warnings.append(
-                f"The model server and Photoshop both use GPU {index} ({gpu.name}) and only "
-                f"{gpu.free_mb} MB of {gpu.total_mb} MB is free. Photoshop's Select Subject may "
-                "be slow or fail; unload the model or move Photoshop to the other GPU "
-                "(Photoshop: Preferences > Performance). " + MEASURED
-            )
-        else:
-            warnings.append(
-                f"Note: the model server and Photoshop share GPU {index} ({gpu.name}); "
-                f"{gpu.free_mb} MB is free, which is above the {min_free_mb} MB threshold. "
-                + MEASURED
-            )
+        if gpu.free_mb >= min_free_mb:
+            continue
+        shared = " The model server uses this GPU too." if index in model_gpus else ""
+        warnings.append(
+            f"Photoshop uses GPU {index} ({gpu.name}) and only {gpu.free_mb} MB of "
+            f"{gpu.total_mb} MB is free (threshold {min_free_mb} MB).{shared} Photoshop's Select "
+            "Subject may be slow or fail; free memory on this GPU (for example unload a model). "
+            + MEASURED
+        )
     return warnings
