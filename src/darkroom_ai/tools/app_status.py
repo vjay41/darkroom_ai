@@ -141,23 +141,54 @@ def _check(ctx: ToolContext, app: AppName) -> AppState:
 
 class GetAppStatusInput(BaseModel):
     """Check whether Lightroom Classic and Photoshop are running and ready to be used. Reads only:
-    it never starts or closes anything. States: ready; busy (a command runs or is stuck in
-    Lightroom; the detail says how long); not_running; needs_user (running but not answering, e.g.
-    a dialog is open; the next step says what to clear); not_installed; unknown."""
+    it never starts or closes anything. The connector block says which code this connector
+    process runs and whether it is stale (older than the files on disk; restart it). States:
+    ready; busy (a command runs or is stuck in Lightroom; the detail says how long); not_running;
+    needs_user (running but not answering, e.g. a dialog is open; the next step says what to
+    clear); not_installed; unknown."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ConnectorState(BaseModel):
+    """Which code this connector process is running (see darkroom_ai.runtime)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: Literal["current", "stale"]
+    process_id: int
+    started_at: str
+    running_code: str
+    code_on_disk: str
+    note: str = ""
 
 
 class AppStatusResult(ToolResult):
     lightroom: AppState
     photoshop: AppState
     all_ready: bool
+    connector: ConnectorState | None = None
 
 
 def get_app_status(ctx: ToolContext, args: GetAppStatusInput) -> Outcome:
     lightroom, photoshop = _check(ctx, "lightroom"), _check(ctx, "photoshop")
     ready = lightroom.state == "ready" and photoshop.state == "ready"
-    return Outcome(AppStatusResult(lightroom=lightroom, photoshop=photoshop, all_ready=ready))
+    connector: ConnectorState | None = None
+    if ctx.connector is not None:
+        code = ctx.connector.state()
+        connector = ConnectorState(
+            state=code.state,
+            process_id=code.pid,
+            started_at=code.started_at,
+            running_code=code.running_code,
+            code_on_disk=code.code_on_disk,
+            note=ctx.connector.warning() or "",
+        )
+    return Outcome(
+        AppStatusResult(
+            lightroom=lightroom, photoshop=photoshop, all_ready=ready, connector=connector
+        )
+    )
 
 
 class EnsureAppsRunningInput(BaseModel):

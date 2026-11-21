@@ -1,6 +1,7 @@
 """Command line entry point (`darkroom`).
 
 darkroom doctor                 check the local setup (config, Lightroom, Photoshop, GPUs)
+darkroom connectors             list running MCP connectors; --stop-stale stops ones with older code
 darkroom mcp                    serve the tools over MCP (stdio)
 darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
 darkroom clean-outputs          remove intermediate files (never final results); asks first
@@ -10,6 +11,7 @@ darkroom lightroom setup|ping   Lightroom plug-in setup and check
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -28,6 +30,12 @@ from darkroom_ai.cleanup import apply_cleanup, plan_cleanup
 from darkroom_ai.config import Settings, load_config
 from darkroom_ai.errors import DarkroomError
 from darkroom_ai.gpu import conflict_warnings, placement, read_gpus
+from darkroom_ai.runtime import (
+    WindowsInstanceControl,
+    code_hash,
+    list_instances,
+    stop_stale,
+)
 from darkroom_ai.tools.factory import build_tool_context
 from darkroom_ai.tools.revert import apply_revert, plan_revert
 
@@ -58,12 +66,52 @@ def _line(status: str, text: str) -> None:
     print(f"[{status:^4}] {text}")
 
 
+# -- connectors -----------------------------------------------------------------------------------
+
+
+def _source_dir() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def _connectors(settings: Settings, stop: bool) -> int:
+    directory = settings.paths.logs_dir.resolve() / "connectors"
+    control = WindowsInstanceControl()
+    disk = code_hash(_source_dir())
+    records = list_instances(directory, control)
+    if not records:
+        print(
+            "No registered connector is running. (A connector started before this check existed "
+            "is not listed: stop it in Task Manager or restart Hermes.)"
+        )
+    for record in records:
+        status = "current" if record.version == disk else "STALE (older code)"
+        print(f"pid {record.pid}  started {record.started}  code {record.version}  {status}")
+    if stop:
+        for old in stop_stale(directory, control, own_version=disk, own_pid=os.getpid()):
+            print(f"stopped pid {old.pid} (older code {old.version})")
+    return EXIT_OK
+
+
 # -- doctor ---------------------------------------------------------------------------------------
 
 
 def _doctor(settings: Settings) -> int:
     problems = 0
     _line("ok", "config: loaded")
+    disk = code_hash(_source_dir())
+    running = list_instances(
+        settings.paths.logs_dir.resolve() / "connectors", WindowsInstanceControl()
+    )
+    old = [r for r in running if r.version != disk]
+    if old:
+        pids = ", ".join(str(r.pid) for r in old)
+        _line(
+            "warn",
+            f"{len(old)} MCP connector(s) run older code (pid {pids}): run "
+            "`darkroom connectors --stop-stale`, then restart the connector in Hermes.",
+        )
+    elif running:
+        _line("ok", f"{len(running)} MCP connector(s) running the current code")
 
     try:
         with LightroomClient.from_settings(settings, load_bridge_file()) as lightroom:
@@ -217,6 +265,12 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("doctor", help="check the local setup")
 
     commands.add_parser("mcp", help="serve the tools over MCP (stdio)")
+    connectors = commands.add_parser(
+        "connectors", help="list running MCP connectors and whether they run the current code"
+    )
+    connectors.add_argument(
+        "--stop-stale", action="store_true", help="stop connectors that run older code"
+    )
 
     revert = commands.add_parser(
         "revert", help="put a photo's copy back to its original values (asks first)"
@@ -244,6 +298,8 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_config(args.config)
         if args.command == "doctor":
             return _doctor(settings)
+        if args.command == "connectors":
+            return _connectors(settings, args.stop_stale)
         if args.command == "revert":
             return _revert(settings, args.photo)
         if args.command == "clean-outputs":

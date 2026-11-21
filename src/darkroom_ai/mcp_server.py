@@ -8,8 +8,11 @@ client cannot ask, the person declines, or nobody answers, the request comes bac
 
 from __future__ import annotations
 
+import atexit
 import base64
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +25,15 @@ from darkroom_ai import __version__
 from darkroom_ai.config import Settings
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.mcp_confirm import ElicitationConfirmer
-from darkroom_ai.tools.factory import build_tool_registry
+from darkroom_ai.runtime import (
+    CodeGuard,
+    InstanceRecord,
+    WindowsInstanceControl,
+    register,
+    stop_stale,
+    unregister,
+)
+from darkroom_ai.tools.factory import build_tool_context
 from darkroom_ai.tools.registry import ToolRegistry
 
 SERVER_NAME = "darkroom_ai"
@@ -122,4 +133,30 @@ async def _serve(registry: ToolRegistry, confirmer: ElicitationConfirmer | None 
 def run(settings: Settings) -> None:
     """Serve the tools over stdio until the client disconnects."""
     confirmer = ElicitationConfirmer()
-    anyio.run(_serve, build_tool_registry(settings, confirmer=confirmer), confirmer)
+    guard = CodeGuard(Path(__file__).resolve().parent)
+    _claim_instance(settings, guard)
+    context = build_tool_context(settings, confirmer=confirmer)
+    context.connector = guard
+    print(
+        f"darkroom_ai: connector pid {guard.pid}, code {guard.version}, started {guard.started_at}",
+        file=sys.stderr,
+        flush=True,
+    )
+    anyio.run(_serve, ToolRegistry(context), confirmer)
+
+
+def _claim_instance(settings: Settings, guard: CodeGuard) -> None:
+    """Stop connectors that run different (older) code, then register this one."""
+    directory = settings.paths.logs_dir.resolve() / "connectors"
+    control = WindowsInstanceControl()
+    for old in stop_stale(directory, control, own_version=guard.version, own_pid=guard.pid):
+        print(
+            f"darkroom_ai: stopped an older connector (pid {old.pid}, code {old.version}, "
+            f"started {old.started})",
+            file=sys.stderr,
+            flush=True,
+        )
+    created = control.create_time(os.getpid())
+    if created is not None:
+        record = InstanceRecord(guard.pid, created, guard.started_at, guard.version)
+        atexit.register(unregister, register(directory, record))

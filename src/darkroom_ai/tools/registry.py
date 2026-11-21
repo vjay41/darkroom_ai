@@ -195,6 +195,21 @@ class ToolRegistry:
             )
             journal.record(name, raw_args, status="error", error=error.to_dict())
             raise error
+        guard = self._context.connector
+        if (
+            guard is not None
+            and tool.writes
+            and guard.stale
+            and self._context.settings.runtime.refuse_writes_when_stale
+        ):
+            error = DarkroomError(
+                ErrorCode.CONNECTOR_STALE,
+                f"'{name}' changes things, but this connector is running older code than the "
+                f"files on disk (started {guard.started_at}). Nothing was changed.",
+                details={"running_code": guard.version, "code_on_disk": guard.on_disk()},
+            )
+            journal.record(name, raw_args, status="error", error=error.to_dict())
+            raise error
         try:
             args = tool.input_model.model_validate(raw_args)
         except ValidationError as exc:
@@ -217,4 +232,8 @@ class ToolRegistry:
             raise
         entry = journal.record(name, raw_args, applied=outcome.applied, undo=outcome.undo)
         result = outcome.result.model_copy(update={"journal_id": entry.id})
-        return result.model_dump(mode="json")
+        data = result.model_dump(mode="json")
+        warning = guard.warning() if guard is not None else None
+        if warning:
+            data["connector_warning"] = warning
+        return data

@@ -1641,3 +1641,18 @@ Built (Python only; the Lua plug-in is unchanged, so only the connector needs a 
 - list_develop_parameters now lists readable text settings (LensProfileName, LensProfileSetup, LensProfileFilename, LensProfileIsEmbedded,
   ProfileName); get_develop_parameters reads any setting name (unknown names come back null).
 - 335 tests pass on Linux (+1 known Windows-path failure), ruff and mypy strict clean.
+
+## 2026-11-21 19:20 - stale connector guard (lesson from the failed mask retest)
+What happened: the retest at 19:04 ran against two connector processes started at 18:35, so Hermes saw the OLD create_mask (no geometry fields, old
+error text). Restarting from Hermes at 19:02 had not replaced them (why Hermes left them alive is not proven). Fixed by stopping the two PIDs by hand.
+Built (Python only; src/darkroom_ai/runtime.py):
+- The connector hashes its own source at start and re-hashes (at most every 5 s). `get_app_status` has a `connector` block (state current/stale,
+  process id, started_at, running_code, code_on_disk). When stale every result carries `connector_warning`, and WRITE tools are refused with
+  CONNECTOR_STALE (reads still work). `[runtime] refuse_writes_when_stale = false` in darkroom.toml makes it warn only.
+- Each connector registers (pid + process creation time + code hash) in logs/connectors/. A newly started connector stops registered ones that
+  run DIFFERENT code; same-code ones are left alone (Hermes may start several); a record only counts when pid AND creation time match.
+  Windows process control through kernel32 via ctypes (no new dependency, no PowerShell). Not run on Windows yet: first live use is the test.
+- `darkroom connectors [--stop-stale]` and a `darkroom doctor` line list them. A connector started BEFORE this feature is not registered.
+- Consequence to remember: editing any .py under src/darkroom_ai while a connector runs makes it stale; restart it before the next live test.
+- Working rule for me: every live-test prompt starts with get_app_status and reports connector.running_code; I check it before reading results.
+- 344 tests pass on Linux (+1 known Windows-path failure), ruff and mypy strict clean.

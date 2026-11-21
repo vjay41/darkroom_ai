@@ -177,6 +177,13 @@ class GpuSettings(_Section):
     min_free_mb: int = Field(default=3000, ge=0, le=100000)
 
 
+class RuntimeSettings(_Section):
+    """How the MCP connector behaves when it is running older code than the files on disk."""
+
+    # True: write tools are refused until the connector is restarted (reads keep working).
+    refuse_writes_when_stale: bool = True
+
+
 class PathSettings(_Section):
     logs_dir: Path = Path("logs")
     outputs_dir: Path = Path("outputs")
@@ -207,6 +214,7 @@ class Settings(_Section):
     gpu: GpuSettings = GpuSettings()
     faces: FaceSettings = FaceSettings()
     paths: PathSettings = PathSettings()
+    runtime: RuntimeSettings = RuntimeSettings()
 
 
 def _read_toml(path: Path) -> dict[str, Any]:

@@ -18,6 +18,7 @@ from darkroom_ai.imaging.faces import FaceDetector
 from darkroom_ai.imaging.io import load_image
 from darkroom_ai.imaging.masks import MaskProvider
 from darkroom_ai.interfaces import ActionJournal, LightroomAdapter, PhotoshopAdapter, ProcessControl
+from darkroom_ai.runtime import CodeGuard
 from darkroom_ai.safety.confirm import Confirmer, DenyAll, require_confirmation
 from darkroom_ai.safety.guardrails import ClampedChange, Limit, clamp_change
 from darkroom_ai.tools.develop_keys import MIN_PROCESS_VERSION
@@ -35,6 +36,8 @@ class ToolContext:
     masks: MaskProvider | None = None
     faces: FaceDetector | None = None
     processes: ProcessControl | None = None
+    # Set by the MCP server only: tells whether this process runs older code than the files on disk.
+    connector: CodeGuard | None = None
     # master photo id -> id of the virtual copy the tools work on
     working_copies: dict[str, str] = field(default_factory=dict)
     # photo id -> the last measurement taken of it (valid until the next write to that photo)

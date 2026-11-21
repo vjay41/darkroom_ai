@@ -33,6 +33,7 @@ class ErrorCode(StrEnum):
     CONFIG_INVALID = "CONFIG_INVALID"
     NON_LOCAL_ENDPOINT = "NON_LOCAL_ENDPOINT"
     GUARDRAIL_REJECTED = "GUARDRAIL_REJECTED"
+    CONNECTOR_STALE = "CONNECTOR_STALE"
     CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
     MASK_MODEL_MISSING = "MASK_MODEL_MISSING"
     MASK_FAILED = "MASK_FAILED"
@@ -72,6 +73,12 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "The detected Adobe app version has not been tested with darkroom_ai.",
         "Compare the detected version with the tested versions in the README and use a tested "
         "version.",
+    ),
+    ErrorCode.CONNECTOR_STALE: (
+        "The darkroom_ai connector is running older code than the files on disk, so it refuses "
+        "to change anything.",
+        "Restart the connector: toggle darkroom_ai off and on in Hermes' Capabilities (or quit "
+        "and reopen Hermes), or run `darkroom connectors --stop-stale`. Reads still work.",
     ),
     ErrorCode.LR_WRONG_CATALOG: (
         "Lightroom has a different catalog open than the one darkroom_ai is configured for.",
