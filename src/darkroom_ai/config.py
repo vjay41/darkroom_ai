@@ -91,6 +91,8 @@ class PhotoshopSettings(_Section):
     # If Photoshop is on screen but does not answer for this long (start, sign-in or another
     # blocking screen), connecting fails early with a clear error.
     ready_grace_s: float = Field(default=30.0, gt=0.0, le=600.0)
+    # Select Subject on the device can take a while on a large image.
+    select_subject_timeout_s: float = Field(default=180.0, gt=0.0, le=1800.0)
 
 
 class GuardrailSettings(_Section):

@@ -5,14 +5,17 @@ import time
 from pathlib import Path
 from typing import Any
 
+import cv2
+import numpy as np
 import pytest
 
 from darkroom_ai.adapters.photoshop import jsx_dir
 from darkroom_ai.adapters.photoshop.client import PhotoshopClient, unique_path
+from darkroom_ai.adapters.photoshop.masks import PhotoshopSelectSubjectProvider
 from darkroom_ai.adapters.photoshop.windows import StartWatchdog, WindowInfo
 from darkroom_ai.adapters.photoshop.worker import ChildProcessRunner
 from darkroom_ai.errors import DarkroomError, ErrorCode
-from darkroom_ai.interfaces import PhotoshopAdapter
+from darkroom_ai.interfaces import MaskProvider, PhotoshopAdapter
 
 
 class FakeRunner:
@@ -25,6 +28,8 @@ class FakeRunner:
         self.open: dict[str, int] = {}
         self.layer_lists: dict[str, list[dict[str, Any]]] = {}
         self.masks: list[str] = []
+        self.select_subject_mode = "imageProcessingModeDevice"
+        self.select_subject_runs = 0
         self.fills: list[tuple[int, ...]] = []
 
     def __call__(
@@ -47,6 +52,20 @@ class FakeRunner:
             return {"name": Path(kwargs["path"]).name}
         if name == "run_script":
             path = kwargs.get("path", "")
+            if "autoCutout" in kwargs["code"]:
+                if self.select_subject_mode != "imageProcessingModeDevice":
+                    raise DarkroomError(
+                        ErrorCode.PS_COMMAND_FAILED,
+                        "Photoshop could not run 'run_script': SELECT_SUBJECT_NOT_DEVICE: mode is "
+                        + self.select_subject_mode,
+                    )
+                self.select_subject_runs += 1
+                mask = np.zeros((40, 60), dtype=np.uint8)
+                mask[10:30, 20:40] = 255
+                assert cv2.imwrite(kwargs["args"][0], mask)
+                return {"result": self.select_subject_mode}
+            if "imageProcessingSelectSubjectPrefs" in kwargs["code"]:
+                return {"result": self.select_subject_mode}
             if "hasUserMask" in kwargs["code"]:
                 return {"result": json.dumps(self.layer_lists[path])}
             if "RvlS" in kwargs["code"]:
@@ -232,6 +251,62 @@ def test_mask_outside_the_work_folder_and_bad_values_are_refused(
             action()
         assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
     assert runner.calls == []
+
+
+def test_select_subject_provider_writes_a_mask_and_closes_without_saving(
+    client: PhotoshopClient, runner: FakeRunner, source: Path, tmp_path: Path
+) -> None:
+    provider: MaskProvider = PhotoshopSelectSubjectProvider(client)
+    out = tmp_path / "masks" / "subject.png"
+    result = provider.subject_mask(source, out)
+
+    assert result.provider == "photoshop-select-subject"
+    assert result.path == out and out.is_file()
+    assert (result.metrics.width, result.metrics.height) == (60, 40)
+    assert result.metrics.region_count == 1
+    assert runner.select_subject_runs == 1
+    assert runner.open == {}  # the working copy was closed
+    names = [name for name, _, _ in runner.calls]
+    assert names.index("open_document") < names.index("close_document")
+    assert "save_psd" not in names and "save_jpg" not in names
+    assert source.read_bytes() == b"original-bytes"
+
+    with pytest.raises(DarkroomError) as caught:
+        provider.subject_mask(source, out)
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+
+
+@pytest.mark.parametrize("mode", ["imageProcessingModeCloud", "somethingNew", ""])
+def test_select_subject_is_refused_unless_the_mode_is_device(
+    client: PhotoshopClient, runner: FakeRunner, source: Path, tmp_path: Path, mode: str
+) -> None:
+    runner.select_subject_mode = mode
+    with pytest.raises(DarkroomError) as caught:
+        PhotoshopSelectSubjectProvider(client).subject_mask(source, tmp_path / "m.png")
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert "Device" in caught.value.next_step
+    assert runner.select_subject_runs == 0
+    assert "open_document" not in [name for name, _, _ in runner.calls]  # nothing was opened
+
+
+def test_select_subject_script_checks_the_mode_itself(
+    client: PhotoshopClient, runner: FakeRunner, source: Path
+) -> None:
+    copy = client.prepare_copy(source)
+    client.open_document(copy)
+    runner.select_subject_mode = "imageProcessingModeCloud"  # changed after the first check
+    with pytest.raises(DarkroomError) as caught:
+        client.select_subject_mask(copy, copy.with_name("m.png"))
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert runner.select_subject_runs == 0
+
+
+def test_select_subject_script_guards_come_before_the_call() -> None:
+    code = (jsx_dir() / "select_subject_mask.jsx").read_text(encoding="utf-8")
+    assert code.index("SELECT_SUBJECT_NOT_DEVICE") < code.index('stringIDToTypeID("autoCutout")')
+    assert code.index("MASK_FILE_EXISTS") < code.index('stringIDToTypeID("autoCutout")')
+    assert '"imageProcessingModeDevice"' in code
+    assert "DialogModes.NO" in code
 
 
 def test_second_copy_and_second_psd_get_new_names(client: PhotoshopClient, source: Path) -> None:

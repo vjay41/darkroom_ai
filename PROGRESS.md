@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21 07:45: hand-off spike PASSED end to end; waiting for the user
+## CURRENT STATE — 2026-11-21 08:25: Select Subject mask backend PASSED; waiting for the user
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -14,7 +14,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 1 lightroom-cli review | Done (not adopted; own plug-in) |
 | 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
-| 4 Imaging toolkit | Hand-off spike DONE. Toolkit BUILT and unit-tested: analysis, face interface, mask interface with synthetic + ONNX backends, mask metrics. NOT built yet: the Photoshop Select Subject backend (needs Photoshop contact). NOT run: ONNX inference on GPU 1 (no model file yet). |
+| 4 Imaging toolkit | Hand-off spike DONE. Toolkit built and unit-tested. Photoshop Select Subject mask backend (Device mode only) BUILT and run once on a test copy: PASSED. NOT run: ONNX backend (no model file, `make install-ml` not run) and the YuNet face detector (no model file). |
 | 5-8 | Not started |
 
 ### Catalog facts (corrects earlier counts in this file)
@@ -80,14 +80,35 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 - Unverified: the YuNet wrapper and real ONNX inference (no model files yet); CUDA 13 loading and GPU placement on the 3090
   (`make install-ml` has not been run - large download, ask first).
 
-### Next step (stopped here; needs the user's go)
-Photoshop Select Subject backend, on a copy of `TEST_2457-37.jpg` inside `outputs\photoshop`:
-1. Read-only first: find how Photoshop 27.8 exposes the Select Subject mode (Device vs Cloud) to scripts, and which key forces
-   device mode. If on-device cannot be proven, report the backend as blocked. Cloud mode must never be used.
-2. Open the copy, run Select Subject (device), write the selection as a mask PNG, close without saving.
-3. Report mask metrics (coverage %, region count, edge raggedness). The user allowed viewing the MASK PNG only (grayscale
-   silhouette) - never the original photo, an overlay or a composite; the user compares those.
-Then: ONNX backend run once the user provides a model path (and approves `make install-ml`).
+### Select Subject spike (2026-11-21 08:20, on a COPY of `TEST_2457-37.jpg`) — PASSED
+- How the mode is exposed (read-only inspection of the application descriptor, 600 keys walked):
+  `imageProcessingPrefs / imageProcessingSelectSubjectPrefs`, an enumeration; current value `imageProcessingModeDevice`.
+  This is Preferences > Image Processing > "Select Subject and Remove Background".
+- Guard: the provider reads that value and refuses unless it is exactly `imageProcessingModeDevice` (nothing is opened); the
+  JSX re-reads it immediately before the `autoCutout` call and throws otherwise. Any other value, including unknown ones, is
+  refused (`GUARDRAIL_REJECTED`). No per-call "cloud" key is sent.
+- Evidence that the run was on-device: mode Device before and after; Photoshop had 0 established non-local TCP connections
+  before and after; system-wide bytes sent during the 11 s run were 152 KB against an idle baseline of 137 KB per 10 s (the
+  photo alone is 2.6 MB as a JPG). This is strong supporting evidence, not a packet capture.
+- Run: copy -> `outputs\photoshop\TEST_2457-37_copy.jpg`, opened, Select Subject (`autoCutout`, `sampleAllLayers = false`),
+  selection stored in a channel and painted white on a black layer, PNG saved as a copy, document closed WITHOUT saving.
+  8.1 s end to end. Final mask: `outputs\masks\TEST_2457-37_subject.png` (single-channel PNG, never overwrites).
+- Mask metrics: 5568 x 3712 (same as the photo); coverage 69.937 %; 1 region plus 4 specks; largest region 69.937 %;
+  soft-edge pixels 0.383 %; edge raggedness: compactness 3.978, hull-perimeter ratio 1.701, solidity 0.848.
+- Mask PNG viewed (mask only, downscaled; the user allowed this and nothing else): one connected silhouette of a group of six
+  standing people with clean outlines; a small notch between two figures in the lower left-centre; a slightly soft patch at
+  the right-most head. The original photo, overlays and composites were NOT viewed; the user compares those.
+- Original `TEST_2457-37.jpg` byte-identical afterwards (SHA-256 `F8BFDC77...46F8`); document count in Photoshop unchanged.
+- Note: the intermediate PNG that Photoshop writes (`..._copy_select_subject.png`) is 62 MB (RGB, barely compressed); the
+  final mask is re-saved as a small single-channel PNG. The intermediate file is left in `outputs\photoshop`.
+- 4 specks: tiny disconnected regions in the mask; a clean-up step (drop regions under a size threshold) is not implemented.
+
+### Next step (needs the user's go)
+- Phase 4 gate report, then Phase 5 (tool layer + guardrails). The live wrong-catalog test required before Phase 5 is done.
+- Still open in Phase 4: ONNX mask backend run on GPU 1 (needs the user's model path and approval for `make install-ml`, a
+  large download) and the YuNet face detector (needs the user's model file). Both are unit-tested with fakes only.
+- Not verified: Select Subject with the mode set to Cloud (the refusal is covered by unit tests against the fake only; it
+  would need the user to switch the preference).
 
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 

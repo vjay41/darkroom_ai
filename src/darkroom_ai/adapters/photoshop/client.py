@@ -52,6 +52,7 @@ class PhotoshopClient:
         timeout_s: float = 30.0,
         start_timeout_s: float = 120.0,
         ready_grace_s: float = 30.0,
+        select_subject_timeout_s: float = 180.0,
         list_windows: Callable[[], list[WindowInfo]] = photoshop_windows,
         runner: OperationRunner,
         tested_versions: tuple[str, ...] = TESTED_VERSIONS,
@@ -60,6 +61,7 @@ class PhotoshopClient:
         self._timeout_s = timeout_s
         self._start_timeout_s = start_timeout_s
         self._ready_grace_s = ready_grace_s
+        self._select_subject_timeout_s = select_subject_timeout_s
         self._list_windows = list_windows
         self._run = runner
         self._tested_versions = tested_versions
@@ -71,6 +73,7 @@ class PhotoshopClient:
             timeout_s=settings.photoshop.timeout_s,
             start_timeout_s=settings.photoshop.start_timeout_s,
             ready_grace_s=settings.photoshop.ready_grace_s,
+            select_subject_timeout_s=settings.photoshop.select_subject_timeout_s,
             runner=ChildProcessRunner(
                 settings.photoshop.prog_id, auto_start=settings.photoshop.auto_start
             ),
@@ -240,3 +243,42 @@ class PhotoshopClient:
         target = unique_path(self._inside_work_dir(wanted))
         self._call("save_jpg", path=str(resolved), out_path=str(target), quality=quality)
         return target
+
+    def select_subject_mode(self) -> str:
+        """Photoshop's Select Subject mode, e.g. "imageProcessingModeDevice" (read-only)."""
+        return self.run_script(read_jsx("select_subject_mode.jsx")).strip()
+
+    def select_subject_mask(self, path: Path, out_png: Path) -> str:
+        """Run Select Subject on the open working copy and write the selection as a mask PNG.
+
+        The script refuses to run unless the processing mode is Device. The document is changed
+        and must be closed without saving. Returns the mode that was in force.
+        """
+        target = self._inside_work_dir(out_png)
+        if target.exists():
+            raise DarkroomError(
+                ErrorCode.GUARDRAIL_REJECTED, f"Refusing to overwrite an existing file: {target}"
+            )
+        try:
+            return self.run_script(
+                read_jsx("select_subject_mask.jsx"),
+                document=path,
+                args=[str(target)],
+                timeout_s=self._select_subject_timeout_s,
+            ).strip()
+        except DarkroomError as exc:
+            if "SELECT_SUBJECT_NOT_DEVICE" in exc.message:
+                raise DarkroomError(
+                    ErrorCode.GUARDRAIL_REJECTED,
+                    "Photoshop's Select Subject mode is not Device. Refused: no uploads allowed.",
+                    next_step="Set Preferences > Image Processing > 'Select Subject and Remove "
+                    "Background' to Device in Photoshop, then retry.",
+                    details=exc.details,
+                ) from exc
+            if "SELECT_SUBJECT_EMPTY" in exc.message:
+                raise DarkroomError(
+                    ErrorCode.MASK_FAILED,
+                    "Photoshop's Select Subject found no subject in this picture.",
+                    details=exc.details,
+                ) from exc
+            raise
