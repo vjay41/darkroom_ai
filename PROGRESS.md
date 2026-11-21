@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21 09:10: Phase 5 built; live run waits for the user's go
+## CURRENT STATE — 2026-11-21 09:25: Phase 5 live run PASSED; waiting at the Phase 5 GATE
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -15,7 +15,7 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 2 Lightroom spike | Done; snapshot apply does not work, undo = settings journal |
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
-| 5 Tool layer + guardrails | BUILT and unit-tested with fakes (268 tests). NOT yet run against Lightroom/Photoshop: the live run (one call per tool on a TEST_ virtual copy) waits for the user's go and one plug-in reload. |
+| 5 Tool layer + guardrails | Built; live run PASSED on 2026-11-21 (8 tools, on a virtual copy of `TEST_2459-39.jpg`). `apply_preset` is built but NOT exposed to the tools/LLM until it is tested live. Waiting at the GATE. |
 | 6-8 | Not started |
 
 ### Catalog facts (corrects earlier counts in this file)
@@ -142,9 +142,41 @@ total cap against the original and separate JPG / RAW white-balance scales; clam
   plus the provider's working copy are deleted after the final mask is saved.
 - `tools/factory.py` wires the real adapters; `scripts/tools_live.py` is the live run (not executed yet).
 
-### Next step (needs the user's go)
-Live run of `scripts/tools_live.py` on a virtual copy of ONE `TEST_` photo: the exact actions were shown to the user. Needs
-one "Reload Plug-in" first (build 0.3.0 for the preset commands). Then the Phase 5 gate report. Do not push `dev`.
+### Phase 5 live run (2026-11-21 08:49, virtual copy of `TEST_2459-39.jpg`) - ALL CHECKS PASSED
+- Selftest first: plug-in build 0.3.0; Photoshop Select Subject mode Device.
+- Tools exposed: `get_photo_info`, `analyze_photo`, `adjust_lighting`, `adjust_white_balance`, `adjust_hsl`, `crop`,
+  `replace_background`, `undo` (8). `apply_preset` is NOT exposed (user decision) and was not called.
+- Results:
+  - `analyze_photo`: mean luma 0.5344; highlights clipped 1.245 % (red channel 1.239 %), shadows 0.566 %; no noticeable cast.
+  - `adjust_lighting` +0.4 EV / shadows +20: created ONE virtual copy; mean luma 0.5344 -> 0.6045.
+  - Clamp: requested +2.5 EV, applied +1.5 (`per_pass`); before 0.4, after 1.9, original 0.0. This was the only clamp.
+  - `adjust_white_balance` +15 -> `IncrementalTemperature` 0 -> 15 (JPG relative slider). `adjust_hsl` orange saturation -10.
+  - `crop` 5 % off each side: `CropLeft/Top` 0.05, `CropRight/Bottom` 0.95 read back - the crop setting names are now
+    VERIFIED in Lightroom. A crop keeping 4 % of the frame was refused.
+  - `replace_background` (colour 30/60/120): 14.7 s; mask by `photoshop-select-subject`, 1 region, 0 specks, coverage 53.1 %;
+    new PSD (152.5 MB) and JPG (3.3 MB) in `outputs\photoshop`; top-left corner of the JPG measures exactly 30/60/120.
+    A background path outside the folder (`..\outside.jpg`) was refused.
+  - `undo` (all): 5 steps undone; the copy is back at its starting values; the master's settings never changed; original
+    JPG byte-identical (SHA-256 `5BD88948...6CF2`, same modified time, no `.xmp` sidecar).
+- Differences from the plan / things to know:
+  - `replace_background` exports the working copy WITH its current edits. At that point the copy had the 5 % crop, +1.9 EV
+    and the other edits, so the TIFF, mask and outputs are 5011 x 3341 (not 5568 x 3712) and carry those edits.
+  - The 16-bit TIFF from Lightroom (95.8 MB) stays in `outputs\photoshop` as the Photoshop working copy, and a second copy
+    stays in `outputs\handoff`; only the mask intermediate is deleted. Disk use per run is roughly 350 MB.
+  - Not tested live: the picture-background path (`add_image_layer_below`; the user gave no file name), RAW white balance,
+    `allow_beyond_total` with a real confirmation, `apply_preset`.
+- Left behind: virtual copy `darkroom_ai 20261121-0849..` of `TEST_2459-39.jpg` (settings back at the start values), 13
+  journal lines in `logs\journal.jsonl` (git-ignored), previews and outputs (git-ignored).
+
+### Backlog (user requests)
+- Presets, AFTER this live run: (1) a read-only `list_presets` tool (preset folders and names); (2) a live test of
+  `apply_preset` with a name from that list, checking that undo restores EVERY setting the preset changed; (3) design question
+  to raise then: presets can exceed the per-pass limits - propose how they interact with guardrails and confirmation.
+  `apply_preset` stays disabled for the LLM until then.
+- Deferred until the user says so: ONNX mask backend, YuNet face detector (`make install-ml` not run; nothing downloaded).
+
+### Next step
+Phase 5 gate: wait for the user's "proceed". Then Phase 6 (LLM layer + agent); the user loads the model in LM Studio first.
 
 ## Phase 0 — Scaffold (2026-11-20) — DONE, waiting at GATE
 
