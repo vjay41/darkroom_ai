@@ -16,6 +16,7 @@ import numpy as np
 from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     ExportedTiff,
+    MaskCreation,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
@@ -155,6 +156,18 @@ class SimulatedLightroom:
         window = ids[offset : offset + limit]
         photos = tuple(self.get_metadata(pid) for pid in window)
         return CatalogPage(total=len(ids), offset=offset, returned=len(photos), photos=photos)
+
+    def create_mask(
+        self, photo_id: str, mask_type: str, subtype: str | None = None
+    ) -> MaskCreation:
+        self.calls.append("create_mask")
+        self._copy_only(photo_id)
+        masks = list(self.settings[photo_id].get("MaskGroupBasedCorrections") or [])
+        masks.append(
+            {"CorrectionName": f"{mask_type} {subtype or ''}".strip(), "CorrectionMasks": []}
+        )
+        self.settings[photo_id]["MaskGroupBasedCorrections"] = masks
+        return MaskCreation(created=True, masks_before=len(masks) - 1, masks_after=len(masks))
 
     def find_photo(self, path: str) -> PhotoInfo | None:
         for photo in self.photos.values():

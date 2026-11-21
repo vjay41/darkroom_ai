@@ -115,6 +115,8 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "list_develop_parameters",
         "get_develop_parameters",
         "set_develop_parameters",
+        "list_masks",
+        "create_mask",
         "adjust_hsl",
         "crop",
         "replace_background",
@@ -968,3 +970,21 @@ def test_generic_develop_parameters_are_bounded_and_refuse_unlisted_names(rig: R
         rig.call("set_develop_parameters", photo_id=MASTER, changes={"Exposure2012": 1})
     assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
     assert "adjust_lighting" in caught.value.next_step
+
+
+def test_create_mask_checks_the_result_and_is_undoable(rig: Rig) -> None:
+    assert rig.call("list_masks", photo_id=MASTER)["count"] == 0
+    got = rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="subject")
+    assert got["creation"]["created"] is True and len(got["masks"]) == 1
+    assert rig.call("list_masks", photo_id=got["photo_id"])["count"] == 1
+    undone = rig.call("undo", photo_id=got["photo_id"])
+    assert undone["undone_steps"] == 1
+    assert rig.call("list_masks", photo_id=got["photo_id"])["count"] == 0
+
+
+def test_create_mask_rejects_a_wrong_subtype(rig: Rig) -> None:
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="sunset")
+    assert caught.value.code is ErrorCode.LLM_BAD_TOOL_CALL
+    with pytest.raises(DarkroomError):
+        rig.call("create_mask", photo_id=MASTER, mask_type="gradient", subtype="sky")

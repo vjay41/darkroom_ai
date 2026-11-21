@@ -20,6 +20,7 @@ WRITE_COMMANDS = {
     "export_preview",
     "export_tiff",
     "apply_preset",
+    "create_mask",
 }
 
 
@@ -257,6 +258,10 @@ class FakeLightroomPlugin:
             "returned": len(window),
             "photos": [self._metadata(p) for p in window],
         }
+
+    def _cmd_create_mask(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._photo(params)
+        return {"created": True, "masks_before": 0, "masks_after": 1, "waited_s": 0.0}
 
     def _cmd_find_photo(self, params: dict[str, Any]) -> dict[str, Any]:
         wanted = str(params.get("path", "")).lower()

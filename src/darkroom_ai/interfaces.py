@@ -17,6 +17,7 @@ from typing import Any, Protocol
 from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     ExportedTiff,
+    MaskCreation,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
@@ -93,6 +94,10 @@ class LightroomAdapter(Protocol):
     def export_preview(self, photo_id: str, name: str, long_edge: int = ...) -> PreviewFile: ...
 
     def export_tiff(self, photo_id: str, name: str, color_space: str = ...) -> ExportedTiff: ...
+
+    def create_mask(
+        self, photo_id: str, mask_type: str, subtype: str | None = None
+    ) -> MaskCreation: ...
 
     def list_presets(self) -> tuple[PresetInfo, ...]: ...
 

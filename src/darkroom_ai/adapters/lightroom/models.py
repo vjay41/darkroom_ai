@@ -80,6 +80,15 @@ class CatalogPage(_Result):
     photos: tuple[PhotoMetadata, ...]
 
 
+class MaskCreation(_Result):
+    """Outcome of asking Lightroom to create a mask (checked by counting masks before and after)."""
+
+    created: bool
+    masks_before: int | None = None
+    masks_after: int | None = None
+    waited_s: float = 0.0
+
+
 class Selection(_Result):
     active: PhotoInfo | None = None
     photos: tuple[PhotoInfo, ...] = ()

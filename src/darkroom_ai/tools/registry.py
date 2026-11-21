@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.errors import DarkroomError, ErrorCode
-from darkroom_ai.tools import app_status, background, lightroom_tools
+from darkroom_ai.tools import app_status, background, lightroom_tools, masks
 from darkroom_ai.tools.context import Outcome, ToolContext
 
 
@@ -125,6 +125,8 @@ TOOLS: tuple[Tool, ...] = (
         lightroom_tools.set_develop_parameters,
         writes=True,
     ),
+    _tool("list_masks", masks.ListMasksInput, masks.list_masks, writes=False),
+    _tool("create_mask", masks.CreateMaskInput, masks.create_mask, writes=True),
     _tool("adjust_hsl", lightroom_tools.AdjustHslInput, lightroom_tools.adjust_hsl, writes=True),
     _tool("crop", lightroom_tools.CropInput, lightroom_tools.crop, writes=True),
     _tool(

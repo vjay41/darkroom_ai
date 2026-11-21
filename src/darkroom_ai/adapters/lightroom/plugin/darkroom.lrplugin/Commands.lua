@@ -19,6 +19,8 @@ Rules:
 ]]
 
 local LrApplication = import "LrApplication"
+local LrApplicationView = import "LrApplicationView"
+local LrDevelopController = import "LrDevelopController"
 local LrExportSession = import "LrExportSession"
 local LrFileUtils = import "LrFileUtils"
 local LrPathUtils = import "LrPathUtils"
@@ -27,9 +29,10 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.5.1"
+local PLUGIN_VERSION = "0.6.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
+local MASK_WAIT_S = 25
 
 local Commands = { read = {}, write = {} }
 
@@ -574,6 +577,72 @@ end
 
 -- Applies a develop preset (by uuid) to a VIRTUAL COPY and reports every setting it changed,
 -- with the values before and after, so the change can be checked against the limits and undone.
+-- Masks. LrDevelopController's mask functions only work while the Develop module shows the photo, so
+-- this selects the (virtual copy) photo, switches Lightroom to Develop and opens Masking. The
+-- person sees Lightroom change module while this runs. The result is checked, not assumed: the
+-- mask count before and after is compared (AI masks are created asynchronously and can fail).
+local MASK_TYPES = { aiSelection = true, rangeMask = true, gradient = true, radialGradient = true }
+local MASK_SUBTYPES = {
+	aiSelection = { subject = true, sky = true, background = true, objects = true, people = true, landscape = true },
+	rangeMask = { color = true, luminance = true, depth = true },
+}
+
+local function maskCount()
+	local ok, masks = LrTasks.pcall(function()
+		return LrDevelopController.getAllMasks()
+	end)
+	if ok and type(masks) == "table" then
+		return #masks
+	end
+	return nil
+end
+
+function Commands.write.create_mask(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local maskType, subtype = params.mask_type, params.subtype
+	if not MASK_TYPES[maskType] then
+		fail("INVALID_PARAMS", "mask_type must be aiSelection, rangeMask, gradient or radialGradient")
+	end
+	local allowed = MASK_SUBTYPES[maskType]
+	if allowed and not allowed[subtype] then
+		fail("INVALID_PARAMS", "subtype is not valid for mask_type " .. maskType)
+	end
+	if not allowed then
+		subtype = nil
+	end
+
+	ctx.catalog:setSelectedPhotos(photo, {})
+	LrApplicationView.switchToModule("develop")
+	LrTasks.sleep(1.0)
+	local target = ctx.catalog:getTargetPhoto()
+	if not target or target:getRawMetadata("uuid") ~= photo:getRawMetadata("uuid") then
+		fail("MASK_PHOTO_NOT_SHOWN", "Lightroom's Develop module is not showing the requested photo")
+	end
+	LrDevelopController.goToMasking()
+	LrTasks.sleep(0.5)
+
+	local before = maskCount()
+	local ok, err = LrTasks.pcall(function()
+		LrDevelopController.createNewMask(maskType, subtype)
+	end)
+	if not ok then
+		fail("MASK_CREATE_FAILED", "Lightroom refused to create the mask: " .. tostring(err))
+	end
+	local after = maskCount()
+	local waited = 0
+	while waited < MASK_WAIT_S and not (before and after and after > before) do
+		LrTasks.sleep(0.5)
+		waited = waited + 0.5
+		after = maskCount()
+	end
+	return {
+		created = (before ~= nil and after ~= nil and after > before) or false,
+		masks_before = before,
+		masks_after = after,
+		waited_s = waited,
+	}
+end
+
 function Commands.write.apply_preset(params, ctx)
 	local photo = findWritablePhoto(ctx, params.photo_id, true)
 	if type(params.preset_uuid) ~= "string" or params.preset_uuid == "" then

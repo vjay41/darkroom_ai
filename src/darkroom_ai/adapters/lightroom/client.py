@@ -21,6 +21,7 @@ from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     CommandList,
     ExportedTiff,
+    MaskCreation,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
@@ -412,6 +413,16 @@ class LightroomClient:
             timeout_s=self._export_timeout_s,
         )
         return self._typed(PreviewFile, "export_preview", data)
+
+    def create_mask(
+        self, photo_id: str, mask_type: str, subtype: str | None = None
+    ) -> MaskCreation:
+        """Create a mask on a virtual copy (Lightroom switches to the Develop module for this)."""
+        params: dict[str, Any] = {"photo_id": photo_id, "mask_type": mask_type}
+        if subtype is not None:
+            params["subtype"] = subtype
+        data = self.call("create_mask", params, timeout_s=self._export_timeout_s)
+        return self._typed(MaskCreation, "create_mask", data)
 
     def export_tiff(self, photo_id: str, name: str, color_space: str = "sRGB") -> ExportedTiff:
         """Export a full-size 16-bit TIFF of a virtual copy into the hand-off folder."""
