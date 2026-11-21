@@ -939,3 +939,9 @@ def test_the_model_sees_the_read_back_as_data(tmp_path: Path) -> None:
         )
     )
     assert loud["readback"] == note
+
+
+def test_rules_say_unknown_is_not_neutral() -> None:
+    from darkroom_ai.agent.loop import SYSTEM_RULES
+
+    assert "not measurable" in SYSTEM_RULES and "UNKNOWN" in SYSTEM_RULES

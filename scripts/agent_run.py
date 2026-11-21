@@ -27,7 +27,7 @@ from darkroom_ai.agent.loop import PLAYBOOKS, Agent
 from darkroom_ai.config import Settings, load_config
 from darkroom_ai.errors import DarkroomError
 from darkroom_ai.llm.client import LocalLlmClient
-from darkroom_ai.tools.context import ToolContext
+from darkroom_ai.tools.context import ToolContext, working_copy
 from darkroom_ai.tools.factory import build_tool_context
 from darkroom_ai.tools.lightroom_tools import applied_differences, pending_edits
 from darkroom_ai.tools.registry import ToolRegistry
@@ -105,7 +105,11 @@ def undo_and_check(context: ToolContext, state: Mapping[str, Any]) -> None:
         print(f"UNDO ERROR [{exc.code.value}] {exc.message}", file=sys.stderr)
         failures.append("undo")
     start, master_start = state["start"], state["master_start"]
-    left = differences(start, dict(lightroom.get_develop_settings(copy_id)))
+    now = dict(lightroom.get_develop_settings(copy_id))
+    added = sorted(set(now) - set(start))  # Lightroom adds some keys after a copy's first edit
+    if added:
+        print(f"  keys added by Lightroom itself (not written by darkroom_ai): {added}")
+    left = differences(start, {key: now[key] for key in now if key in start})
     check(f"all {len(start)} settings of the copy equal the recorded start state", not left)
     if left:
         print("   differences:", left)
@@ -144,7 +148,9 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
     info = ToolRegistry(context).call("get_photo_info", {"photo_id": photo.id})
     copy_id = info["working_copy_id"]
     if not copy_id:
-        raise SystemExit("No existing virtual copy for this photo; stopping (plan assumed one).")
+        copy, _ = working_copy(context, photo.id)  # journaled; the copy stays in the catalog
+        copy_id = copy.id
+        print(f"new virtual copy created for this run: {copy_id}")
     left_over = pending_edits(context, copy_id, session=None)
     if left_over:
         raise SystemExit(

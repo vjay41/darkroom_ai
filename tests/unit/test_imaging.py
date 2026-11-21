@@ -85,7 +85,7 @@ def test_saturated_image_gives_low_confidence_cast() -> None:
     pixels[..., 0] = 0.9  # pure red: no near-neutral pixels
     cast = analyze(pixels).color_cast
     assert cast.confidence == "low"
-    assert cast.strength == 0
+    assert cast.strength is None
     assert "not enough" in cast.description
 
 
@@ -347,3 +347,22 @@ def test_unknown_mask_backend_is_rejected() -> None:
     with pytest.raises(DarkroomError) as caught:
         _settings(masks={"backend": "cloud"})
     assert caught.value.code is ErrorCode.CONFIG_INVALID
+
+
+def test_cast_that_cannot_be_judged_is_null_with_a_reason_never_zero() -> None:
+    # Strongly coloured picture: no near-neutral pixels at all.
+    pixels = np.zeros((40, 60, 3), dtype=np.float32)
+    pixels[..., 0] = 0.9
+    pixels[..., 2] = 0.1
+    cast = analyze(pixels).color_cast
+    assert cast.measurable is False
+    assert cast.blue_yellow is None and cast.green_magenta is None and cast.strength is None
+    assert cast.confidence == "low"
+    assert cast.description.startswith("not measurable")
+    assert "near-neutral" in cast.reason and "Unknown is not the same as neutral" in cast.reason
+    data = cast.model_dump(mode="json")
+    assert data["blue_yellow"] is None  # serialised as null, not 0.0
+
+    grey = np.full((40, 60, 3), 0.5, dtype=np.float32)
+    neutral = analyze(grey).color_cast
+    assert neutral.measurable is True and neutral.strength == 0 and neutral.reason == ""

@@ -49,12 +49,20 @@ class Clipping(_Result):
 
 
 class ColorCast(_Result):
-    blue_yellow: float
-    green_magenta: float
-    strength: float
+    """Colour cast measured on near-neutral mid-tone pixels.
+
+    When there are too few such pixels the cast is NOT MEASURABLE: the three numbers are None
+    (never 0.0, which would read as "neutral") and `reason` says why.
+    """
+
+    measurable: bool
+    blue_yellow: float | None
+    green_magenta: float | None
+    strength: float | None
     neutral_fraction: float
     confidence: str  # "ok" | "low" (too few near-neutral pixels to judge)
     description: str
+    reason: str = ""
 
 
 class ImageAnalysis(_Result):
@@ -102,7 +110,7 @@ def _clipping(pixels: Pixels) -> Clipping:
 
 def _describe_cast(blue_yellow: float, green_magenta: float, confidence: str) -> str:
     if confidence == "low":
-        return "not enough near-neutral areas to judge a colour cast"
+        return "not measurable: not enough near-neutral areas to judge a colour cast"
     parts = []
     if abs(blue_yellow) >= CAST_NOTICEABLE:
         parts.append("yellow/warm" if blue_yellow > 0 else "blue/cool")
@@ -121,17 +129,23 @@ def _color_cast(pixels: Pixels, y: np.ndarray) -> ColorCast:
     fraction = float(neutral.mean())
     if fraction < MIN_NEUTRAL_FRACTION:
         return ColorCast(
-            blue_yellow=0.0,
-            green_magenta=0.0,
-            strength=0.0,
+            measurable=False,
+            blue_yellow=None,
+            green_magenta=None,
+            strength=None,
             neutral_fraction=round(fraction, 4),
             confidence="low",
             description=_describe_cast(0.0, 0.0, "low"),
+            reason=(
+                f"only {fraction * 100:.2f} % of the picture is near-neutral mid-tone; at least "
+                f"{MIN_NEUTRAL_FRACTION * 100:g} % is needed. Unknown is not the same as neutral."
+            ),
         )
     red, green, blue = (float(pixels[..., i][neutral].mean()) for i in range(3))
     blue_yellow = (red + green) / 2.0 - blue
     green_magenta = (red + blue) / 2.0 - green
     return ColorCast(
+        measurable=True,
         blue_yellow=round(blue_yellow, 4),
         green_magenta=round(green_magenta, 4),
         strength=round(float(np.hypot(blue_yellow, green_magenta)), 4),
