@@ -1777,3 +1777,9 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Open: the existing profile skill `darkroom-ai-lightroom` (v1.2.0) and its `references/editing-principles.md`
   contain slider-number ranges, which conflicts with the "no recipes" principle. Proposal: keep the tool docs
   and hard rules, move the numbers out. Needs the user's decision.
+
+### P7 installed (2026-11-21)
+- The seven `lr-*` skills are installed in the Hermes profile (`skills/photo/`). Hermes' skill list shows all seven (checked in state.db).
+- `references/editing-principles.md` replaced with the version in `hermes/proposed/` (slider ranges and the case-study recipe removed; CRLF kept). The old copy is in `profiles/darkroom/_to_delete/editing-principles.md.bak-pre-p7-20261121`.
+- Verified: Hermes loads the skills list and reads the new principles file. NOT verified: that the skills improve a real edit (no edit was run). Next: one supervised edit on the test catalog.
+- Not done: `darkroom-operations` / `single-photo-edit` / `photo-diagnosis` may still hold number-style guidance; not reviewed yet.
