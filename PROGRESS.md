@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: anchors removed; agent runs 1-4, clamp run and dark-photo run done; run 5 (--pause, edit left in place) waits for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: run 5 done, its edit is LEFT IN PLACE on the copy 'darkroom_ai 20261121-134032' of TEST_2457-37.jpg until the user runs darkroom revert. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -649,8 +649,31 @@ copies only, including a strong "much brighter" request and a white-balance requ
     Findings: (1) a repeated identical call does happen (here after an unclamped success); the tool neither says
     "no change" nor refuses it. (2) After a pass the loop exports again although the tool has just measured the same
     state: one redundant export per pass.
-  * Runs 5 (`--pause`), 6, 7: waiting for the user's go, one at a time. The playbook-versus-none comparison is a
-    separate block afterwards.
+  * "NO CHANGE" BUILT (user decision: information, never a refusal; only when the resulting state equals the current
+    state, i.e. absolute settings such as crop; a repeated relative slider call is a new request): an identical crop
+    returns `no_change: true` with "No change: the photo already has these values. Nothing was written.", writes
+    nothing, exports nothing, journals no undo information and does not count as a pass. Unit tests for both cases.
+    The loop's own export after a pass stays (user decision: it supplies the next preview and is an independent check).
+    344 tests, `make quality` clean.
+  * RUN 5 DONE, EDIT LEFT IN PLACE at the user's request (`--pause`; landscape playbook; lighting + white balance;
+    request "Balance the lighting and make the white balance slightly cooler."; NEW virtual copy of `TEST_2457-37.jpg`
+    named 'darkroom_ai 20261121-134032', id `63C87087-...`):
+    Turn 1 (4.6 s, 595 tokens, 339 thinking), two calls in one pass: `adjust_lighting` highlights -25 (applied -25);
+    `adjust_white_balance` temperature -10 (applied -10; note "WhiteBalance set to Custom (was As Shot)."). Turn 2
+    (4.3 s, 562 tokens, 347 thinking): finished. One pass, 11.4 s, 2 previews; each edit call took 0.6 s with its export.
+    Tool-measured before -> after: highlights edit: clipped highlights 2.618 % -> 0.132 %, p50 0.528 -> 0.504;
+    white-balance edit: 0.132 % -> 0.372 %, p50 0.504 -> 0.512. Separate measurement after the pass: clipped highlights
+    0.372 %, p50 0.512 (equal to the tool's last "after"); cast blue_yellow +0.0062 -> -0.0357 ("no noticeable cast" ->
+    "cast towards blue/cool"), measurable both times.
+    The white-balance edit SURVIVED the agent's own export: the read-back after the last export found every applied
+    edit in place (Highlights2012 -25, IncrementalTemperature -10, WhiteBalance "Custom").
+    Master settings and file SHA-256 unchanged. State saved in `logs\agent_run_state.json`. Summary (831 characters) in
+    `logs\agent_run_20261121-134044.txt`, not read.
+    CURRENT STATE OF THAT COPY: Highlights -25, temperature -10, mode "Custom". NOT undone. The user reverts with
+    `darkroom revert --photo D:\darkroom_test\TEST_2457-37.jpg`; then the assistant compares every setting with the
+    saved start state (including the mode back to "As Shot").
+  * Runs 6, 7: waiting for the user's go, one at a time. The playbook-versus-none comparison is a separate block
+    afterwards.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
