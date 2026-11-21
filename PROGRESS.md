@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: design note signed off; edit tools report measured before/after; `--playbook none` built; prompts shown; runs 4-7 wait for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: anchors removed; agent runs 1-4, clamp run and dark-photo run done; run 5 (--pause, edit left in place) waits for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -626,7 +626,31 @@ copies only, including a strong "much brighter" request and a white-balance requ
     - Still present in BOTH modes and flagged as possible anchors: the example in the rules ("exposure 0.3 = +0.3 EV")
       and in the exposure field's description ("e.g. 0.4 or -0.3").
   * NOT yet run live: the measured before/after in edit tools, and `--playbook none`.
-  * Runs 4, 5 (`--pause`), 6, 7 with the final tools: waiting for the user's go, one at a time.
+  * ANCHORS REMOVED (user decision, both modes): the rules now say "Slider values are changes relative to the current
+    value: a positive value raises the slider, a negative value lowers it." and the exposure field says "Change in EV;
+    positive brightens, negative darkens." A unit test fails on "e.g.", "for example" or any number in a tool
+    description other than scale / range definitions (-100..100, 0-255, the crop's 0 and 1 edges), which are kept as
+    facts. The crop tool now also returns `measured` before / after. 341 tests, `make quality` clean.
+  * For the later comparison the user also wants counted: how often an applied value equals the per-call maximum, and
+    early stops.
+  * RUN 4 DONE (portrait playbook, crop only, `TEST_2462-42.jpg` copy; request "Crop to a 4:5 portrait format, keeping
+    the centre."): turn 1 (5.3 s, 684 tokens, 568 thinking): crop left 0.2333, right 0.7667, full height; kept fraction
+    0.5334 (above the 0.25 minimum); the new preview is 819 x 1024, i.e. 4:5, centred. Turn 2 (3.5 s): the model sent
+    the IDENTICAL crop call again (a repeat that changed nothing; it was accepted, journaled and counted as a second
+    pass). Turn 3 (2.6 s): finished. 2 passes, 14.4 s, 3 previews.
+    Check asked for by the user: the "after" numbers returned by the crop tool (clipped highlights 0.991 %, shadows
+    0.004 %, p05 0.0726, p50 0.4927, p95 0.8518) are IDENTICAL to the separate measurement taken after the pass; the
+    tool's "before" equals the first measurement (0.55 %, 0.005 %, 0.0785, 0.5849, 0.8782). No difference to explain.
+    (The numbers change with the crop because a different part of the picture is measured.)
+    Time added by the extra export: the crop call took 0.6 s including its one export ("before" was reused from the
+    first measurement); about 0.5 s per edit.
+    Read-back: the edit held. Undo: 2 steps; all 171 settings equal the start state; master and SHA-256 unchanged;
+    nothing pending. Summary (569 characters) in `logs\agent_run_20261121-133429.txt`, not read.
+    Findings: (1) a repeated identical call does happen (here after an unclamped success); the tool neither says
+    "no change" nor refuses it. (2) After a pass the loop exports again although the tool has just measured the same
+    state: one redundant export per pass.
+  * Runs 5 (`--pause`), 6, 7: waiting for the user's go, one at a time. The playbook-versus-none comparison is a
+    separate block afterwards.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
