@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-7 done; playbook-versus-none comparison plan shown, waiting for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-7 done; playbook-versus-none batch (22 runs, 6 new copies, 3 blind pairs left in place) RUNNING or just run; see the plan below. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -724,8 +724,35 @@ copies only, including a strong "much brighter" request and a white-balance requ
     master unchanged; SHA-256 unchanged; nothing pending. Summary (688 characters) in
     `logs\agent_run_20261121-140929.txt`, not read.
     With this the JPG white-balance path has been re-run with the fix through the agent (runs 5 and 7).
-  * ALL PLANNED AGENT RUNS DONE (1-7, the clamp run, the dark-photo run). The playbook-versus-none comparison plan was
-    shown to the user; waiting for the go.
+  * ALL PLANNED AGENT RUNS DONE (1-7, the clamp run, the dark-photo run).
+
+### Playbook-versus-none comparison: PLAN (user go 2026-11-21: one batch, one report at the end)
+Scope and stop rules from the user: virtual copies of TEST_ photos and RAW copies only; every run undone with an exact
+compare; masters checked (an empty FilterList is tolerated); nothing pushed. STOP the batch at once and report if a
+restore is not exact, a master changes (other than an empty FilterList), LR_NOT_REACHABLE or a model refusal occurs, a
+text-only Qwen call takes over 5 s, or there would be more than 24 runs or 8 new virtual copies.
+- Script: `scripts/compare_modes.py`. One fresh journal session per run. Before each run: Qwen must be reported loaded and
+  a text-only call is timed. Tools offered in EVERY run, both modes: `adjust_lighting`, `adjust_white_balance`,
+  `adjust_hsl`, `crop` (the same freedom in both modes, so "edits to something the request did not name" can occur).
+  Playbook mode uses the portrait playbook.
+- Comparison block, 16 runs, no new copies (the existing darkroom_ai copies are used), each undone and compared exactly:
+  1. "Fix the lighting" on `TEST_2467-47.jpg`
+  2. "Make it much brighter" on `TEST_2457-37.jpg`
+  3. "Make the white balance slightly warmer" on the `RAW_DSC00481.ARW` copy
+  4. "Reduce the saturation of orange a little" on `TEST_2462-42.jpg`
+  each as playbook, none, playbook, none.
+- Counted per run: final clipped highlights and shadows, median, passes, tool calls, clamps hit, applied values equal to
+  the per-call maximum, repeated identical calls, "no change" answers, early stop vs end at the pass limit, edits to
+  settings the request did not name, time, thinking tokens, read-back result.
+  "Named" settings: lighting sliders for requests 1 and 2; temperature / tint for 3; orange saturation for 4.
+- Blind pairs for the user's eye, 6 runs on 6 NEW virtual copies (not journaled as working copies, so later runs do not
+  pick them up): for requests 1, 2 and 4, two fresh copies of the photo named "darkroom_ai pair N A" and "... pair N B";
+  one mode on each, assigned at random; the edits are LEFT IN PLACE. The assignment and the run details go ONLY to
+  `logs\blind_pairs_mapping.json`; the script prints nothing that tells the modes apart, and the assistant does not
+  read that file or say which is which until the user has given a verdict. Afterwards the assistant undoes each pair
+  copy through its resumed session and compares it exactly with its saved start state.
+- Totals: 22 runs (limit 24), 6 new virtual copies (limit 8). Results of the comparison block in
+  `logs\compare_results.json`.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
