@@ -27,7 +27,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.5.0"
+local PLUGIN_VERSION = "0.5.1"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 
@@ -233,32 +233,41 @@ function Commands.read.find_photo(params, ctx)
 	return { found = true, photo = summary(photo) }
 end
 
--- Facts about one photo from the catalog and its EXIF. Every key is read inside pcall because a
--- metadata key that Lightroom does not know (or a photo without that value) must give nil, not an error.
-local function safeFormatted(photo, key)
-	local ok, value = pcall(function()
+-- Facts about one photo from the catalog and its EXIF. Each key is read inside LrTasks.pcall (the
+-- plain pcall cannot yield, and Lightroom may need to yield while it loads metadata, which made
+-- every value come back empty). A key that fails gives nil and its error text is reported in
+-- lookup_errors, so a missing value is visible and never guessed.
+local function safeFormatted(photo, key, errors)
+	local ok, value = LrTasks.pcall(function()
 		return photo:getFormattedMetadata(key)
 	end)
-	if ok and value ~= nil and value ~= "" then
+	if not ok then
+		errors[key] = tostring(value)
+		return nil
+	end
+	if value ~= nil and value ~= "" then
 		return tostring(value)
 	end
 	return nil
 end
 
-local function safeRaw(photo, key)
-	local ok, value = pcall(function()
+local function safeRaw(photo, key, errors)
+	local ok, value = LrTasks.pcall(function()
 		return photo:getRawMetadata(key)
 	end)
-	if ok then
-		return value
+	if not ok then
+		errors["raw:" .. key] = tostring(value)
+		return nil
 	end
-	return nil
+	return value
 end
 
 local function metadata(photo)
 	local info = summary(photo)
-	local captured = safeRaw(photo, "captureTime")
-	return {
+	local errors = {}
+	local captured = safeRaw(photo, "captureTime", errors)
+	local edits = safeRaw(photo, "editCount", errors)
+	local result = {
 		id = info.id,
 		file_name = info.file_name,
 		path = info.path,
@@ -266,19 +275,23 @@ local function metadata(photo)
 		is_virtual_copy = info.is_virtual_copy,
 		width = info.width,
 		height = info.height,
-		camera_make = safeFormatted(photo, "cameraMake"),
-		camera_model = safeFormatted(photo, "cameraModel"),
-		lens = safeFormatted(photo, "lens"),
-		focal_length = safeFormatted(photo, "focalLength"),
-		aperture = safeFormatted(photo, "aperture"),
-		shutter_speed = safeFormatted(photo, "shutterSpeed"),
-		iso = safeFormatted(photo, "isoSpeedRating"),
-		exposure_bias = safeFormatted(photo, "exposureBias"),
-		flash = safeFormatted(photo, "flash"),
-		capture_time = safeFormatted(photo, "dateTimeOriginal") or (captured and tostring(captured) or nil),
-		rating = safeRaw(photo, "rating"),
-		has_develop_edits = safeRaw(photo, "hasAdjustments"),
+		camera_make = safeFormatted(photo, "cameraMake", errors),
+		camera_model = safeFormatted(photo, "cameraModel", errors),
+		lens = safeFormatted(photo, "lens", errors),
+		focal_length = safeFormatted(photo, "focalLength", errors),
+		aperture = safeFormatted(photo, "aperture", errors),
+		shutter_speed = safeFormatted(photo, "shutterSpeed", errors),
+		iso = safeFormatted(photo, "isoSpeedRating", errors),
+		exposure_bias = safeFormatted(photo, "exposureBias", errors),
+		flash = safeFormatted(photo, "flash", errors),
+		capture_time = safeFormatted(photo, "dateTimeOriginal", errors) or (captured and tostring(captured) or nil),
+		rating = safeRaw(photo, "rating", errors),
+		has_develop_edits = edits ~= nil and edits > 0 or nil,
 	}
+	if next(errors) ~= nil then
+		result.lookup_errors = errors
+	end
+	return result
 end
 
 function Commands.read.get_metadata(params, ctx)

@@ -67,6 +67,8 @@ class PhotoMetadata(_Result):
     capture_time: str | None = None
     rating: int | None = None
     has_develop_edits: bool | None = None
+    # Metadata keys Lightroom refused to give (key -> reason); empty when everything was read.
+    lookup_errors: dict[str, str] | None = None
 
 
 class CatalogPage(_Result):
