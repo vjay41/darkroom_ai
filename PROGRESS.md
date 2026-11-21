@@ -1783,3 +1783,9 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - `references/editing-principles.md` replaced with the version in `hermes/proposed/` (slider ranges and the case-study recipe removed; CRLF kept). The old copy is in `profiles/darkroom/_to_delete/editing-principles.md.bak-pre-p7-20261121`.
 - Verified: Hermes loads the skills list and reads the new principles file. NOT verified: that the skills improve a real edit (no edit was run). Next: one supervised edit on the test catalog.
 - Not done: `darkroom-operations` / `single-photo-edit` / `photo-diagnosis` may still hold number-style guidance; not reviewed yet.
+
+### P7 live check (2026-11-21, test catalog)
+- Supervised run in Hermes on the working copy of IMPORT_TEST_1.jpg (confirmed with get_selected_photos, virtual copy, master untouched).
+- Hermes loaded darkroom-operations and the lr-* skills, looked at the preview and analysis, checked the baseline, judged the photo needed nothing, made zero writes, and reported what it left alone, the undo route and what it could not judge at preview size.
+- Verified: skills load and shape behaviour (restraint, honesty about limits). NOT verified: the edit + compare + undo loop, because this photo had no real problem. A photo with a genuine fault is needed for that.
+- Note: faces unavailable (FACE_MODEL_MISSING, no YuNet ONNX file configured); it is the user's decision to supply one.
