@@ -1543,3 +1543,6 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   counts; explicit proceed=false/decline/cancel still refuse; raw answer logged to mcp-stderr.log. Error text now tells the model not to
   retry in a loop and that a chat reply is not an approval. OPEN RISK: Hermes may auto-approve some prompts (2 s answers seen; it has
   an "Auxiliary approval" LLM feature) - check Hermes approval mode so the model cannot approve its own actions.
+- LIVE PASS (server restarted 18:05, commit 8993c21): scan_folder -> 1 new; import_folder asked via Hermes' approval prompt, accepted,
+  added 1 (IMPORT_TEST_1.jpg); catalog_summary total 120 -> 121; ISO bands now real values. Gap 6 (confirmation from Hermes) works live.
+  Still to check: Hermes approval mode must be manual (answers came back in ~3 s). import_folder is not undoable by the undo tool.
