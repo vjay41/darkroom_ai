@@ -1746,3 +1746,6 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
   watched photo; sim selection now follows the new copy; test added (362 passed, 8 skipped on Linux).
 - Skill note added to mask-tools.md (backup .bak-pre-people-guard-20261121).
 - Open: the 21:12:49 approval was not clicked by Claude (Vijay presumably); earlier 'choice=once' still unexplained.
+- Guard verified live (refusal in <1 s, nothing asked, error names the shown photo). Windows `make quality`: 363 passed, 8 skipped.
+- Side effect of the first guard test: the copy FF6FB2BE now holds two empty people masks (Person 1, Person 2); test catalog only, harmless.
+- Stray backups moved to profiles/darkroom/_to_delete/ (deletion is user-only).
