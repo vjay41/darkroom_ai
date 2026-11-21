@@ -185,3 +185,31 @@ def test_no_listener_message_names_the_bridge() -> None:
     assert "Nothing is listening" in caught.value.message
     assert "58763" in caught.value.message
     assert "Start darkroom_ai Bridge" in caught.value.next_step
+
+
+def test_photoshop_busy_error_names_the_open_windows(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from darkroom_ai.adapters.photoshop.client import PhotoshopClient
+    from darkroom_ai.errors import DarkroomError, ErrorCode
+
+    def busy(_operation: str, _arguments: Any, **_: Any) -> dict[str, Any]:
+        raise DarkroomError(
+            ErrorCode.PS_NOT_REACHABLE,
+            "Photoshop is busy and rejected the call (likely a dialog is open).",
+            details={"reason": "busy", "hresult": -2147417846},
+        )
+
+    windows: Any = lambda: [  # noqa: E731
+        SimpleNamespace(title="Preferences"),
+        SimpleNamespace(title="Adobe Photoshop 2026"),
+        SimpleNamespace(title=""),
+    ]
+    client = PhotoshopClient(work_dir=tmp_path, runner=busy, list_windows=windows)
+    for action in (client.connect, client.info):
+        with pytest.raises(DarkroomError) as caught:
+            action()
+        assert caught.value.code is ErrorCode.PS_NOT_REACHABLE
+        assert "'Preferences', 'Adobe Photoshop 2026'" in caught.value.message
+        assert "close that dialog" in caught.value.next_step
+        assert caught.value.details["reason"] == "busy"

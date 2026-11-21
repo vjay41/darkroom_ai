@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error cases 1-5 done (Photoshop's Preferences dialog is still OPEN; recovery check pending); next: pip-audit, firewall run, message review, README
+## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 3, 4, 5, 6 done; waiting for the user to apply the firewall rules for item 2; then message review, README, gate
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -376,7 +376,18 @@ Item 3, live error cases (2026-11-21):
    Photoshop and the 30 s watchdog answered instead (its text, for the record: "Photoshop is open but has not answered
    for 30 s. Open Photoshop windows: 'Preferences', 'Adobe Photoshop 2026'..."). To improve in the message review: the
    fast "busy" message could name the open dialog window, as the watchdog message does. Recovery after closing the
-   dialog: pending (the user closes it, the same call is repeated).
+   dialog: DONE, the same call answered in 0.2 s (version 27.8.0, 0 open documents).
+   Built afterwards: the fast "busy" error now names the open Photoshop windows ("Open Photoshop windows: 'Preferences',
+   'Adobe Photoshop 2026'. Likely one of them is a dialog that is waiting.") with the next step "Bring Photoshop to the
+   front, finish or close that dialog, then retry." Unit-tested (317 tests); NOT re-run live with a dialog open.
+
+Item 6 DONE, pip-audit (2026-11-21, one-off, approved by the user, no firewall block active):
+`poetry run pip-audit --progress-spinner off --desc on --output logs\pip_audit_20261121.txt` (flags checked first with the
+offline `--help`, pip-audit 2.10.1). Result: "No known vulnerabilities found", exit 0, for the 74 packages installed in
+`.venv` (main + dev; the `ml` extra is not installed and so was not audited). pip-audit wrote no file because it had
+nothing to report; the assistant wrote the outcome to `logs\pip_audit_20261121.txt` (git-ignored). No dependency changed.
+
+Item 2 (firewall run): instructions given to the user; waiting for the rules to be applied.
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error

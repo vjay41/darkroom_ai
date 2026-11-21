@@ -85,7 +85,26 @@ class PhotoshopClient:
         self, operation: str, /, *, timeout_s: float | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         deadline = self._timeout_s if timeout_s is None else timeout_s
-        return self._run(operation, kwargs, timeout_s=deadline)
+        try:
+            return self._run(operation, kwargs, timeout_s=deadline)
+        except DarkroomError as exc:
+            raise self._with_window_names(exc) from exc
+
+    def _with_window_names(self, exc: DarkroomError) -> DarkroomError:
+        """For a 'busy' refusal, say which Photoshop windows are open (usually the dialog)."""
+        if (exc.details or {}).get("reason") != "busy":
+            return exc
+        titles = [window.title for window in self._list_windows() if window.title]
+        if not titles:
+            return exc
+        names = ", ".join(repr(title) for title in titles)
+        return DarkroomError(
+            ErrorCode.PS_NOT_REACHABLE,
+            f"Photoshop is busy and rejected the call. Open Photoshop windows: {names}. Likely "
+            "one of them is a dialog that is waiting.",
+            next_step="Bring Photoshop to the front, finish or close that dialog, then retry.",
+            details={**(exc.details or {}), "windows": titles},
+        )
 
     def _inside_work_dir(self, path: Path) -> Path:
         resolved = path.resolve()
@@ -129,7 +148,10 @@ class PhotoshopClient:
         waiting for the whole start deadline.
         """
         watchdog = StartWatchdog(self._ready_grace_s, list_windows=self._list_windows)
-        data = self._run("info", {}, timeout_s=self._start_timeout_s, watchdog=watchdog)
+        try:
+            data = self._run("info", {}, timeout_s=self._start_timeout_s, watchdog=watchdog)
+        except DarkroomError as exc:
+            raise self._with_window_names(exc) from exc
         return self._typed(PhotoshopInfo, "info", data)
 
     def info(self) -> PhotoshopInfo:
