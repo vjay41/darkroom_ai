@@ -1727,3 +1727,6 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
   read-only tool launched Photoshop. Fixed (only asks when the process is already running; test added with a Photoshop fake that fails if started).
   Photoshop was left running (not closed: it may hold the user's work now).
 - Hermes gateway restarted with `hermes gateway restart` (scheduled task Hermes_Gateway, new pid 33664) so the 30-tool list is picked up.
+- LIVE selftest through Hermes (20:41, new gateway): get_capabilities and run_selftest both worked on the real Lightroom 15.2.1 / plug-in 0.9.1 / Photoshop 27.8.
+  Result: all probes passed except "develop key map": MaskGroupBasedCorrections missing (1 of 39). FALSE POSITIVE in my drift check: Lightroom omits that key
+  while a photo has no masks. Fixed (key no longer required; test added). 38 of 38 other keys read fine on the real catalog = the key map is intact for 15.2.1.

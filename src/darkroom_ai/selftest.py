@@ -21,7 +21,6 @@ from darkroom_ai.interfaces import LightroomAdapter, PhotoshopAdapter
 from darkroom_ai.tools.develop_keys import CROP_KEYS, HSL_COLORS, HSL_PREFIX, lighting_limits
 
 Status = Literal["pass", "fail", "warn", "skip"]
-MASKS_KEY = "MaskGroupBasedCorrections"
 PROBE_STEP = 0.1  # Exposure change used by the write probe (EV)
 PROBE_TOLERANCE = 0.02
 
@@ -55,7 +54,9 @@ def expected_keys(guardrails: GuardrailSettings) -> list[str]:
     keys.update(CROP_KEYS)
     for prefix in HSL_PREFIX.values():
         keys.update(f"{prefix}{color.capitalize()}" for color in HSL_COLORS)
-    keys.update({"ProcessVersion", MASKS_KEY, "IncrementalTemperature", "IncrementalTint"})
+    keys.update({"ProcessVersion", "IncrementalTemperature", "IncrementalTint"})
+    # The masks key is deliberately not here: Lightroom leaves it out while a photo has no masks
+    # (seen live, 21 Nov: the first selftest wrongly reported it as a renamed key).
     return sorted(keys)
 
 
@@ -183,7 +184,7 @@ def run_selftest(
     def drift() -> Probe:
         keys = expected_keys(guardrails)
         raw = lightroom.get_develop_settings(target, keys)
-        missing = [k for k in keys if k not in raw or (raw[k] is None and k != MASKS_KEY)]
+        missing = [k for k in keys if k not in raw or raw[k] is None]
         if missing:
             return Probe(
                 name="develop key map",

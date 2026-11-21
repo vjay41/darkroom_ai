@@ -139,9 +139,8 @@ def test_selftest_stops_with_a_plain_error_when_lightroom_is_down(tmp_path: Path
 
 def test_expected_keys_cover_the_key_map() -> None:
     keys = expected_keys(GuardrailSettings())
-    assert {"Exposure2012", "CropLeft", "HueAdjustmentRed", "MaskGroupBasedCorrections"} <= set(
-        keys
-    )
+    assert {"Exposure2012", "CropLeft", "HueAdjustmentRed"} <= set(keys)
+    assert "MaskGroupBasedCorrections" not in keys  # absent from a photo with no masks
 
 
 def test_run_selftest_tool_reads_without_asking(tmp_path: Path) -> None:
