@@ -1523,3 +1523,8 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   once it has been still for 4 s; they retry on their own for 45 s, then ask the person via the confirmer to stop using
   Lightroom and retry once; if declined/unanswered they stop with LR_BUSY_USER and a plain next step. Plug-in error
   MASK_PHOTO_NOT_SHOWN maps to LR_BUSY_USER. Limits: only selection changes are detectable, not other Lightroom use.
+- LIVE PASS (plug-in 0.7.1, DSC_2411-1.jpg): create_mask (waited 10 s for takeover, then OK), inspect_masks, set_mask_adjustments
+  (+0.5 EV / +15 contrast, unclamped), get_preview, invert_mask, get_preview, undo x3 -> list_masks count 0. Verified: mask ids are
+  UUIDs; selectMask/setValue(local_*)/invertMask work; undo restores MaskGroupBasedCorrections (MaskInverted, Local*2012 keys;
+  stored scale: exposure 0.5 EV -> 0.125, contrast 15 -> 0.15). Hermes judged subject vs inverted background from previews itself.
+  Still unverified live: delete_mask, range/gradient masks, the user-prompt path of takeover, starting from a non-Develop module.
