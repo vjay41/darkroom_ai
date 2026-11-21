@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW steps 1-2 done (step 2 not as predicted; edit taken back); STOPPED before RAW step 3; preset probe needs a plug-in reload (0.4.0) by the user. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW steps 1-4 done (copy at its fresh-snapshot state); preset probe + scan done, apply_preset stays unexposed pending the user's decision; next RAW step 5. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -322,7 +322,26 @@ plug-in call for step 3 and wait for the OK.
 - Lens-related develop settings are readable on the RAW copy (read only): `EnableLensCorrections` true,
   `LensProfileEnable` 0, `LensProfileSetup` "LensDefaults", `AutoLateralCA` 0, `ChromaticAberrationR/B` 0, `Defringe*`,
   `PerspectiveUpright` 0, `PostCropVignette*`, `Upright*`, `Vignette*`. Whether they can be SET is untested.
-- STOPPED here: step 3 (and everything after) waits for the user's decision.
+- Step 3 DONE as a READ (user decision; no write probe): the copy reports Temperature 4100 K and Tint 9. These are the
+  values AS REPORTED BY LIGHTROOM for the As Shot white balance; they are NOT independently verified against the camera
+  or the file's metadata. A fresh snapshot of the copy (172 settings; the keys not in the step-1 snapshot are
+  `FilterList`, `Temperature`, `Tint`) is the reference for all later exactness checks.
+- Step 4 DONE. Expected values were written down before the run (in the chat and printed by the script):
+  A: +500 K -> applied +500, 4600 K, no limit. B (after undoing A, so from 4100): +3000 K -> per-pass clamp to +1000,
+  5100 K, rule "per_pass"; no total limit exists for temperature and the range (2000-50000 K) is not reached.
+  | Request | Expected | Actual | Lightroom reports | blue_yellow before -> with edit -> after undo |
+  |---|---|---|---|---|
+  | A +500 K | +500, 4600, no limit | +500, 4600, no limit | 4600 | -0.0115 -> -0.0029 -> -0.0115 |
+  | B +3000 K | +1000, 5100, per_pass | +1000, 5100, per_pass ("Clamped - temperature: asked +3000, applied +1000") | 5100 | -0.0115 -> +0.0031 -> -0.0115 |
+  The preview moved towards warm in both cases, further for B, and returned to the same numbers after each undo. After
+  each undo all 172 settings equalled the fresh snapshot EXACTLY and nothing was pending. Master unchanged; file SHA-256
+  unchanged; no new file in the RAW folder. Tint stayed 9. The label stayed "As Shot" throughout.
+  Observations: highlights clipping fell with the warmer setting (1.27 % -> 0.32 % -> 0.06 %); the preview's median
+  brightness is very low (p50 0.008), i.e. a dark picture, so the cast numbers rest on few neutral pixels.
+  GAP flagged: temperature and tint have NO total limit against the original (only exposure has one); with 3 passes a
+  run can move 3000 K, and further runs more.
+- Steps 5 (16-bit TIFF export, after a free-space check on D:) and 6 (highlight / shadow limits on RAW), the other two
+  RAW files, and the final folder / hash check: NOT yet run.
 
 Presets, user decisions (2026-11-21): first a read-only probe of whether the SDK exposes a preset's contents; if not,
 `apply_preset` stays unexposed. If yes: allowlist (a preset containing any setting outside the guardrail-covered set is
@@ -334,6 +353,22 @@ design and wait for the OK before any live `apply_preset`.
 - Built for the probe: plug-in read command `get_preset` (returns the preset's settings; applies nothing), plug-in
   build 0.4.0, client method `get_preset_settings`. The plug-in loaded in Lightroom is still 0.3.0 until the user
   reloads it. 321 tests, `make quality` clean.
+- Preset probe DONE (2026-11-21, read-only, nothing applied; the user reloaded the plug-in; build 0.4.0 confirmed with
+  `get_preset` registered). The SDK DOES expose a preset's contents. Allowlist used = the 39 guardrail-covered settings
+  (6 lighting sliders, temperature / tint in both scales, 24 HSL sliders, 5 crop keys).
+  - "Natural" (folder Color): 56 keys, 29 covered, 27 outside (camera profile, clarity, colour grading, split toning,
+    tone curve, vibrance 10, saturation, process version "10.0", version).
+  - "Warm Pop" (folder Adaptive: Subject): 5 keys, 0 covered; it is a MASK preset (`MaskGroupBasedCorrections`).
+  - "Warm Gold" (folder Style: Film-Inspired): 62 keys, 24 covered, 38 outside (grain 25, clarity -20, calibration
+    hues / saturations, split toning, shadow tint, profile "Look", tone curve, vignette).
+  - Scan of all 393 presets (read-only): under a strict allowlist (no key outside the covered set) 0 presets pass.
+    Under "no setting outside the covered set would CHANGE on a neutral JPG" (version keys ignored) 3 pass, all trivial
+    (Defaults / Adobe Default, Defaults / Camera Settings, Grain / None). Most frequent blockers: process version (327),
+    tone curve (249), split toning (197), camera profile (186), vibrance (170), clarity (154), saturation (147),
+    texture (126). No preset has an exposure beyond 3 EV. The second count is approximate (a preset's process version or
+    curve name may differ in spelling without changing the picture).
+  - Consequence: with the user's allowlist rule `apply_preset` would refuse practically every preset. It stays
+    unexposed; the design decision is the user's. No `apply_preset` has ever been run live.
 
 README: bridge wording corrected (the bridge starts by itself when Lightroom loads the plug-in; the menu entry is only
 needed after "Stop darkroom_ai Bridge" or a failed start). Verified in the source: `Init.lua` calls `Bridge.start()`.
