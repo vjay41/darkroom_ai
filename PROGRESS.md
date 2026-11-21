@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: agent runs 1-7 done; playbook-versus-none batch (22 runs, 6 new copies, 3 blind pairs left in place) RUNNING or just run; see the plan below. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: playbook-versus-none batch DONE (22 runs); SIX blind-pair copies carry edits until the user's verdict, then `compare_modes.py undo-blind`. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -753,6 +753,43 @@ text-only Qwen call takes over 5 s, or there would be more than 24 runs or 8 new
   copy through its resumed session and compares it exactly with its saved start state.
 - Totals: 22 runs (limit 24), 6 new virtual copies (limit 8). Results of the comparison block in
   `logs\compare_results.json`.
+
+### Playbook-versus-none comparison: RESULT (2026-11-21, one batch, no stop rule triggered)
+22 runs, 6 new virtual copies. Before each run Qwen was reported loaded and a text-only call stayed under 5 s. All 16
+comparison runs were undone and compared exactly; masters and file hashes unchanged; no refusal, no clamp, no repeated
+identical call, no "no change" answer, no read-back difference in any run.
+| Request / photo | Mode | What the model applied (run 1; run 2) | Final clipped highlights | Final median | Time, thinking |
+|---|---|---|---|---|---|
+| "Fix the lighting", TEST_2467-47 (start 7.6 %, 0.437) | playbook | highlights -30; highlights -30 (identical) | 0.14 %; 0.14 % | 0.411; 0.411 | 8 s, 460 |
+| | none | contrast +10, highlights -40, shadows +25, whites -15; exposure +0.2, highlights -40, shadows +25, temperature -3, tint +2 | 0.15 %; 6.25 % | 0.397; 0.459 | 15 s, 1090 |
+| "Make it much brighter", TEST_2457-37 (start 2.6 %, 0.528) | playbook | exposure +0.5 then highlights -25, -25 (2 passes); the same plus -15 (3 passes, pass limit) | 4.98 %; 4.11 % | 0.583; 0.568 | 23 s, 1860 |
+| | none | exposure +1.2, highlights -25, shadows +15, then highlights -25, whites -10; exposure +1.5 (the per-call maximum), highlights -50 (maximum), shadows +30, then highlights -30, whites -15 | 8.50 %; 8.50 % | 0.713; 0.742 | 17 s, 1070 |
+| "Make the white balance slightly warmer", RAW_DSC00481 copy | playbook | +100 K; +150 K | 0.31 %; 0.30 % | 0.014 | 8 s, 560 |
+| | none | +150 K; +200 K | 0.30 %; 0.28 % | 0.014 | 8 s, 540 |
+| "Reduce the saturation of orange a little", TEST_2462-42 | playbook | orange saturation -15; -10 | 0.03 %; 0.04 % | 0.591 | 6 s, 200 |
+| | none | -12; -10 | 0.03 %; 0.04 % | 0.591 | 5 s, 160 |
+Counts over 8 runs per mode: edits to something the request did not name: playbook 0, none 2 settings in 1 run
+(temperature and tint during "Fix the lighting"). Applied value equal to the per-call maximum: playbook 0, none 2 (both
+in one "much brighter" run). Early stops (finished before the pass limit): playbook 7 of 8, none 8 of 8. Passes: 1 in
+every run except "much brighter" (playbook 2 and 3, none 2 and 2).
+Observations (measurements only; whether a result LOOKS better is for the user's blind pairs):
+- With the playbook the model is conservative and repeatable (identical output twice for "Fix the lighting"); without it
+  the model uses more sliders, larger steps and varies more between repeats.
+- "Much brighter": none moved the median to 0.71 / 0.74 (playbook 0.58 / 0.57), i.e. it did what the words ask, at the
+  price of 8.5 % clipped highlights (playbook 4-5 %).
+- "Fix the lighting" without the playbook: one run was as good as the playbook's on clipping (0.15 %), the other added
+  exposure and ended at 6.25 % clipped highlights (start 7.6 %) and made an unrequested white-balance change.
+- RAW "slightly warmer": +100 to +200 K in both modes; the cast number did not move in any run (-0.0272 -> -0.0271), so
+  the effect is below what this measurement can show on that dark picture. No unrequested lighting edit in either mode
+  (the playbook line that caused it in run 6 is gone).
+- Orange saturation: no difference between the modes.
+- Two repeats per case is a small sample.
+Blind pairs (edits LEFT IN PLACE, six new virtual copies, not journaled as working copies):
+'darkroom_ai pair 1 A' / 'pair 1 B' ("Fix the lighting", TEST_2467-47.jpg); 'pair 2 A' / 'pair 2 B' ("Make it much
+brighter", TEST_2457-37.jpg); 'pair 3 A' / 'pair 3 B' ("Reduce the saturation of orange a little", TEST_2462-42.jpg).
+Which mode is A and which is B is ONLY in `logs\\blind_pairs_mapping.json`; the assistant has not read it and will not
+say until the user has given a verdict. Then: `scripts/compare_modes.py undo-blind` undoes each pair copy through its
+saved session and compares it exactly. Until then those six copies carry edits.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
