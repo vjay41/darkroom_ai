@@ -343,15 +343,11 @@ def test_missing_source_is_reported(client: PhotoshopClient, tmp_path: Path) -> 
     assert caught.value.code is ErrorCode.PS_COMMAND_FAILED
 
 
-def test_untested_version_is_reported(tmp_path: Path) -> None:
+def test_untested_version_is_not_refused(tmp_path: Path) -> None:
     client = PhotoshopClient(
         work_dir=tmp_path, list_windows=list, runner=FakeRunner(version="99.1.0")
     )
-    with pytest.raises(DarkroomError) as caught:
-        client.check_version()
-    assert caught.value.code is ErrorCode.ADOBE_VERSION_UNSUPPORTED
-    assert "99.1.0" in caught.value.message
-    assert "27.8" in caught.value.message
+    assert client.check_version().version == "99.1.0"  # compat.assess_version warns instead
 
 
 def test_tested_version_passes(client: PhotoshopClient) -> None:

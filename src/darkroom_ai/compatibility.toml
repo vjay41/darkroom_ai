@@ -1,0 +1,92 @@
+# What darkroom_ai has been verified against. Data, not code: edit this file when a live check
+# changes the picture. Untested or known-issue versions only WARN; nothing here refuses a call.
+# A tool is blocked only when it actually fails (see `darkroom selftest` and get_capabilities).
+
+[apps.lightroom]
+baseline = "15.2.1"
+tested = ["15.2"]            # major.minor prefixes verified live
+
+[apps.photoshop]
+baseline = "27.8"
+tested = ["27.8"]
+
+[plugin]
+min_version = "0.9.0"        # older plug-ins lack commands the tools rely on
+
+# status: verified | known_issue | untested | unavailable
+# verified_on: the Adobe version the live check ran on.
+
+[[features]]
+name = "Read photo, EXIF, lens and catalog facts"
+tools = ["get_photo_info", "get_photo_metadata", "list_catalog_photos", "catalog_summary", "find_photo", "get_selected_photos"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+
+[[features]]
+name = "Preview and numeric analysis"
+tools = ["get_preview", "analyze_photo"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+
+[[features]]
+name = "Develop sliders on JPG/TIFF (lighting, white balance, HSL, crop, any listed parameter)"
+tools = ["adjust_lighting", "adjust_white_balance", "adjust_hsl", "crop", "set_develop_parameters", "undo"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+note = "White balance on JPG/TIFF uses the relative Incremental sliders."
+
+[[features]]
+name = "Develop sliders on RAW/DNG (incl. Kelvin white balance)"
+tools = ["adjust_lighting", "adjust_white_balance"]
+status = "untested"
+note = "No RAW write has been run live yet. Check the result after the first RAW edit."
+
+[[features]]
+name = "Lens profile and chromatic aberration toggles"
+tools = ["set_develop_parameters", "get_develop_parameters"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (JPG)"
+note = "A profile name is only reported when Lightroom finds one for the lens; untested on RAW."
+
+[[features]]
+name = "AI masks: subject, sky, background, objects, landscape"
+tools = ["create_mask", "set_mask_adjustments", "invert_mask", "delete_mask"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (subject, sky)"
+
+[[features]]
+name = "Masks written as data: linear gradient, radial gradient, luminance range"
+tools = ["create_mask"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+
+[[features]]
+name = "People mask"
+tools = ["create_mask"]
+status = "known_issue"
+note = "Interactive: the person picks someone in Lightroom and presses Create Mask within about a minute. Not yet confirmed end to end with approvals set to manual."
+
+[[features]]
+name = "Colour range and depth range masks"
+tools = ["create_mask"]
+status = "unavailable"
+note = "Lightroom's stored format for these has not been captured, so they cannot be created automatically yet."
+
+[[features]]
+name = "Presets"
+tools = ["list_presets", "apply_preset"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+
+[[features]]
+name = "Import a folder"
+tools = ["scan_folder", "import_folder"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+
+[[features]]
+name = "Photoshop hand-off (16-bit TIFF in, new PSD out)"
+tools = ["replace_background"]
+status = "verified"
+verified_on = "Photoshop 27.8"
+note = "The picture-background path (add image layer below) was not run live."

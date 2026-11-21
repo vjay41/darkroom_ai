@@ -1700,3 +1700,14 @@ First Windows run: ruff, format, mypy (59 files, incl. the ctypes code in runtim
 test_app_status::test_missing_program_file_is_reported_not_started. Cause: the test relied on the DEFAULT Lightroom path not existing; on this machine Lightroom is
 installed there, so the code (correctly) went on to "start" it via the fake. Product code was right; test was machine-dependent. Fix: the test now points
 apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass); needs one more Windows `make quality` run.
+
+### 2026-11-21 20:00 - P1c compatibility layer, first slice built
+- `src/darkroom_ai/compatibility.toml` (data): tested Adobe versions (Lightroom 15.2.x, Photoshop 27.8.x), plug-in minimum 0.9.0, feature table with status
+  verified / known_issue / untested / unavailable (RAW writes untested; people mask known_issue until confirmed end to end; colour/depth range unavailable).
+- `compat.py`: assess_version (tested / known_issue / untested / unknown; warns, never refuses; 15.20 is not 15.2), plugin minimum compare.
+- New read-only tool `get_capabilities` (versions, verdicts, features, `not_verified` list, advice). Photoshop `check_version` no longer raises
+  ADOBE_VERSION_UNSUPPORTED (decision 13); doctor uses the same data.
+- `darkroom selftest [--write] [--photo-id]` (selftest.py): ping, versions, catalog read, develop KEY-MAP DRIFT check (all keys the tools use must be readable),
+  metadata, masks (virtual copy only), presets, preview render; with --write a virtual copy in the TEST catalog gets Exposure +0.1, read back, restored. Report in
+  outputs/selftest-<date>.json. Photoshop only asked if already running.
+- 357 tests pass on Linux (ruff, format, mypy clean). NOT done yet: plug-in capability probe + protocol handshake (needs Lua + live check), upgrade runbook (P8), live selftest run.

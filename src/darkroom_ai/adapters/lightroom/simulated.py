@@ -115,11 +115,11 @@ class SimulatedLightroom:
     # -- LightroomAdapter -----------------------------------------------------------------------
 
     def bridge_status(self) -> BridgeStatus:
-        return BridgeStatus(instance="fake", plugin_version="fake", uptime_s=1.0)
+        return BridgeStatus(instance="fake", plugin_version="0.9.1", uptime_s=1.0)
 
     def ping(self) -> PingInfo:
         return PingInfo(
-            plugin_version="fake",
+            plugin_version="0.9.1",
             protocol=1,
             lightroom_version="15.2.1",
             catalog_path="D:\\cat\\Test.lrcat",

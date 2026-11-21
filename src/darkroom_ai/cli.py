@@ -1,6 +1,7 @@
 """Command line entry point (`darkroom`).
 
 darkroom doctor                 check the local setup (config, Lightroom, Photoshop, GPUs)
+darkroom selftest [--write]     check every tool group against the installed Adobe apps
 darkroom connectors             list running MCP connectors; --stop-stale stops ones with older code
 darkroom mcp                    serve the tools over MCP (stdio)
 darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
@@ -27,6 +28,7 @@ from darkroom_ai.adapters.lightroom.bridge_file import (
 from darkroom_ai.adapters.lightroom.client import LightroomClient
 from darkroom_ai.adapters.photoshop.windows import photoshop_windows
 from darkroom_ai.cleanup import apply_cleanup, plan_cleanup
+from darkroom_ai.compat import assess_version
 from darkroom_ai.config import Settings, load_config
 from darkroom_ai.errors import DarkroomError
 from darkroom_ai.gpu import conflict_warnings, placement, read_gpus
@@ -39,7 +41,6 @@ from darkroom_ai.runtime import (
 from darkroom_ai.tools.factory import build_tool_context
 from darkroom_ai.tools.revert import apply_revert, plan_revert
 
-TESTED_LIGHTROOM = ("15.2",)  # major.minor versions the plug-in has been run against
 EXIT_OK = 0
 EXIT_PROBLEM = 1
 EXIT_ERROR = 2
@@ -129,14 +130,10 @@ def _doctor(settings: Settings) -> int:
                 "       Open the configured catalog in Lightroom, or change lightroom.test_catalog "
                 "and run `darkroom lightroom setup` again.",
             )
-        if not info.lightroom_version.startswith(TESTED_LIGHTROOM):
+        verdict = assess_version("lightroom", info.lightroom_version)
+        if verdict.status != "tested":
             # A warning only: an untested version is not refused.
-            _line(
-                "warn",
-                f"Lightroom {info.lightroom_version} has not been tested with darkroom_ai "
-                f"(tested: {', '.join(v + '.x' for v in TESTED_LIGHTROOM)}). It may work; check "
-                "results carefully.",
-            )
+            _line("warn", verdict.note)
     except DarkroomError as exc:
         problems += 1
         _line("FAIL", f"Lightroom: [{exc.code.value}] {exc.message}\n       {exc.next_step}")
@@ -251,6 +248,29 @@ def _lightroom_ping(settings: Settings) -> int:
     return EXIT_OK
 
 
+def _selftest(settings: Settings, write: bool, photo_id: str | None) -> int:
+    from darkroom_ai.adapters.photoshop.client import PhotoshopClient
+    from darkroom_ai.selftest import format_report, run_selftest
+
+    # Photoshop is only asked when it is already running: the selftest never starts it.
+    photoshop = PhotoshopClient.from_settings(settings) if photoshop_windows() else None
+    with LightroomClient.from_settings(settings, load_bridge_file()) as lightroom:
+        report = run_selftest(
+            lightroom,
+            photoshop,
+            settings.guardrails,
+            write=write,
+            photo_id=photo_id,
+        )
+    print(format_report(report))
+    out_dir = settings.paths.outputs_dir.resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"selftest-{report.started[:10]}.json"
+    out.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+    print(f"Report saved: {out}")
+    return EXIT_PROBLEM if report.failed else EXIT_OK
+
+
 # -- parser ---------------------------------------------------------------------------------------
 
 
@@ -271,6 +291,15 @@ def build_parser() -> argparse.ArgumentParser:
     connectors.add_argument(
         "--stop-stale", action="store_true", help="stop connectors that run older code"
     )
+
+    selftest = commands.add_parser(
+        "selftest",
+        help="check each tool group against the installed Adobe apps (run after updates)",
+    )
+    selftest.add_argument(
+        "--write", action="store_true", help="also test an edit on a virtual copy (test catalog)"
+    )
+    selftest.add_argument("--photo-id", default=None, help="photo to test with (default: first)")
 
     revert = commands.add_parser(
         "revert", help="put a photo's copy back to its original values (asks first)"
@@ -298,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_config(args.config)
         if args.command == "doctor":
             return _doctor(settings)
+        if args.command == "selftest":
+            return _selftest(settings, args.write, args.photo_id)
         if args.command == "connectors":
             return _connectors(settings, args.stop_stale)
         if args.command == "revert":

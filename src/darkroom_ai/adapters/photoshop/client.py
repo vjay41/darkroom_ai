@@ -30,9 +30,6 @@ from darkroom_ai.adapters.photoshop.worker import ChildProcessRunner, OperationR
 from darkroom_ai.config import Settings
 from darkroom_ai.errors import DarkroomError, ErrorCode
 
-# Versions this adapter has been run against (major.minor).
-TESTED_VERSIONS = ("27.8",)
-
 
 def unique_path(path: Path) -> Path:
     """Return `path`, or `name-2.ext`, `name-3.ext`, ... if it already exists."""
@@ -55,7 +52,6 @@ class PhotoshopClient:
         select_subject_timeout_s: float = 180.0,
         list_windows: Callable[[], list[WindowInfo]] = photoshop_windows,
         runner: OperationRunner,
-        tested_versions: tuple[str, ...] = TESTED_VERSIONS,
     ) -> None:
         self._work_dir = work_dir
         self._timeout_s = timeout_s
@@ -64,7 +60,6 @@ class PhotoshopClient:
         self._select_subject_timeout_s = select_subject_timeout_s
         self._list_windows = list_windows
         self._run = runner
-        self._tested_versions = tested_versions
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Self:
@@ -158,17 +153,9 @@ class PhotoshopClient:
         return self._typed(PhotoshopInfo, "info", self._call("info"))
 
     def check_version(self) -> PhotoshopInfo:
-        """Return app info, or raise ADOBE_VERSION_UNSUPPORTED for an untested version."""
-        info = self.info()
-        major_minor = ".".join(info.version.split(".")[:2])
-        if major_minor not in self._tested_versions:
-            tested = ", ".join(self._tested_versions)
-            raise DarkroomError(
-                ErrorCode.ADOBE_VERSION_UNSUPPORTED,
-                f"Photoshop {info.version} detected; tested with: {tested}.",
-                details={"detected": info.version, "tested": list(self._tested_versions)},
-            )
-        return info
+        """Return app info. An untested version is NOT refused: darkroom_ai.compat judges it and
+        get_capabilities / the doctor warn; only a call that really fails raises."""
+        return self.info()
 
     def prepare_copy(self, source: Path) -> Path:
         """Copy `source` into the work folder (new name if needed) and return the copy's path."""
