@@ -1668,3 +1668,18 @@ Built (Python only; src/darkroom_ai/runtime.py):
   12 s wait was too short / the person had not finished. Redesign (this commit): no SDK call for people; ask first, wait up to 60 s for the mask,
   report its id. UNVERIFIED live.
 - Unverified: luminance-range semantics and gradient direction at a visible strength (0.3 EV is too weak to see); colour-range refusal text; people.
+
+### Live pass 2026-11-21 19:25-19:32 - strength test (+1.5 EV per mask), connector current (pid 49924, code 1c7ef41e7653da2d)
+Numeric check done by Claude from the saved analyze renders (no image viewed; luma differences against the clean render, 1024 px):
+- Luminance range [0,0,0.3,0.4]: pixels with base tone 0-0.3 +0.155, tone > 0.6 unchanged. [0.6,0.7,1,1]: tone > 0.6 +0.195, tone < 0.3 unchanged.
+  => the four values are (ramp-in start, full start, full end, ramp-out end): CONFIRMED.
+- Linear gradient start [0.5,0.1] end [0.5,0.5]: 10 horizontal bands top->bottom +0.234, +0.210, +0.132, +0.056, +0.008, then 0.000. Effect is FULL at
+  `start` and gone at `end`: CONFIRMED.
+- Radial gradient (centre 0.5/0.55, radii 0.2/0.25): inside the ellipse +0.155, outside +0.002 => effect INSIDE (Flipped=true): CONFIRMED.
+- Hermes' own LOOK at the previews called the gradient and radial lifts "not visible" / "bottom third brightest" while the numbers show clear effects.
+  Lesson: the local vision model is unreliable for subtle regional changes; use measurements. Idea (not built): analyze_photo with a region box.
+- 1.5 EV is stored as LocalExposure2012 0.375 (EV / 4), same ratio as before. Colour range refusal text is the intended honest one.
+- People: prompt 19:31:29, answered 19:31:33 (4 s), then no mask in the settings for 60 s; the catalog has no people mask afterwards, so nothing was
+  created in Lightroom (not a read problem). What the person saw is unknown. Manual run earlier: Return in the Person Mask Options panel works.
+- Draft of a corrected Hermes skill reference (references/mask-tools.md, which still says "no geometry parameters"): outputs/mask-tools.proposed.md
+  (git-ignored). NOT applied: waiting for the user's go-ahead. The original file has CRLF line endings; keep them when applying.
