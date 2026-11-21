@@ -1563,3 +1563,11 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   per-command duration. Client never re-sends real commands (unchanged). Lua syntax-checked with Lua 5.4 (lupa) only.
 - Known limit: a command already running when the reload happens still finishes with the old code (cannot be aborted safely); its
   response is lost, so check state (list_masks / get_develop_parameters) before repeating a write after a reload.
+- Plug-in 0.9.0 (hang protection): per-command time budget (default 60 s; export_tiff/import_folder 300, export_preview 120, create_mask/
+  set_mask_values 90; never longer than the client's own deadline); commands call ctx.checkpoint() in their loops and stop themselves
+  with COMMAND_TIMEOUT; a watchdog answers the client if a command does not return (budget + 2 s) and marks the session wedged, after
+  which new requests are refused at once with BRIDGE_BUSY + retry_after_s; >2 waiting also -> BRIDGE_BUSY; the late answer of a timed-out
+  command is discarded; answers > 8 MB become RESPONSE_TOO_LARGE; `bridge_status` is answered instantly (never queued) with queue,
+  running command, counters, last error; get_app_status shows a new state `busy` with how long and what to clear. Python maps
+  COMMAND_TIMEOUT to LR_COMMAND_FAILED ("check state before repeating"). UNVERIFIED live; a truly hung Lua task cannot be killed
+  from inside Lightroom, only refused around.

@@ -34,6 +34,18 @@ logger:enable("logfile")
 
 local MAX_BUFFER = 4 * 1024 * 1024
 local MAX_WAITING = 2 -- requests allowed to wait behind the one being processed
+local MAX_RESPONSE = 8 * 1024 * 1024 -- a larger answer is replaced by an error, never sent
+-- Time one command may run before it is cut off (the client's own deadline can make it shorter).
+-- A command checks ctx.checkpoint() in its loops and stops itself; a watchdog answers the client
+-- if a command does not return at all, and then refuses new work instead of queueing it.
+local DEFAULT_BUDGET_S = 60
+local BUDGETS = {
+	export_tiff = 300,
+	import_folder = 300,
+	export_preview = 120,
+	create_mask = 90,
+	set_mask_values = 90,
+}
 -- LrDate.currentTime() counts seconds from 2001-01-01; client deadlines are Unix seconds.
 local UNIX_OFFSET = 978307200
 local MIN_TOKEN_LENGTH = 32
@@ -94,12 +106,12 @@ local function loadConfig()
 	return config, nil
 end
 
-local function errorResponse(id, code, message)
-	return { id = id, ok = false, error = { code = code, message = message } }
+local function errorResponse(id, code, message, retryAfter)
+	return { id = id, ok = false, error = { code = code, message = message, retry_after_s = retryAfter } }
 end
 
 -- Runs inside an LrTasks task. Returns the response table for one decoded request.
-local function handleRequest(request, config, instance)
+local function handleRequest(request, config, instance, job)
 	local id = type(request.id) == "string" and request.id or nil
 	if not id or type(request.command) ~= "string" then
 		return errorResponse(id, "BAD_REQUEST", "Request needs string fields 'id' and 'command'")
@@ -131,6 +143,16 @@ local function handleRequest(request, config, instance)
 	local catalogPath = catalog:getPath()
 	local ctx = {
 		instance = instance,
+		-- Called inside long loops: stops the command once it has used up its time.
+		checkpoint = function()
+			if job.timedOut or LrDate.currentTime() - job.since > job.budget then
+				job.timedOut = true
+				error({
+					code = "COMMAND_TIMEOUT",
+					message = "'" .. command .. "' used its " .. job.budget .. " s time limit and was stopped",
+				}, 0)
+			end
+		end,
 		config = config,
 		catalog = catalog,
 		catalog_path = catalogPath,
@@ -167,7 +189,17 @@ end
 -- One listening session: bind both sockets, serve until a socket closes or the plug-in stops.
 local function runSession(config, active, instance)
 	LrFunctionContext.callWithContext("darkroom_ai_bridge_session", function(context)
-		local session = { closed = false, buffer = "", queue = {}, working = false, current = nil }
+		local session = {
+			closed = false,
+			buffer = "",
+			queue = {},
+			working = false,
+			current = nil,
+			handled = 0,
+			failed = 0,
+			lastError = nil,
+			startedAt = LrDate.currentTime(),
+		}
 		local sender
 
 		local function send(response)
@@ -175,7 +207,36 @@ local function runSession(config, active, instance)
 			if not ok then
 				text = Json.encode(errorResponse(response.id, "INTERNAL", "Response could not be encoded: " .. tostring(text)))
 			end
+			if #text > MAX_RESPONSE then
+				text = Json.encode(
+					errorResponse(response.id, "RESPONSE_TOO_LARGE", "The answer is larger than 8 MB; ask for less at a time")
+				)
+			end
 			sender:send(text .. "\n")
+		end
+
+		local function snapshot()
+			local job = session.current
+			local busy = nil
+			if job then
+				local running = LrDate.currentTime() - job.since
+				busy = {
+					command = job.command,
+					running_s = running,
+					budget_s = job.budget,
+					over_budget = job.answered == true,
+				}
+			end
+			return {
+				instance = instance,
+				plugin_version = Commands.read.list_commands().plugin_version,
+				uptime_s = LrDate.currentTime() - session.startedAt,
+				waiting = #session.queue,
+				busy = busy,
+				handled = session.handled,
+				failed = session.failed,
+				last_error = session.lastError,
+			}
 		end
 
 		local function pump()
@@ -196,18 +257,42 @@ local function runSession(config, active, instance)
 							"The Lightroom plug-in was restarting; nothing was executed, retry in a few seconds"
 						)
 					else
-						session.current = { command = request.command, since = LrDate.currentTime() }
-						local ok, handled = LrTasks.pcall(handleRequest, request, config, instance)
+						local budget = BUDGETS[request.command] or DEFAULT_BUDGET_S
+						if type(request.deadline) == "number" then
+							local left = request.deadline - (LrDate.currentTime() + UNIX_OFFSET)
+							budget = math.min(budget, math.max(left, 1))
+						end
+						local job = {
+							id = request.id,
+							command = tostring(request.command),
+							since = LrDate.currentTime(),
+							budget = budget,
+							timedOut = false,
+							answered = false,
+						}
+						session.current = job
+						local ok, handled = LrTasks.pcall(handleRequest, request, config, instance, job)
 						session.current = nil
-						if ok then
+						if job.answered then
+							-- The watchdog already told the client this command timed out.
+							logger:warn("[" .. instance .. "] '" .. job.command .. "' finished late; its answer is discarded")
+							response = nil
+						elseif ok then
 							response = handled
 						else
 							response = errorResponse(request.id, "INTERNAL", tostring(handled))
 						end
 					end
-					local sent, sendError = pcall(send, response)
-					if not sent then
-						logger:error("could not send response: " .. tostring(sendError))
+					if response then
+						session.handled = session.handled + 1
+						if response.ok ~= true then
+							session.failed = session.failed + 1
+							session.lastError = response.error and response.error.code or nil
+						end
+						local sent, sendError = pcall(send, response)
+						if not sent then
+							logger:error("could not send response: " .. tostring(sendError))
+						end
 					end
 				end
 				session.working = false
@@ -227,20 +312,29 @@ local function runSession(config, active, instance)
 					end
 					if type(request) == "table" then
 						session.buffer = ""
-						if #session.queue >= MAX_WAITING then
-							local busy = session.current
-							local what = busy and (" while running '" .. tostring(busy.command) .. "'") or ""
-							local reply = errorResponse(
-								type(request.id) == "string" and request.id or nil,
-								"BRIDGE_BUSY",
-								"The Lightroom plug-in is still busy" .. what .. "; nothing was executed"
-							)
-							local ok, text = pcall(Json.encode, reply)
-							if ok then
-								pcall(function()
-									sender:send(text .. "\n")
-								end)
+						local requestId = type(request.id) == "string" and request.id or nil
+						local busy = session.current
+						if request.command == "bridge_status" then
+							-- Answered at once, never queued, so it works even while a command is stuck.
+							local reply
+							if request.token ~= config.token then
+								reply = errorResponse(requestId, "UNAUTHORIZED", "Missing or wrong token")
+							else
+								reply = { id = requestId, ok = true, result = snapshot() }
 							end
+							pcall(send, reply)
+						elseif #session.queue >= MAX_WAITING or (busy and busy.answered) then
+							local what = busy and (" while running '" .. tostring(busy.command) .. "'") or ""
+							local wait = 5
+							if busy then
+								wait = math.max(2, math.ceil(busy.budget - (LrDate.currentTime() - busy.since)))
+							end
+							pcall(send, errorResponse(
+								requestId,
+								"BRIDGE_BUSY",
+								"The Lightroom plug-in is still busy" .. what .. "; nothing was executed",
+								wait
+							))
 						else
 							session.queue[#session.queue + 1] = request
 						end
@@ -290,6 +384,26 @@ local function runSession(config, active, instance)
 		})
 
 		logger:info("[" .. instance .. "] listening on localhost ports " .. config.request_port .. " (requests) and " .. config.response_port .. " (responses)")
+
+		-- Watchdog: if a command does not come back in its time, answer the client now and mark the
+		-- session as wedged, so new requests are refused with a clear message instead of queueing.
+		LrTasks.startAsyncTask(function()
+			while not session.closed do
+				LrTasks.sleep(0.5)
+				local job = session.current
+				if job and not job.answered and LrDate.currentTime() - job.since > job.budget + 2 then
+					job.answered = true
+					job.timedOut = true
+					logger:warn("[" .. instance .. "] command '" .. job.command .. "' exceeded " .. job.budget .. " s")
+					pcall(send, errorResponse(
+						job.id,
+						"COMMAND_TIMEOUT",
+						"'" .. job.command .. "' did not finish within " .. job.budget
+							.. " s and may still complete inside Lightroom; check the photo's state before repeating it"
+					))
+				end
+			end
+		end, "darkroom_ai watchdog")
 
 		while active() and not session.closed do
 			LrTasks.sleep(0.2)

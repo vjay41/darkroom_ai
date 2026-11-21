@@ -81,6 +81,20 @@ class CatalogPage(_Result):
     photos: tuple[PhotoMetadata, ...]
 
 
+class BridgeStatus(_Result):
+    """The plug-in's own view of its health. Answered at once, even while a command is stuck."""
+
+    instance: str | None = None
+    plugin_version: str | None = None
+    uptime_s: float = 0.0
+    waiting: int = 0
+    # Set while a command runs: command, running_s, budget_s, over_budget.
+    busy: dict[str, Any] | None = None
+    handled: int = 0
+    failed: int = 0
+    last_error: str | None = None
+
+
 class FolderScan(_Result):
     """What a folder would add to the catalog (read only)."""
 

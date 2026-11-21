@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.adapters.lightroom.bridge_file import BridgeFile
 from darkroom_ai.adapters.lightroom.models import (
+    BridgeStatus,
     CatalogPage,
     CommandList,
     ExportedTiff,
@@ -282,7 +283,7 @@ class LightroomClient:
     def _error(command: str, error: Any) -> DarkroomError:
         code = str(error.get("code", "UNKNOWN")) if isinstance(error, dict) else "UNKNOWN"
         text = str(error.get("message", "")) if isinstance(error, dict) else ""
-        details = {"command": command, "plugin_code": code}
+        details: dict[str, Any] = {"command": command, "plugin_code": code}
         if code == "WRONG_CATALOG":
             return DarkroomError(ErrorCode.LR_WRONG_CATALOG, text or None, details=details)
         if code in ("PHOTO_OUTSIDE_ROOT", "NOT_A_VIRTUAL_COPY", "FILE_EXISTS"):  # refusals
@@ -294,11 +295,24 @@ class LightroomClient:
                 details=details,
             )
         if code in ("BRIDGE_RESTARTING", "BRIDGE_BUSY", "REQUEST_EXPIRED"):
+            retry = error.get("retry_after_s") if isinstance(error, dict) else None
+            wait = f"about {retry:g} s" if isinstance(retry, int | float) else "a few seconds"
+            if isinstance(retry, int | float):
+                details = {**details, "retry_after_s": retry}
             return DarkroomError(
                 ErrorCode.LR_NOT_REACHABLE,
                 f"The Lightroom plug-in did not run '{command}': {text or code} [{code}]",
-                next_step="Nothing was executed. Wait a few seconds (the plug-in may be restarting "
-                "or busy with an earlier request) and call the tool again.",
+                next_step=f"Nothing was executed. Wait {wait} (the plug-in may be restarting or "
+                "busy with an earlier request), then call the tool again.",
+                details=details,
+            )
+        if code == "COMMAND_TIMEOUT":
+            return DarkroomError(
+                ErrorCode.LR_COMMAND_FAILED,
+                f"Lightroom took too long for '{command}': {text or code} [{code}]",
+                next_step="The step may still have partly happened. Check the photo's current "
+                "state (for example list_masks or get_develop_parameters) before repeating it; "
+                "if Lightroom shows a dialog, clear it first.",
                 details=details,
             )
         if code == "MASK_PHOTO_NOT_SHOWN":
@@ -331,6 +345,10 @@ class LightroomClient:
 
     def ping(self) -> PingInfo:
         return self._typed(PingInfo, "ping", self.call("ping"))
+
+    def bridge_status(self) -> BridgeStatus:
+        """The plug-in's health (queue, running command, counters); never waits in the queue."""
+        return self._typed(BridgeStatus, "bridge_status", self.call("bridge_status"))
 
     def selftest(self, value: Any) -> Any:
         """Round-trip a value through the plug-in's JSON decoder and encoder."""

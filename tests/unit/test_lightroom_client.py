@@ -336,3 +336,15 @@ def test_plugin_restart_busy_and_expiry_replies_say_nothing_was_executed(code: s
     assert error.code is ErrorCode.LR_NOT_REACHABLE
     assert "Nothing was executed" in error.next_step
     assert error.details["plugin_code"] == code
+
+
+def test_bridge_status_is_available_and_timeout_replies_say_to_check_state(
+    client: LightroomClient,
+) -> None:
+    assert client.bridge_status().instance == "fake-1"
+    error = LightroomClient._error("create_mask", {"code": "COMMAND_TIMEOUT", "message": "slow"})
+    assert error.code is ErrorCode.LR_COMMAND_FAILED and "state" in error.next_step
+    busy = LightroomClient._error(
+        "ping", {"code": "BRIDGE_BUSY", "message": "busy", "retry_after_s": 20}
+    )
+    assert "about 20 s" in busy.next_step and busy.details["retry_after_s"] == 20

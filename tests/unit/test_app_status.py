@@ -76,3 +76,16 @@ def test_missing_program_file_is_reported_not_started(tmp_path: Path) -> None:
     got = _registry(tmp_path, processes).call("ensure_apps_running", {"app": "lightroom"})
     assert got["started"] is False and got["status"]["state"] == "not_installed"
     assert processes.started == []
+
+
+def test_busy_bridge_is_reported_with_how_long_and_what_to_do(tmp_path: Path) -> None:
+    from darkroom_ai.adapters.lightroom.models import BridgeStatus
+
+    registry = _registry(tmp_path, FakeProcesses({"Lightroom.exe": True, "Photoshop.exe": False}))
+    stuck = BridgeStatus(
+        busy={"command": "create_mask", "running_s": 130.0, "budget_s": 90.0, "over_budget": True}
+    )
+    registry._context.lightroom.bridge_status = lambda: stuck  # type: ignore[method-assign]
+    got = registry.call("get_app_status", {})["lightroom"]
+    assert got["state"] == "busy" and "create_mask" in got["detail"]
+    assert "dialog" in got["next_step"]

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from darkroom_ai.adapters.lightroom.models import (
+    BridgeStatus,
     CatalogPage,
     ExportedTiff,
     FolderImport,
@@ -64,6 +65,8 @@ class LightroomAdapter(Protocol):
     def ping(self) -> PingInfo: ...
 
     def get_selection(self) -> Selection: ...
+
+    def bridge_status(self) -> BridgeStatus: ...
 
     def find_photo(self, path: str) -> PhotoInfo | None: ...
 

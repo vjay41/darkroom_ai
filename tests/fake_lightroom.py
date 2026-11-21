@@ -225,8 +225,16 @@ class FakeLightroomPlugin:
             "writes_allowed": self.writes_allowed,
         }
 
+    def _cmd_bridge_status(self, _: dict[str, Any]) -> dict[str, Any]:
+        return {"instance": "fake-1", "plugin_version": "fake", "uptime_s": 2.0, "waiting": 0}
+
     def _cmd_list_commands(self, _: dict[str, Any]) -> dict[str, Any]:
-        names = sorted(name[5:] for name in dir(self) if name.startswith("_cmd_"))
+        # bridge_status is answered by Bridge.lua itself (never queued), not by Commands.lua.
+        names = sorted(
+            name[5:]
+            for name in dir(self)
+            if name.startswith("_cmd_") and name != "_cmd_bridge_status"
+        )
         return {
             "plugin_version": "0.4.0",
             "read": [name for name in names if name not in WRITE_COMMANDS],

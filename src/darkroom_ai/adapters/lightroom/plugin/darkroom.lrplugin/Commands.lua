@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.8.1"
+local PLUGIN_VERSION = "0.9.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -328,6 +328,7 @@ function Commands.read.list_photos(params, ctx)
 	end)
 	local photos = {}
 	for i = offset + 1, math.min(offset + limit, #matches) do
+		ctx.checkpoint()
 		photos[#photos + 1] = metadata(matches[i].photo)
 	end
 	return { total = #matches, offset = offset, returned = #photos, photos = list(photos) }
@@ -363,6 +364,7 @@ local function scanFolder(params, ctx)
 	local iterator = params.recursive and LrFileUtils.recursiveFiles(folder) or LrFileUtils.files(folder)
 	local newFiles, existing, unsupported, seen = {}, 0, 0, 0
 	for path in iterator do
+		ctx.checkpoint()
 		local extension = string.lower(LrPathUtils.extension(path) or "")
 		if IMPORT_EXTENSIONS[extension] then
 			seen = seen + 1
@@ -406,6 +408,7 @@ function Commands.write.import_folder(params, ctx)
 	end
 	withWrite(ctx, "darkroom_ai: import folder", function()
 		for _, path in ipairs(todo) do
+			ctx.checkpoint()
 			local ok, err = LrTasks.pcall(function()
 				ctx.catalog:addPhoto(path)
 			end)
@@ -732,6 +735,7 @@ local function showInMasking(ctx, photo)
 	local wanted = photo:getRawMetadata("uuid")
 	local shownName = nil
 	for attempt = 1, SHOW_ATTEMPTS do
+		ctx.checkpoint()
 		ctx.catalog:setSelectedPhotos(photo, {})
 		LrApplicationView.switchToModule("develop")
 		LrTasks.sleep(0.5 * attempt + 0.5)
@@ -779,6 +783,7 @@ function Commands.write.create_mask(params, ctx)
 	local after = maskCount()
 	local waited = 0
 	while waited < MASK_WAIT_S and not (before and after and after > before) do
+		ctx.checkpoint()
 		LrTasks.sleep(0.5)
 		waited = waited + 0.5
 		after = maskCount()
@@ -825,6 +830,7 @@ function Commands.write.set_mask_values(params, ctx)
 	end
 	local before, after = {}, {}
 	for key, spec in pairs(params.values) do
+		ctx.checkpoint()
 		if type(key) ~= "string" or string.sub(key, 1, 6) ~= "local_" or type(spec) ~= "table" then
 			fail("INVALID_PARAMS", "values keys must be local_* names with a spec object")
 		end

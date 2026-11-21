@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 
 from darkroom_ai.adapters.lightroom.models import (
+    BridgeStatus,
     CatalogPage,
     ExportedTiff,
     FolderImport,
@@ -109,6 +110,9 @@ class SimulatedLightroom:
             )
 
     # -- LightroomAdapter -----------------------------------------------------------------------
+
+    def bridge_status(self) -> BridgeStatus:
+        return BridgeStatus(instance="fake", plugin_version="fake", uptime_s=1.0)
 
     def ping(self) -> PingInfo:
         return PingInfo(

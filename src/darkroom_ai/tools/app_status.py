@@ -21,7 +21,7 @@ _sleep = time.sleep
 POLL_S = 3.0
 
 AppName = Literal["lightroom", "photoshop"]
-State = Literal["ready", "not_running", "needs_user", "not_installed", "unknown"]
+State = Literal["ready", "busy", "not_running", "needs_user", "not_installed", "unknown"]
 
 
 class AppState(BaseModel):
@@ -44,6 +44,32 @@ def _lightroom(ctx: ToolContext) -> AppState:
             detail="Lightroom Classic is not running.",
             next_step="Call ensure_apps_running with app 'lightroom'.",
         )
+    # The bridge answers this at once even when a command is stuck, so ask it first.
+    try:
+        health = ctx.lightroom.bridge_status()
+    except DarkroomError:
+        health = None
+    if health is not None and health.busy:
+        running_s = float(health.busy.get("running_s", 0) or 0)
+        budget_s = float(health.busy.get("budget_s", 0) or 0)
+        over = bool(health.busy.get("over_budget"))
+        if over or running_s > 5:
+            return AppState(
+                app="lightroom",
+                state="busy",
+                detail=(
+                    f"Lightroom's bridge is running '{health.busy.get('command')}' "
+                    f"({running_s:.0f} s of {budget_s:.0f} s allowed"
+                    + ("; it is over its limit, so it is probably stuck" if over else "")
+                    + ")."
+                ),
+                next_step=(
+                    "Look at Lightroom for an open dialog or a spinning progress bar and clear it."
+                    if over
+                    else "Wait a few seconds and call get_app_status again."
+                ),
+                facts={"waiting_requests": health.waiting, "plugin_version": health.plugin_version},
+            )
     try:
         info = ctx.lightroom.ping()
     except DarkroomError as exc:
@@ -62,6 +88,15 @@ def _lightroom(ctx: ToolContext) -> AppState:
             "plugin_version": info.plugin_version,
             "open_catalog": info.catalog_path,
             "edits_allowed_in_this_catalog": info.writes_allowed,
+            **(
+                {
+                    "bridge_requests_handled": health.handled,
+                    "bridge_requests_failed": health.failed,
+                    "bridge_last_error": health.last_error,
+                }
+                if health is not None
+                else {}
+            ),
         },
         next_step=(
             ""
@@ -106,8 +141,9 @@ def _check(ctx: ToolContext, app: AppName) -> AppState:
 
 class GetAppStatusInput(BaseModel):
     """Check whether Lightroom Classic and Photoshop are running and ready to be used. Reads only:
-    it never starts or closes anything. States: ready, not_running, needs_user (running but not
-    answering, e.g. a dialog is open; the next step says what to clear), not_installed, unknown."""
+    it never starts or closes anything. States: ready; busy (a command runs or is stuck in
+    Lightroom; the detail says how long); not_running; needs_user (running but not answering, e.g.
+    a dialog is open; the next step says what to clear); not_installed; unknown."""
 
     model_config = ConfigDict(extra="forbid")
 
