@@ -1601,3 +1601,15 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
   already clean) and the profile name/setup was not read. Next check: read LensProfileName / LensProfileSetup after enabling, and render a 100% crop.
 - Observation: `create_mask` subject returned `Tools: {}` for the new mask (AI masks may fill in after inference); not an error, but inspect again
   after a short wait before adjusting it.
+
+### Live pass 2026-11-21 18:50 - lens profile name + mask types (Hermes, DSC_2411-1.jpg working copy)
+- Lens: LensProfileEnable 0->1->0 again fine. LensProfileName / LensProfileSetup are NOT in our 64-key registry, so never read: gap, still unverified
+  whether Lightroom found a profile.
+- Masks (createNewMask, 25 s wait each): sky (aiSelection) CREATED, adjusted (local_Exposure 0.0->0.3 reported), deleted, count back to 0.
+  REFUSED with ADOBE_FEATURE_UNAVAILABLE (mask count stayed 0 after 25 s): gradient, radialGradient, rangeMask (luminance), aiSelection people.
+  Photo has 6 people, no sky. Hermes circuit breaker paused the server ~44 s after 3 identical failures (works as designed).
+- Unverified: sky adjustment persistence (inspect_masks still showed Tools: {} after set_mask_adjustments); cause of the 4 refusals.
+- Hypotheses (NOT tested): (a) gradient/radial/range createNewMask only arms an interactive tool and the mask commits when the user drags/clicks;
+  (b) people needs a person chosen / face detection finished; (c) wrong subtype for this build. The error code ADOBE_FEATURE_UNAVAILABLE and its
+  "type not available" wording over-claims: the cause is unknown. Candidate routes: write the mask geometry into MaskGroupBasedCorrections
+  directly, using a sample read from a mask the user draws by hand (exact schema, no guessing).
