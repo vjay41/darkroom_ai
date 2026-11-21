@@ -8,6 +8,7 @@ darkroom mcp                    serve the tools over MCP (stdio)
 darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
 darkroom clean-outputs          remove intermediate files (never final results); asks first
 darkroom lightroom setup|ping   Lightroom plug-in setup and check
+darkroom deploy --hermes-profile DIR [--dry-run]   connect a Hermes profile; asks before each write
 """
 
 from __future__ import annotations
@@ -226,6 +227,27 @@ def _clean_outputs(settings: Settings) -> int:
     return EXIT_OK
 
 
+def _deploy(settings: Settings, profile: Path, dry_run: bool) -> int:
+    """Human-only: connect a Hermes profile to this checkout; plans first, asks per write."""
+    import time
+
+    from darkroom_ai.deploy import run_deploy
+
+    def write_bridge() -> list[str]:
+        bridge = write_bridge_file(settings)
+        return [f"bridge file written: {bridge_path()}", f"catalog: {bridge.catalog_path}"]
+
+    return run_deploy(
+        _source_dir().parents[1],
+        profile,
+        AskUser(lead="This will"),
+        dry_run=dry_run,
+        interactive=sys.stdin.isatty(),
+        stamp=time.strftime("%Y%m%d-%H%M%S"),
+        bridge_writer=write_bridge,
+    )
+
+
 # -- lightroom ------------------------------------------------------------------------------------
 
 
@@ -354,6 +376,14 @@ def build_parser() -> argparse.ArgumentParser:
         "clean-outputs", help="remove intermediate files, never final results (asks first)"
     )
 
+    deploy = commands.add_parser(
+        "deploy", help="connect a Hermes profile to this checkout (plans first, asks per write)"
+    )
+    deploy.add_argument(
+        "--hermes-profile", type=Path, required=True, help="Hermes profile folder (has config.yaml)"
+    )
+    deploy.add_argument("--dry-run", action="store_true", help="show the plan only")
+
     lightroom = commands.add_parser("lightroom", help="Lightroom plug-in setup and checks")
     lightroom_commands = lightroom.add_subparsers(dest="lightroom_command", required=True)
     setup = lightroom_commands.add_parser("setup", help="write the plug-in's bridge.json")
@@ -382,6 +412,8 @@ def main(argv: list[str] | None = None) -> int:
             return _revert(settings, args.photo)
         if args.command == "clean-outputs":
             return _clean_outputs(settings)
+        if args.command == "deploy":
+            return _deploy(settings, args.hermes_profile, args.dry_run)
         if args.command == "mcp":
             from darkroom_ai import mcp_server
 
