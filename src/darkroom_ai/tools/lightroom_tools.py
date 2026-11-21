@@ -90,6 +90,49 @@ def get_photo_info(ctx: ToolContext, args: GetPhotoInfoInput) -> Outcome:
     return Outcome(result)
 
 
+# -- get_selected_photos / find_photo ----------------------------------------------------------
+
+
+class GetSelectedPhotosInput(BaseModel):
+    """List the photo(s) selected in Lightroom Classic, with their catalog ids. Reads only;
+    changes nothing. Use the ids with the other tools."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SelectedPhotosResult(ToolResult):
+    active: PhotoInfo | None
+    photos: tuple[PhotoInfo, ...]
+    note: str = ""
+
+
+def get_selected_photos(ctx: ToolContext, args: GetSelectedPhotosInput) -> Outcome:
+    selection = ctx.lightroom.get_selection()
+    note = "" if selection.active else "No photo is selected in Lightroom. Select one and retry."
+    result = SelectedPhotosResult(active=selection.active, photos=selection.photos, note=note)
+    return Outcome(result)
+
+
+class FindPhotoInput(BaseModel):
+    """Find a photo in the open catalog by its file path and return its catalog id. Reads only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = Field(min_length=1, description="Absolute path of the photo file.")
+
+
+class FindPhotoResult(ToolResult):
+    found: bool
+    photo: PhotoInfo | None = None
+    note: str = ""
+
+
+def find_photo(ctx: ToolContext, args: FindPhotoInput) -> Outcome:
+    photo = ctx.lightroom.find_photo(args.path)
+    note = "" if photo else "That file is not in the open catalog (import it into Lightroom first)."
+    return Outcome(FindPhotoResult(found=photo is not None, photo=photo, note=note))
+
+
 # -- get_preview ----------------------------------------------------------------------------------
 
 

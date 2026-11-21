@@ -81,6 +81,9 @@ def rig(tmp_path: Path) -> Rig:
     return Rig(tmp_path)
 
 
+NOT_ABOUT_ONE_PHOTO = {"list_presets", "get_selected_photos", "find_photo"}
+
+
 def change(result: dict[str, Any], name: str) -> dict[str, Any]:
     return next(c for c in result["changes"] if c["name"] == name)
 
@@ -91,6 +94,8 @@ def change(result: dict[str, Any], name: str) -> dict[str, Any]:
 def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
     assert rig.tools.names == (
         "get_photo_info",
+        "get_selected_photos",
+        "find_photo",
         "get_preview",
         "analyze_photo",
         "adjust_lighting",
@@ -110,7 +115,7 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
     json.dumps(schemas)  # must be plain JSON
     for schema in schemas:
         assert schema["description"]
-        if schema["name"] != "list_presets":  # the only tool that is not about one photo
+        if schema["name"] not in NOT_ABOUT_ONE_PHOTO:
             assert "photo_id" in schema["parameters"]["properties"]
         assert schema["parameters"]["additionalProperties"] is False
 
@@ -916,3 +921,10 @@ def test_a_repeated_relative_slider_call_is_a_new_request(rig: Rig) -> None:
     assert not first.get("no_change") and not second.get("no_change")
     assert change(second, "exposure")["after"] == pytest.approx(0.6)
     assert second["measured"] is not None
+
+
+def test_selected_photos_and_find_photo_are_read_only(rig: Rig) -> None:
+    selected = rig.call("get_selected_photos")
+    assert "photos" in selected and "note" in selected
+    missing = rig.call("find_photo", path="X:/not/in/catalog.jpg")
+    assert missing["found"] is False and "import" in missing["note"]
