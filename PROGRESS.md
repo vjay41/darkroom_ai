@@ -1490,3 +1490,7 @@ P1 status (2026-11-21 15:10): `pre-mcp-pivot` tag created locally (9d1bd93). Leg
 - OK: `get_preview` (new) and the elicitation confirmer contain no editing logic.
 - TO FIX (Photoshop phase): `replace_background` is a fixed pipeline (Lightroom TIFF -> subject mask -> Photoshop layers -> PSD/JPG) in one call. Decompose into granular tools the model chains itself: export_for_photoshop, create_subject_mask (on demand), open_document, apply_mask, add_layer_below / fill_layer, save_psd/jpg, close. Keep `replace_background` only as a thin convenience until then, or retire it.
 - Commits so far on dev: 23c3596 (strip to MCP, legacy parked), 463786b (get_preview + elicitation). Windows `make quality` still to be run by the user.
+
+## Windows gate for P1 (2026-11-21 15:39)
+`make quality` on Windows 11, Python 3.13.14, in-project .venv: ruff clean, format clean, mypy strict clean (52 files), pytest 294 passed, 8 skipped (need DARKROOM_LUAC), 0 failed. The one Linux-only failure (Windows path test) does not occur on Windows, as expected. P1 pushed to origin/dev with tag pre-mcp-pivot (via IntelliJ). Test catalog is now D:\darkroom_test\test_catalog\test_catalog.lrcat (darkroom.local.toml, git-ignored); test photos: 118 Nikon JPG + 2 Sony ARW in D:\darkroom_test\photos.
+Still open: live check through Hermes (/reload-mcp, get_photo_info, get_preview on the test catalog); P1b; P1c.
