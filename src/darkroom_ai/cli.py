@@ -3,7 +3,7 @@
 darkroom doctor                 check the local setup (config, Lightroom, Photoshop, GPUs)
 darkroom selftest [--write]     check every tool group against the installed Adobe apps
 darkroom soak [--cycles N] --yes  repeat the real tools on the test catalog, count failures
-darkroom connectors             list running MCP connectors; --stop-stale stops ones with older code
+darkroom connectors             list running MCP connectors; --stop-stale / --stop-all stop them
 darkroom mcp                    serve the tools over MCP (stdio)
 darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
 darkroom clean-outputs          remove intermediate files (never final results); asks first
@@ -75,7 +75,7 @@ def _source_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _connectors(settings: Settings, stop: bool) -> int:
+def _connectors(settings: Settings, stop: bool, stop_all: bool = False) -> int:
     directory = settings.paths.logs_dir.resolve() / "connectors"
     control = WindowsInstanceControl()
     disk = code_hash(_source_dir())
@@ -88,9 +88,11 @@ def _connectors(settings: Settings, stop: bool) -> int:
     for record in records:
         status = "current" if record.version == disk else "STALE (older code)"
         print(f"pid {record.pid}  started {record.started}  code {record.version}  {status}")
-    if stop:
-        for old in stop_stale(directory, control, own_version=disk, own_pid=os.getpid()):
-            print(f"stopped pid {old.pid} (older code {old.version})")
+    if stop or stop_all:
+        # An empty own_version matches no connector, so every registered one is stopped.
+        keep = "" if stop_all else disk
+        for old in stop_stale(directory, control, own_version=keep, own_pid=os.getpid()):
+            print(f"stopped pid {old.pid} (code {old.version})")
     return EXIT_OK
 
 
@@ -320,6 +322,11 @@ def build_parser() -> argparse.ArgumentParser:
     connectors.add_argument(
         "--stop-stale", action="store_true", help="stop connectors that run older code"
     )
+    connectors.add_argument(
+        "--stop-all",
+        action="store_true",
+        help="stop every connector (Hermes starts a new one on its next call)",
+    )
 
     selftest = commands.add_parser(
         "selftest",
@@ -370,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "soak":
             return _soak(settings, args.cycles, args.photo_id, args.yes)
         if args.command == "connectors":
-            return _connectors(settings, args.stop_stale)
+            return _connectors(settings, args.stop_stale, args.stop_all)
         if args.command == "revert":
             return _revert(settings, args.photo)
         if args.command == "clean-outputs":

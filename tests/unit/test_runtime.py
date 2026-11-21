@@ -93,6 +93,15 @@ def test_only_running_connectors_with_different_code_are_stopped(tmp_path: Path)
     assert sorted(p.name for p in directory.glob("*.json")) == ["2.json"]
 
 
+def test_an_empty_own_version_stops_every_connector(tmp_path: Path) -> None:
+    directory = tmp_path / "connectors"
+    for item in (record(1, "old"), record(2, "new")):
+        register(directory, item)
+    control = FakeControl({1: 100, 2: 100, 10: 5})
+    stopped = stop_stale(directory, control, own_version="", own_pid=10, sleep=lambda _s: None)
+    assert sorted(r.pid for r in stopped) == [1, 2]
+
+
 def test_a_connector_that_cannot_be_stopped_stays_registered(tmp_path: Path) -> None:
     directory = tmp_path / "connectors"
     register(directory, record(1, "old"))
