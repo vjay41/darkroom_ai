@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW total limits pass live; STOPPED on a serious finding: a JPG white-balance edit is lost after one preview export (not fixed, not understood); agent runs not started. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: JPG white-balance loss investigated (lost with "As Shot", kept with "Custom"); fix design shown, NOT built; agent runs wait for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -457,7 +457,28 @@ copies only, including a strong "much brighter" request and a white-balance requ
     case the white-balance label stayed "As Shot".
   * NOT fixed. Candidate to test with the user's OK: write `WhiteBalance = "Custom"` together with the incremental
     values, and restore "As Shot" on undo. Until this is understood, JPG white-balance results are UNRELIABLE.
-- Agent runs: NOT started (the JPG white-balance problem comes first; `lms ps` not run yet).
+- JPG white-balance investigation (2026-11-21; user decision: investigate first, no agent runs; the user ran `lms ps`:
+  qwen/qwen3.8-27b, IDLE, context 32768; the user checked `Commands.lua`: the export paths do not call
+  applyDevelopSettings, so the loss is Lightroom's). Hypothesis under test, not a conclusion: Lightroom drops
+  `IncrementalTemperature` on re-read while `WhiteBalance` is "As Shot". Expected values were written down before each
+  step; all four came out as predicted. Every step was undone and compared exactly with a snapshot.
+  1. `TEST_2461-41.jpg` copy (where an edit had survived in Phase 6), +30: reported 30 after the edit; after export 1
+     reported 0; export 2 measured the baseline again (0.0084). LOST. So the loss is not specific to one copy.
+  2. FRESH copy of `TEST_2462-42.jpg` (new virtual copy `D1A7715D-...`, stays in the catalog), +30: reported 30 after the
+     edit, 0 after export 1; here even export 1 measured the baseline (0.0015). LOST. (Exact compare afterwards: only
+     `FilterList`, which Lightroom adds itself after a copy's first edit, differs.)
+  3. Controls on the `TEST_2459-39.jpg` copy: HSL (orange saturation -20) SURVIVED two exports; a crop (0.1 / 0.1 / 0.9 /
+     0.9) SURVIVED two exports.
+  4. Candidate fix on the `TEST_2459-39.jpg` copy, the approved call `apply_settings {"IncrementalTemperature": 30,
+     "WhiteBalance": "Custom"}` through the normal write gate: reported 30 and "Custom" after the edit and after both
+     exports; both exports measured the warm value (0.0649 vs baseline 0.0083). SURVIVED. Restore call
+     `{"IncrementalTemperature": 0, "WhiteBalance": "As Shot"}`: Lightroom took "As Shot" back; reported 0 / "As Shot";
+     export measured the baseline; all 171 settings equal the snapshot exactly; master and file hash unchanged.
+  Conclusion so far: consistent with the hypothesis on three copies (loss with "As Shot") and one copy (no loss with
+  "Custom"). Still not explained: why the Phase 6 run's -10 survived. Tint and negative values were not tested
+  separately; TIFF files not tested.
+  Guardrail change (journal both keys) and a final read-back in every agent run: DESIGN shown to the user; NOT built.
+- Agent runs: NOT started; they wait for the user's go.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
