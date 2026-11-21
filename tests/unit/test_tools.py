@@ -1289,6 +1289,7 @@ def test_analyze_batch_returns_numbers_for_many_photos_and_changes_nothing(rig: 
     assert bad["error"] is not None and bad["median"] is None
     assert result["not_processed"] == []
     assert result["long_edge"] == 512
+    assert result["elapsed_s"] >= 0
     assert rig.lightroom.calls.count("create_virtual_copy") == 0
 
 

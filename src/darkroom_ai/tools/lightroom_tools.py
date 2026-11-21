@@ -384,6 +384,7 @@ class AnalyzeBatchResult(ToolResult):
     results: tuple[BatchPhotoNumbers, ...]
     not_processed: tuple[str, ...] = ()
     long_edge: int
+    elapsed_s: float = 0.0
     note: str = ""
 
 
@@ -435,12 +436,17 @@ def analyze_batch(ctx: ToolContext, args: AnalyzeBatchInput) -> Outcome:
     rest = tuple(ids[done:])
     note = (
         "Numbers only, from a small preview of each photo as it is now; "
-        "they are evidence, not verdicts."
+        "they are evidence, not verdicts. Clipping shares depend on the preview size, so compare "
+        "photos measured at the same long_edge."
     )
     if rest:
         note += f" Stopped early: {stopped}. Call again with not_processed."
     result = AnalyzeBatchResult(
-        results=tuple(results), not_processed=rest, long_edge=args.long_edge, note=note
+        results=tuple(results),
+        not_processed=rest,
+        long_edge=args.long_edge,
+        elapsed_s=round(time.monotonic() - began, 2),
+        note=note,
     )
     return Outcome(result, applied={"photos": len(results), "not_processed": len(rest)})
 
