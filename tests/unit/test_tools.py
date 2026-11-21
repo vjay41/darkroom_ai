@@ -373,7 +373,7 @@ def test_unknown_and_ambiguous_presets(tmp_path: Path) -> None:
 
 
 def test_undo_last_all_and_nothing(rig: Rig) -> None:
-    assert rig.call("undo", photo_id=MASTER)["note"] == "There is nothing to undo."
+    assert rig.call("undo", photo_id=MASTER)["note"].startswith("There is nothing to undo in this")
     copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.5, contrast=10)["photo_id"]
     rig.call("adjust_lighting", photo_id=MASTER, exposure=0.3)
     rig.call("adjust_white_balance", photo_id=MASTER, temperature=20)
@@ -528,3 +528,47 @@ def test_replace_background_needs_photoshop_and_a_mask_backend(tmp_path: Path) -
         tools.call("replace_background", {"photo_id": MASTER, "color": [0, 0, 0]})
     assert caught.value.code is ErrorCode.PS_NOT_REACHABLE
     assert lightroom.calls == []
+
+
+# -- undo is limited to the session; revert is for the person only --------------------------------
+
+
+def test_undo_reaches_only_this_sessions_edits(rig: Rig) -> None:
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.5)["photo_id"]
+    rig.journal.session = "later-session"
+    nothing = rig.call("undo", photo_id=MASTER, scope="all")
+    assert nothing["undone_steps"] == 0
+    assert "darkroom revert" in nothing["note"]
+    assert rig.value(copy_id, "Exposure2012") == 0.5
+
+    rig.call("adjust_lighting", photo_id=MASTER, exposure=0.25)
+    rig.call("adjust_lighting", photo_id=MASTER, shadows=10)
+    assert rig.call("undo", photo_id=MASTER)["undone_steps"] == 1  # default: the last one
+    assert rig.value(copy_id, "Shadows2012") == 0
+    everything = rig.call("undo", photo_id=MASTER, scope="all")
+    assert everything["undone_steps"] == 1
+    assert rig.value(copy_id, "Exposure2012") == 0.5  # the earlier session's edit stays
+
+
+def test_revert_goes_back_to_the_original_and_is_not_a_tool(rig: Rig) -> None:
+    from darkroom_ai.tools.revert import apply_revert, plan_revert
+
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.5)["photo_id"]
+    rig.journal.session = "later-session"
+    rig.call("adjust_lighting", photo_id=MASTER, exposure=0.25, shadows=10)
+    plan = plan_revert(rig.context, MASTER)
+    assert (len(plan.entries), plan.sessions) == (2, 2)
+    assert plan.settings == {"Exposure2012": 0, "Shadows2012": 0}
+    assert rig.value(copy_id, "Exposure2012") == 0.75  # planning changes nothing
+
+    entry = apply_revert(rig.context, plan)
+    assert entry.tool == "revert"
+    assert rig.value(copy_id, "Exposure2012") == 0
+    assert rig.value(copy_id, "Shadows2012") == 0
+    assert plan_revert(rig.context, MASTER).entries == ()
+    assert rig.call("undo", photo_id=MASTER, scope="all")["undone_steps"] == 0
+
+    assert "revert" not in rig.tools.names
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("revert", photo_id=MASTER)
+    assert caught.value.code is ErrorCode.LLM_BAD_TOOL_CALL

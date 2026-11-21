@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: first agent run PASSED on `primary` (lighting + white balance, undone); waiting for the user
+## CURRENT STATE — 2026-11-21: Phase 6: undo limited to the session, `darkroom revert` added; second agent run (replace_background) plan shown, waiting for the go
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -125,7 +125,20 @@ tools offered: `adjust_lighting`, `adjust_white_balance`; no confirmer):
   pending and by checking the undone entries' session. Open decision: add a scope "session" to the tool.
 - One photo, one request: no evidence yet for white-balance changes, multi-pass runs, or other photos.
 
-Still owed: `replace_background` as a second agent run (after the user's go); profiles `glimmer` and `fast` (the user will
+User decisions after the first run (2026-11-21) and what was built:
+- `undo` tool: reaches only edits made in the CURRENT session ("last" is the default, "all" = everything from this session).
+  My reading, flagged to the user: "last" is session-limited too, so a model can never take back an earlier session's edit.
+  With nothing to undo, the result points to `darkroom revert`.
+- `darkroom revert [--photo PATH]` (`tools/revert.py`): human-only, not in the tool registry and not offered over MCP. Shows
+  how many edits from how many sessions would be taken back and the values to restore, asks y/N, then puts every setting
+  darkroom_ai ever changed on the copy back to its value from before the first such change (from the journal). Settings
+  changed by hand in Lightroom are not touched. Unit-tested; NOT yet run against Lightroom.
+- Answer recorded: on turn 1 of the first run no `reasoning_effort` was sent (planning turn; `reasoning_effort_planning` is
+  unset for `primary`), so the model used its default thinking: 306 of 385 tokens.
+- 304 tests pass, `make quality` clean.
+
+Still owed: `replace_background` as a second agent run with RGB 210/210/210 and a pause before the undo (plan shown,
+waiting for the go); profiles `glimmer` and `fast` (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
 Earlier note (done): a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its

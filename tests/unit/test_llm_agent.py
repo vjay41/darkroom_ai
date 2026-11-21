@@ -753,3 +753,31 @@ def test_only_the_latest_preview_is_in_a_request(tmp_path: Path) -> None:
     last = rig.llm.sent[-1]
     assert PREVIEW_REMOVED in last[1]["content"]  # the original preview is gone from history
     assert "USER REQUEST: Brighten" in last[1]["content"]  # ... its text is kept
+
+
+def test_revert_command_asks_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lightroom = FakeLightroom(tmp_path)
+    journal = InMemoryJournal()
+    context = ToolContext(settings=settings_for(tmp_path), lightroom=lightroom, journal=journal)
+    copy_id = ToolRegistry(context).call("adjust_lighting", {"photo_id": MASTER, "exposure": 0.5})[
+        "photo_id"
+    ]
+    journal.session = "later-session"
+    monkeypatch.setattr(cli, "build_tool_context", lambda _settings: context)
+    path = Path(lightroom.photos[MASTER]["path"])
+
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+    assert cli._revert(context.settings, path) == cli.EXIT_OK
+    assert lightroom.settings[copy_id]["Exposure2012"] == 0.5
+    assert "Nothing was changed." in capsys.readouterr().out
+
+    monkeypatch.setattr("builtins.input", lambda _prompt: "y")
+    assert cli._revert(context.settings, path) == cli.EXIT_OK
+    assert lightroom.settings[copy_id]["Exposure2012"] == 0
+    out = capsys.readouterr().out
+    assert "1 darkroom_ai edit(s) from 1 session(s)" in out and "Reverted 1 setting(s)." in out
+    assert cli._revert(context.settings, path) == cli.EXIT_OK
+    assert "no darkroom_ai edits to take back" in capsys.readouterr().out
+    assert "revert" not in [tool.name for tool in mcp_server.list_tools(ToolRegistry(context))]

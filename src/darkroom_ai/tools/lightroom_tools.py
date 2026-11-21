@@ -7,6 +7,7 @@ are recorded with the values needed to undo them.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -16,6 +17,7 @@ from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.imaging.analysis import ImageAnalysis, analyze
 from darkroom_ai.imaging.faces import FaceAnalysis, analyze_faces
 from darkroom_ai.imaging.io import load_image
+from darkroom_ai.safety.journal import JournalEntry
 from darkroom_ai.tools.context import (
     EditResult,
     Outcome,
@@ -382,7 +384,10 @@ def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
 
 
 class UndoInput(_Input):
-    """Take back darkroom_ai's edits on a photo: the last one, or all of them."""
+    """Take back darkroom_ai's edits made in THIS session: the last one, or all of them.
+
+    Edits from earlier sessions cannot be taken back with this tool.
+    """
 
     scope: Literal["last", "all"] = "last"
 
@@ -394,35 +399,55 @@ class UndoResult(ToolResult):
     note: str = ""
 
 
-def undo(ctx: ToolContext, args: UndoInput) -> Outcome:
-    copy = resolve_copy(ctx, args.photo_id)
+UNDO_RECORDS = ("undo", "revert")  # journal entries that list edits they took back
+NOTHING_TO_UNDO = (
+    "There is nothing to undo in this session. Edits from earlier sessions can only be taken "
+    "back by the user, with the command `darkroom revert`."
+)
+
+
+def pending_edits(ctx: ToolContext, copy_id: str, *, session: str | None) -> list[JournalEntry]:
+    """Edits on this copy that have not been taken back yet, oldest first.
+
+    `session` limits the list to one session's edits; None means every session.
+    """
     entries = list(ctx.journal.entries())
     already = {
         str(entry_id)
         for entry in entries
-        if entry.tool == "undo" and entry.status == "ok" and entry.applied
+        if entry.tool in UNDO_RECORDS and entry.status == "ok" and entry.applied
         for entry_id in entry.applied.get("undone", [])
     }
-    pending = [
+    return [
         entry
         for entry in entries
         if entry.undoable
         and entry.undo is not None
-        and entry.undo.get("photo_id") == copy.id
+        and entry.undo.get("photo_id") == copy_id
         and entry.undo.get("settings")
         and entry.id not in already
+        and (session is None or entry.session == session)
     ]
+
+
+def restore_values(entries: Sequence[JournalEntry]) -> dict[str, Any]:
+    """The values to put back to take `entries` back: each setting's oldest "before" value."""
+    restore: dict[str, Any] = {}
+    for entry in reversed(entries):
+        assert entry.undo is not None
+        restore.update(entry.undo["settings"])
+    return restore
+
+
+def undo(ctx: ToolContext, args: UndoInput) -> Outcome:
+    copy = resolve_copy(ctx, args.photo_id)
+    pending = pending_edits(ctx, copy.id, session=ctx.journal.session)
     if not pending:
-        result = UndoResult(
-            photo_id=copy.id, undone_steps=0, restored={}, note="There is nothing to undo."
-        )
+        result = UndoResult(photo_id=copy.id, undone_steps=0, restored={}, note=NOTHING_TO_UNDO)
         return Outcome(result)
 
     chosen = pending if args.scope == "all" else pending[-1:]
-    restore: dict[str, Any] = {}
-    for entry in reversed(chosen):  # the oldest "before" value of each setting wins
-        assert entry.undo is not None
-        restore.update(entry.undo["settings"])
+    restore = restore_values(chosen)
     check_process_version(ctx.lightroom.get_develop_settings(copy.id, ["ProcessVersion"]))
     ctx.lightroom.apply_develop_settings(copy.id, restore, "darkroom_ai: undo")
     result = UndoResult(photo_id=copy.id, undone_steps=len(chosen), restored=restore)
@@ -449,5 +474,7 @@ __all__ = [
     "apply_preset",
     "crop",
     "get_photo_info",
+    "pending_edits",
+    "restore_values",
     "undo",
 ]

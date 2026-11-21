@@ -110,7 +110,7 @@ def main() -> int:
     profile = settings.llm.active
     context = build_tool_context(settings)  # default confirmer: refuses anything gated
     lightroom, journal = context.lightroom, context.journal
-    session = journal.session  # type: ignore[attr-defined]
+    session = journal.session
     registry = RecordingRegistry(context)
 
     photo = lightroom.find_photo(str(args.photo))

@@ -4,6 +4,7 @@ darkroom doctor                 check the local setup (config, Lightroom, Photos
 darkroom models test [...]      test model profiles (vision, tool calling, prompt injection)
 darkroom chat "..." [...]       let the local model edit one photo; asks before anything gated
 darkroom mcp                    serve the tools over MCP (stdio)
+darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
 darkroom lightroom setup|ping   Lightroom plug-in setup and check
 """
 
@@ -32,6 +33,7 @@ from darkroom_ai.llm import selftest
 from darkroom_ai.llm.client import LocalLlmClient
 from darkroom_ai.tools.factory import build_tool_context
 from darkroom_ai.tools.registry import ToolRegistry
+from darkroom_ai.tools.revert import apply_revert, plan_revert
 
 EXIT_OK = 0
 EXIT_PROBLEM = 1
@@ -229,6 +231,44 @@ def _chat(settings: Settings, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# -- revert ---------------------------------------------------------------------------------------
+
+
+def _revert(settings: Settings, photo_path: Path | None) -> int:
+    """Human-only: back to the values from before any darkroom_ai edit. Never offered to a model."""
+    context = build_tool_context(settings)
+    if photo_path:
+        photo = context.lightroom.find_photo(str(photo_path))
+        if photo is None:
+            print(f"{photo_path} is not in the open Lightroom catalog.", file=sys.stderr)
+            return EXIT_ERROR
+    else:
+        selection = context.lightroom.get_selection()
+        if selection.active is None:
+            print("Select one photo in Lightroom, or pass --photo PATH.", file=sys.stderr)
+            return EXIT_ERROR
+        photo = selection.active
+    plan = plan_revert(context, photo.id)
+    if not plan.entries:
+        print(f"{photo.file_name}: no darkroom_ai edits to take back.")
+        return EXIT_OK
+    print(
+        f"{photo.file_name}: {len(plan.entries)} darkroom_ai edit(s) from {plan.sessions} "
+        "session(s) would be taken back on its virtual copy. Settings changed by hand in "
+        "Lightroom are not touched; the original file is never changed."
+    )
+    agreed = AskUser().confirm(
+        "put these settings back to their values from before darkroom_ai's first edit",
+        plan.settings,
+    )
+    if not agreed:
+        print("Nothing was changed.")
+        return EXIT_OK
+    apply_revert(context, plan)
+    print(f"Reverted {len(plan.settings)} setting(s).")
+    return EXIT_OK
+
+
 # -- lightroom ------------------------------------------------------------------------------------
 
 
@@ -282,6 +322,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("mcp", help="serve the tools over MCP (stdio)")
 
+    revert = commands.add_parser(
+        "revert", help="put a photo's copy back to its original values (asks first)"
+    )
+    revert.add_argument("--photo", type=Path, default=None, help="file path of the photo")
+
     lightroom = commands.add_parser("lightroom", help="Lightroom plug-in setup and checks")
     lightroom_commands = lightroom.add_subparsers(dest="lightroom_command", required=True)
     setup = lightroom_commands.add_parser("setup", help="write the plug-in's bridge.json")
@@ -307,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"There is no profile named '{args.profile}'.", file=sys.stderr)
                 return EXIT_ERROR
             return _chat(settings, args)
+        if args.command == "revert":
+            return _revert(settings, args.photo)
         if args.command == "mcp":
             from darkroom_ai import mcp_server
 

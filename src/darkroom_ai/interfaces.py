@@ -123,6 +123,11 @@ class PhotoshopAdapter(Protocol):
 class ActionJournal(Protocol):
     """Append-only record of every action, with what is needed to undo it."""
 
+    @property
+    def session(self) -> str:
+        """Identifier of the current run; every entry it records carries it."""
+        ...
+
     def record(
         self,
         tool: str,
