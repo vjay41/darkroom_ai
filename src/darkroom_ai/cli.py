@@ -2,6 +2,7 @@
 
 darkroom doctor                 check the local setup (config, Lightroom, Photoshop, GPUs)
 darkroom selftest [--write]     check every tool group against the installed Adobe apps
+darkroom soak [--cycles N] --yes  repeat the real tools on the test catalog, count failures
 darkroom connectors             list running MCP connectors; --stop-stale stops ones with older code
 darkroom mcp                    serve the tools over MCP (stdio)
 darkroom revert [--photo PATH]  put a photo's copy back to its original values; asks first
@@ -271,6 +272,34 @@ def _selftest(settings: Settings, write: bool, photo_id: str | None) -> int:
     return EXIT_PROBLEM if report.failed else EXIT_OK
 
 
+def _soak(settings: Settings, cycles: int, photo_id: str | None, yes: bool) -> int:
+    from darkroom_ai.soak import format_soak, run_soak
+    from darkroom_ai.tools.factory import build_tool_registry
+
+    with LightroomClient.from_settings(settings, load_bridge_file()) as lightroom:
+        info = lightroom.ping()
+    print(f"Soak plan: {cycles} cycle(s) on the open catalog {info.catalog_path}")
+    print("  each cycle: list, preview, exposure edit + undo, gradient mask create + delete")
+    print("  writes happen on ONE working copy (a virtual copy); originals are never changed")
+    if not info.writes_allowed:
+        print(
+            "  writes are NOT allowed for this catalog (not the configured test catalog): stopping"
+        )
+        return EXIT_PROBLEM
+    if not yes:
+        print("Run again with --yes to start.")
+        return EXIT_PROBLEM
+    registry = build_tool_registry(settings)
+    report = run_soak(registry.call, cycles=cycles, photo_id=photo_id)
+    print(format_soak(report))
+    out_dir = settings.paths.outputs_dir.resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"soak-{report.started[:10]}.json"
+    out.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+    print(f"Report saved: {out}")
+    return EXIT_PROBLEM if report.failed else EXIT_OK
+
+
 # -- parser ---------------------------------------------------------------------------------------
 
 
@@ -301,6 +330,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     selftest.add_argument("--photo-id", default=None, help="photo to test with (default: first)")
 
+    soak = commands.add_parser(
+        "soak", help="repeat the real tools on the test catalog and count failures (P6)"
+    )
+    soak.add_argument("--cycles", type=int, default=10, help="how many rounds (default 10)")
+    soak.add_argument("--photo-id", default=None, help="master photo to use (default: first)")
+    soak.add_argument(
+        "--yes", action="store_true", help="start (without it only the plan is shown)"
+    )
+
     revert = commands.add_parser(
         "revert", help="put a photo's copy back to its original values (asks first)"
     )
@@ -329,6 +367,8 @@ def main(argv: list[str] | None = None) -> int:
             return _doctor(settings)
         if args.command == "selftest":
             return _selftest(settings, args.write, args.photo_id)
+        if args.command == "soak":
+            return _soak(settings, args.cycles, args.photo_id, args.yes)
         if args.command == "connectors":
             return _connectors(settings, args.stop_stale)
         if args.command == "revert":

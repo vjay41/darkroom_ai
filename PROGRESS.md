@@ -1757,3 +1757,7 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Not done in P1c: nothing blocking; Lua-side syntax test still needs DARKROOM_LUAC.
 - P1c verified live (Hermes get_capabilities: protocol 1, protocol_matches true, missing_commands []). Connector restarted with `--stop-stale`.
 - People mask feature set to `verified` in compatibility.toml (confirmed end to end 2026-11-21, approvals manual, copy shown in Develop).
+
+## 21 Nov 2026 - P6 soak runner
+- `darkroom soak [--cycles N] --yes`: repeats list, preview, exposure edit + read-back + undo, gradient mask create/list/delete on one working copy of a master (test catalog; refuses if the plug-in says writes are not allowed). Report: outputs/soak-<date>.json. Unit tests against the simulator (370 passed, 8 skipped on Linux); they caught a bad `undo` call (photo_id required) in my first draft.
+- Live run: see next entry.
