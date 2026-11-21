@@ -1789,3 +1789,10 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Hermes loaded darkroom-operations and the lr-* skills, looked at the preview and analysis, checked the baseline, judged the photo needed nothing, made zero writes, and reported what it left alone, the undo route and what it could not judge at preview size.
 - Verified: skills load and shape behaviour (restraint, honesty about limits). NOT verified: the edit + compare + undo loop, because this photo had no real problem. A photo with a genuine fault is needed for that.
 - Note: faces unavailable (FACE_MODEL_MISSING, no YuNet ONNX file configured); it is the user's decision to supply one.
+
+### P7 edit-loop check PASSED (2026-11-21, test catalog)
+- Photo chosen from a numeric ranking Hermes ran over 12 originals: DSC_2530-106.jpg (highlight clip 16.8%, red 14.6%). RAW top candidate skipped (RAW writes unverified).
+- Hermes stated the intent, noticed Lightroom showed the master, and the bridge made working copy 1894FC78. One pass: Highlights -10 only. Highlight clip 16.8% -> 2.35% (red 14.6% -> 1.4%), shadows flat, no cast. Kept; undo route reported. Everything else left alone.
+- Verified: skills load and the look / edit / measure / compare / report loop works end to end. Still judged by preview and Hermes' own read; the user's eyes at full size are the final check.
+- Observed cost: the numeric ranking of 12 photos took many minutes and Hermes wrote its own parsing script -> motivates read-only `analyze_batch` + list filters (next).
+- Left on the test catalog: working copy 1894FC78 with Highlights -10 (keep or undo at the user's choice).
