@@ -19,19 +19,19 @@ metadata:
   id of the photo you mean. Get it from `get_selected_photos` or `find_photo`, never by guessing.
 - Edits have limits per call and per photo. A request over the limit is clamped or needs a go-ahead. Say
   when something was clamped; do not hide it.
-- Writes are only allowed on the configured catalog (the test catalog until Vijay says otherwise). A
+- Writes are only allowed on the configured catalog (the test catalog until the user says otherwise). A
   "wrong catalog" error means stop, not work around.
 - Every write is journaled and can be taken back with `undo` (this session's edits). Old sessions cannot be
   undone with it.
 
 ## Go-aheads belong to the person
-- Some actions ask Vijay for a go-ahead (people masks, imports, going past an edit limit, the write
+- Some actions ask the user for a go-ahead (people masks, imports, going past an edit limit, the write
   self-test). Treat a decline or a timeout as an answer, not an error to route around.
 - Never approve your own request, never look for another way to do a declined action, and never claim
   something was approved when it was not.
 
 ## Checks before and after a write
-- Before: is the right photo showing, and does `get_capabilities` say the feature is verified? Tell Vijay
+- Before: is the right photo showing, and does `get_capabilities` say the feature is verified? Tell the user
   about anything not verified before you use it.
 - After: read back the change (`get_develop_parameters`, `list_masks`) and look at the preview. If the
   result is merely different or worse, `undo` and do less.

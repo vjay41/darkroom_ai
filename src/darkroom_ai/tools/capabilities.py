@@ -23,8 +23,8 @@ class GetCapabilitiesInput(BaseModel):
     """Report the installed Lightroom Classic, plug-in and Photoshop versions, whether each is a
     version darkroom_ai was tested with, and which features are verified, untested, have a known
     issue or are unavailable. Reads only. Call it at the start of a session and before relying on
-    an untested feature (for example RAW edits or people masks); tell Vijay about anything that is
-    not 'verified' before you use it. An untested version is a warning, never a block."""
+    an untested feature (for example RAW edits or people masks); tell the user about anything
+    that is not 'verified' before you use it. An untested version is a warning, never a block."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -140,7 +140,7 @@ class RunSelftestInput(BaseModel):
     key the tools use (drift check), metadata, presets, preview. Run it after an Adobe update and
     report every probe. Reads only by default. With write=true it also makes ONE virtual copy in
     the test catalog, changes Exposure by +0.1 EV, reads it back and puts it back; that asks
-    Vijay first. A failed probe means the matching tools may not work: say which."""
+    the user first. A failed probe means the matching tools may not work: say which."""
 
     model_config = ConfigDict(extra="forbid")
 

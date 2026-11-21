@@ -24,7 +24,7 @@ that they are updated one at a time.
 - **Plug-in block:** the protocol must match, no commands may be missing, and the plug-in must be recent
   enough. Otherwise say what the note says: update the plug-in and reload it in Lightroom.
 - **Feature list:** features that are untested, have a known issue or are unavailable are listed. Tell
-  Vijay before using one.
+  the user before using one.
 
 ## Reading `run_selftest`
 - It checks, probe by probe, that the installed apps still behave as expected. Report every probe, not

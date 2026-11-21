@@ -28,7 +28,7 @@ look at the photo, decide the intent, then pick the smallest tool that does the 
 - **AI selections (subject, sky, background, objects, landscape):** fast, good on clear edges, can miss
   fine detail such as hair, veils, jewellery and glass. Treat the result as a draft and check the edge.
 - **People:** Lightroom will not make it without a person being chosen in its own panel. The tool
-  asks Vijay for a go-ahead and then waits for him to pick a person and create the mask. This is
+  asks the user for a go-ahead and then waits for them to pick a person and create the mask. This is
   interactive and time-boxed; do not loop retries. `get_capabilities` says whether it is verified.
 - **Gradients and radial gradients:** geometric, predictable and soft. Good for sky, vignettes, light
   falloff. The feather matters as much as the position: a hard edge reads as a filter.
@@ -50,7 +50,7 @@ look at the photo, decide the intent, then pick the smallest tool that does the 
   do not click in Lightroom meanwhile. If it was in use you get a busy error; wait, do not hammer.
 - **Collapsed stacks hide the working copy.** Lightroom stacks a virtual copy with its original, and a
   copy inside a collapsed stack cannot be shown. Symptoms: a busy error, or a mask that takes about a
-  minute and comes back without an id. Vijay fixes it in the Library module (Photo > Stacking > Expand
+  minute and comes back without an id. The user fixes it in the Library module (Photo > Stacking > Expand
   All Stacks, with a folder or All Photographs as the source). Do not retry in a loop.
 - **Check the id you act on.** Use the id of the photo Lightroom is actually showing (`get_selected_photos`).
   A mask made on the wrong photo, possibly an original, is a real risk; say so and stop.

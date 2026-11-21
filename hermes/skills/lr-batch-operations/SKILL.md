@@ -21,14 +21,14 @@ decision.
 
 ## Phases
 1. **Scope (ask once).** Count what is involved (`list_catalog_photos`, filter by folder text, page with the
-   offset). Say how many photos, the phases below and a rough time. Wait for Vijay's go-ahead before any write.
+   offset). Say how many photos, the phases below and a rough time. Wait for the user's go-ahead before any write.
 2. **Triage with numbers only.** Use `analyze_batch` (up to 25 photos per call, no pictures). Keep the numbers,
    not the images. If it returns `not_processed`, call again with those ids. Facts from `get_photo_metadata`
    (camera, ISO, file type) add context. Numbers are evidence; they never decide an edit alone.
 3. **Group.** Put photos with similar scene and light together (same session, similar numbers). Mark outliers
    (very dark, very bright, odd cast, a different file type) to handle on their own.
 4. **Pilot.** For each group, pick one representative and do the full careful loop: look, state the intent,
-   one small pass, measure, compare, undo if worse. Show Vijay the result and get his approval before spreading it.
+   one small pass, measure, compare, undo if worse. Show the user the result and get their approval before spreading it.
 5. **Rollout in chunks.** Apply the approved idea to a small chunk (about ten photos), not the whole set.
    Choose the values per photo from its own numbers; identical values on photos with different exposure can
    hurt them. After each chunk, re-measure with `analyze_batch` and compare with the triage numbers.
@@ -39,8 +39,8 @@ decision.
 ## Stop conditions (stop, report, ask)
 - A tool error that is not a single odd photo (Lightroom not reachable, wrong catalog, wrong photo showing).
 - More than one photo in a chunk got worse after the same change: the idea is wrong for this group.
-- Anything outside what Vijay approved (another folder, masks, presets, RAW files not covered by the pilot).
-- A time or call budget that Vijay set is used up.
+- Anything outside what the user approved (another folder, masks, presets, RAW files not covered by the pilot).
+- A time or call budget that the user set is used up.
 
 ## Keeping it efficient
 - Smaller previews are enough for triage; look at full-size images only for the pilot and for flagged photos.
@@ -50,4 +50,4 @@ decision.
 
 ## Honest limits
 - Grouping by numbers can put different scenes together; check the pilot against a second photo of the group.
-- A batch that "worked" on numbers can still look wrong. Offer samples and let Vijay's eyes decide.
+- A batch that "worked" on numbers can still look wrong. Offer samples and let the user's eyes decide.

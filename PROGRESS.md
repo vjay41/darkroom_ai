@@ -1803,3 +1803,10 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Not done: list filters (needs plug-in change), batch writes (batch id, batch undo, chunk/error limits) - needs a PRD addendum and the user's sign-off first.
 - Live check of `analyze_batch` through Hermes: PASSED 2026-11-22 (4 photos in one call, numbers match the earlier analysis, unknown id came back as a per-photo error, not_processed empty). Added `elapsed_s` and a note that clipping shares depend on preview size (compare like with like). Hermes only sees new MCP tools after the app restarts; the profile must be the darkroom one.
 - Darktable-path skills `single-photo-edit` and `photo-diagnosis` got a read-first note (numbers are reference only, not a recipe); backups in `profiles/darkroom/_to_delete/`.
+
+### Release hygiene pass (2026-11-22)
+- Windows `make quality` green via Hermes: ruff, format, mypy, 411 passed, 8 skipped (log in outputs/quality-20261122.txt, not tracked).
+- Shipped skills and tool descriptions no longer name the user ("Vijay" -> "the user"); the eight lr-* skills were re-synced to the profile.
+- Scratch folder `hermes/proposed/` removed from the repo (copy kept in outputs/, untracked).
+- Checked: no photos, catalogs, models, logs or local config are tracked (151 files); `darkroom.local.toml` is ignored.
+- Still to do before public: LICENSE/NOTICE, AGENTS.md, `darkroom deploy`, docs layout, README/PRD/PROGRESS cleanup of personal paths (P8).
