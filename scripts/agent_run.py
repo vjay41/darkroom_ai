@@ -61,6 +61,15 @@ def differences(before: Mapping[str, Any], after: Mapping[str, Any]) -> list[str
     return changed
 
 
+def master_differences(before: Mapping[str, Any], now: Mapping[str, Any]) -> list[str]:
+    """Differences on a master. An added EMPTY FilterList is Lightroom's own and is only
+    reported; a non-empty one, or any other change, counts."""
+    if "FilterList" not in before and now.get("FilterList") == {}:
+        print("  note: Lightroom added an empty FilterList to the master (not a darkroom_ai write)")
+        now = {key: value for key, value in now.items() if key != "FilterList"}
+    return differences(before, now)
+
+
 def numbers(analysis: Mapping[str, Any]) -> str:
     tones = {k: v for k, v in analysis["tones"].items() if k != "histogram"}
     return json.dumps(
@@ -113,7 +122,7 @@ def undo_and_check(context: ToolContext, state: Mapping[str, Any]) -> None:
     check(f"all {len(start)} settings of the copy equal the recorded start state", not left)
     if left:
         print("   differences:", left)
-    master_left = differences(master_start, dict(lightroom.get_develop_settings(photo_id)))
+    master_left = master_differences(master_start, dict(lightroom.get_develop_settings(photo_id)))
     check("master's settings never changed", not master_left)
     check("original file SHA-256 unchanged", sha256(photo_path) == state["sha256"])
     check(
@@ -226,7 +235,7 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
         )
     check("read-back: every applied edit still holds after the last export", not lost)
     master_now = dict(lightroom.get_develop_settings(photo.id))
-    check("master's settings unchanged", not differences(state["master_start"], master_now))
+    check("master's settings unchanged", not master_differences(state["master_start"], master_now))
     check("original file SHA-256 unchanged", sha256(args.photo) == state["sha256"])
 
     if args.pause:

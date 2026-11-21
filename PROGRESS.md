@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: runs 1-5 done; run 5 reverted by the user and verified; run 6 (RAW white balance) waits for the user's go. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: runs 1-6 done (run 6: the playbook caused an unrequested lighting edit); run 7 waits for the user's go. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -681,8 +681,31 @@ copies only, including a strong "much brighter" request and a white-balance requ
     plug-in refuses writes to masters). Right after the run the master was still identical. So Lightroom added that
     empty key to the master by itself at some point afterwards (the same key it adds to copies after their first edit);
     what triggered it is not established.
-  * Runs 6, 7: waiting for the user's go, one at a time. The playbook-versus-none comparison is a separate block
-    afterwards.
+  * RULE for later checks (user decision): an added EMPTY `FilterList` on a master is reported but does not fail the
+    check; a non-empty `FilterList` or any other key change on a master fails it (`scripts/agent_run.py` updated).
+    Possible trigger of the empty key on the run 5 master, UNPROVEN: the user viewing the master in Lightroom.
+  * RUN 6 DONE (portrait playbook, lighting + white balance, virtual copy of `RAW_DSC00481.ARW`; request "Make the white
+    balance slightly warmer."):
+    - Lightroom DID report the numbers for this copy (it had one earlier edit): Temperature 4700 K at the start.
+    - Pass 1 (38.8 s, 5946 tokens, 5672 thinking): `adjust_lighting` exposure +0.3 and shadows +15 (both applied, no
+      limit). The user had NOT asked for a lighting change. The playbook's RAW line ("make lighting changes BEFORE
+      white-balance changes") was evidently read as a step to carry out. Tool-measured: clipped shadows 28.9 % -> 14.4 %,
+      clipped highlights 0.35 % -> 1.40 %, p50 0.014 -> 0.022.
+    - Pass 2 (2.8 s, 282 tokens, 126 thinking): `adjust_white_balance` temperature +100 K (applied +100, 4700 -> 4800;
+      a tenth of the 1000 K per-pass limit; no clamp, no refusal). Tint not touched.
+    - Turn 3 (5.8 s): finished. 2 passes, 50.4 s, 3 previews. No refusal, no clamp, no repeated call, no loop.
+    - Final measurement: clipped highlights 1.171 %, clipped shadows 14.398 %, p50 0.022; cast measurable, "towards
+      blue/cool and magenta". Blue-yellow: -0.0272 at the start, -0.0299 after the lighting edit, -0.0304 after the
+      +100 K. So the measurement does NOT show a warmer picture: +100 K is too small to register here (for
+      comparison, +500 K moved it by about +0.009 on the 480 file), and the unrequested lighting edit moved the number
+      more than the white-balance edit did.
+    - Read-back: every applied edit held. Undo: 2 steps; all 172 settings equal the start state; master unchanged;
+      SHA-256 unchanged; nothing pending. Summary (683 characters) in `logs\agent_run_20261121-135648.txt`, not read.
+    - Findings: (1) the playbook caused an edit the user did not ask for; (2) "slightly warmer" was honoured in the
+      setting (+100 K) but is not visible in the measurement; (3) the first turn's thinking was very long (5672
+      tokens, 39 s) at a normal token rate, so it is the model deliberating, not a GPU problem.
+  * Run 7 (the Phase 6 "slightly cooler" request again): waiting for the user's go. The playbook-versus-none comparison
+    is a separate block afterwards.
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
