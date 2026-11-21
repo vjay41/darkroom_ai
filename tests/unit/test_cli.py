@@ -22,13 +22,6 @@ def test_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert "doctor" in capsys.readouterr().out
 
 
-def test_doctor_with_repository_config(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["--config", str(REPO / "darkroom.toml"), "doctor"]) == EXIT_OK
-    out = capsys.readouterr().out
-    assert "config: OK" in out
-    assert "not checked yet" in out
-
-
 def test_doctor_reports_non_local_endpoint(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

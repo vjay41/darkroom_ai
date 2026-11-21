@@ -110,3 +110,67 @@ def open_tcp(host: str, port: int, *, timeout_s: float) -> socket.socket:
             continue
         return sock
     raise last_error or OSError(f"no address found for {host}:{port}")
+
+
+class LocalHttpError(OSError):
+    """A request to the local server failed at the connection level (refused, timed out, ...)."""
+
+
+class LocalHttp:
+    """Minimal JSON-over-HTTP client that can only talk to this computer.
+
+    - The base URL must be a loopback address (checked here and again for every request).
+    - Environment proxy settings are ignored (trust_env=False) and no proxy is mounted, so
+      HTTP_PROXY / HTTPS_PROXY / ALL_PROXY cannot route a request anywhere else.
+    - Redirects are not followed.
+    """
+
+    def __init__(self, base_url: str, *, timeout_s: float) -> None:
+        import httpx2
+
+        validate_local_url(base_url)
+        parts = urlsplit(base_url)
+        assert parts.hostname is not None
+        resolve_loopback(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80))
+
+        def only_loopback(request: httpx2.Request) -> None:
+            if not is_loopback_host(request.url.host):
+                raise _reject("request", str(request.url), "the host is not a loopback address")
+
+        self._errors = (httpx2.TransportError, httpx2.InvalidURL)
+        self._client = httpx2.Client(
+            base_url=base_url.rstrip("/") + "/",
+            timeout=timeout_s,
+            trust_env=False,
+            proxy=None,
+            mounts={},
+            follow_redirects=False,
+            transport=httpx2.HTTPTransport(trust_env=False, proxy=None, retries=0),
+            event_hooks={"request": [only_loopback]},
+        )
+
+    def close(self) -> None:
+        self._client.close()
+
+    def request_json(
+        self,
+        method: str,
+        path: str,
+        payload: object | None = None,
+        *,
+        timeout_s: float | None = None,
+    ) -> tuple[int, object]:
+        """Send a request and return (status code, decoded JSON or the body text)."""
+        kwargs: dict[str, object] = {}
+        if payload is not None:
+            kwargs["json"] = payload
+        if timeout_s is not None:
+            kwargs["timeout"] = timeout_s
+        try:
+            response = self._client.request(method, path.lstrip("/"), **kwargs)  # type: ignore[arg-type]
+        except self._errors as exc:
+            raise LocalHttpError(f"{type(exc).__name__}: {exc}") from exc
+        try:
+            return response.status_code, response.json()
+        except ValueError:
+            return response.status_code, response.text

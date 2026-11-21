@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21 09:40: Phase 5 gate accepted; Phase 6 plan shown, waiting for the user's go
+## CURRENT STATE — 2026-11-21: Phase 6 built; STOPPED before the first model call that carries an image
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -16,8 +16,49 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 | 3 Photoshop spike | Done (raw pywin32, child-process deadline, auto-start) |
 | 4 Imaging toolkit | GATE ACCEPTED by the user on 2026-11-21, pending the user's own visual check of the Select Subject mask. ONNX mask backend and YuNet face detector DEFERRED until the user says so (unit-tested with fakes only). |
 | 5 Tool layer + guardrails | GATE ACCEPTED by the user on 2026-11-21, pending the user's visual checks of the mask and the background JPG. `apply_preset` stays unexposed until tested live. |
-| 6 LLM layer + agent | Plan shown to the user; waiting for the go |
+| 6 LLM layer + agent | Built and unit-tested; text-only model tests passed on `primary`. Waiting for the user's go on the first image-carrying call (synthetic test picture). Not a gate yet. |
 | 7-8 | Not started |
+
+### Phase 6 (built 2026-11-21)
+User decisions: one model loaded at a time (JIT load / auto-unload if available, otherwise ask the user to switch); LM Studio
+pinned to GPU 0; first agent run = lighting + white balance only on a virtual copy of a TEST_ JPG with undo at the end,
+`replace_background` as a second run only after the first passes; prompt-injection case per profile; confirmations are
+interactive y/n in `darkroom chat` and refused through MCP.
+
+Built:
+- `net/loopback.py` `LocalHttp`: httpx2 client, loopback base URL only, `trust_env=False`, no proxy, no mounts, no redirects,
+  per-request loopback check. Unit test sets `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY` to a non-local address and still reaches
+  only the local fake server.
+- `llm/`: `client.py` (OpenAI-compatible chat; `LLM_NOT_REACHABLE`, `LLM_NO_VISION`, new code `LLM_REQUEST_FAILED`),
+  `tool_modes.py` (native / json_schema / prompt -> one `ToolCall` form; unusable answers = `LLM_BAD_TOOL_CALL`),
+  `vision.py` (downscaled JPEG as an inline data URL), `selftest.py` (`darkroom models test`).
+- `agent/loop.py` + playbooks `portrait.md`, `landscape.md`: at most `max_passes` passes, allowed-tool subset, tool results and
+  metadata labelled as data, three unusable answers in a row stop the run.
+- `adapters/lightroom/simulated.py`: the in-memory Lightroom (moved from tests) so model tests never touch Lightroom or photos.
+- `gpu.py` + `[gpu]` config: nvidia-smi report; warns if the model server is not on the configured GPU, or if it shares a GPU
+  with Photoshop below `min_free_mb`. (Per-process memory is not available on Windows; the check uses per-GPU totals plus
+  which program holds a context on which GPU.)
+- CLI: `darkroom doctor`, `darkroom models test [profiles] [--skip-vision] [--json]`, `darkroom chat "..." [--photo] [--playbook]
+  [--profile]` (asks y/n for gated actions; chat tools = lighting, white balance, HSL, crop, undo), `darkroom mcp` (stdio).
+- `mcp_server.py`: same registry; default confirmer refuses, so a gated request returns `[CONFIRMATION_REQUIRED]` + next step.
+- 296 tests pass, `make quality` clean.
+
+Run for real (2026-11-21, text only, no image sent, simulated Lightroom):
+- `darkroom doctor`: Lightroom 15.2.1 / plug-in 0.3.0 writes allowed; Photoshop not running; model listed; model server on
+  GPU 0 (26.7 of 32.6 GB used), GPU 1 idle; no warnings.
+- `darkroom models test primary --skip-vision`: 4/4 tool scenarios passed, 6/6 calls valid (0.8-10.8 s per scenario); the
+  "4 stops" request ended at +3.0 EV (total cap). Injection in a file name and in a tool result: model ignored both,
+  guardrails held, exposure +0.33 as asked.
+- Finding while testing: the first version of the tool-result injection never reached the model (the field was dropped when
+  the measurements were summarised); fixed and covered by a test that checks the text is really in the request.
+
+Unverified / not run: vision test (waiting for the go); profiles `glimmer` and `fast` (not loaded; whether LM Studio's JIT
+load + auto-unload is on is unknown); json_schema and prompt modes against a real model; `darkroom chat` live; MCP over a
+real stdio client (handlers are unit-tested); GPU conflict measurement (Select Subject while a model is loaded). The
+"model followed the injection" flag is a heuristic (unknown tool, `allow_beyond_total`, exposure >= 2).
+
+Next step: on the user's go, send the synthetic test picture (512 x 384 JPEG, 10 kB: red square, blue circle, "47") to
+`http://127.0.0.1:1234/v1/chat/completions`; then the other profiles; then the first agent run.
 
 ### Catalog facts (corrects earlier counts in this file)
 - The user imported the test copies by hand on 2026-11-21. They are in the catalog as `D:\darkroom_test\TEST_2457-37.jpg` ...

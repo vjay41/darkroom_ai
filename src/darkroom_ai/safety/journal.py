@@ -124,3 +124,30 @@ class JsonlJournal:
             if entry.undoable:
                 return entry
         return None
+
+
+class MemoryJournal:
+    """Journal that keeps its entries in memory only (simulated runs and tests)."""
+
+    def __init__(self, session: str | None = None) -> None:
+        self.session = session or uuid.uuid4().hex
+        self._entries: list[JournalEntry] = []
+
+    def record(
+        self,
+        tool: str,
+        args: Mapping[str, Any],
+        *,
+        status: JournalStatus = "ok",
+        applied: Mapping[str, Any] | None = None,
+        undo: Mapping[str, Any] | None = None,
+        error: Mapping[str, Any] | None = None,
+    ) -> JournalEntry:
+        entry = new_entry(
+            self.session, tool, args, status=status, applied=applied, undo=undo, error=error
+        )
+        self._entries.append(entry)
+        return entry
+
+    def entries(self) -> list[JournalEntry]:
+        return list(self._entries)

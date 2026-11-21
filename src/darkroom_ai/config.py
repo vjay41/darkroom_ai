@@ -146,6 +146,13 @@ class FaceSettings(_Section):
     score_threshold: float = Field(default=0.7, gt=0.0, lt=1.0)
 
 
+class GpuSettings(_Section):
+    """Which GPU the model server should be on, and when sharing a GPU becomes a warning."""
+
+    llm_gpu_index: int = Field(default=0, ge=0, le=15)
+    min_free_mb: int = Field(default=6000, ge=0, le=100000)
+
+
 class PathSettings(_Section):
     logs_dir: Path = Path("logs")
     outputs_dir: Path = Path("outputs")
@@ -160,6 +167,7 @@ class Settings(_Section):
     guardrails: GuardrailSettings = GuardrailSettings()
     masks: MaskSettings = MaskSettings()
     backgrounds: BackgroundSettings = BackgroundSettings()
+    gpu: GpuSettings = GpuSettings()
     faces: FaceSettings = FaceSettings()
     paths: PathSettings = PathSettings()
 

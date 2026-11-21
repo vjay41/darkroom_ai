@@ -26,6 +26,7 @@ class ErrorCode(StrEnum):
     LLM_NOT_REACHABLE = "LLM_NOT_REACHABLE"
     LLM_NO_VISION = "LLM_NO_VISION"
     LLM_BAD_TOOL_CALL = "LLM_BAD_TOOL_CALL"
+    LLM_REQUEST_FAILED = "LLM_REQUEST_FAILED"
     # darkroom_ai itself
     CONFIG_INVALID = "CONFIG_INVALID"
     NON_LOCAL_ENDPOINT = "NON_LOCAL_ENDPOINT"
@@ -89,6 +90,11 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "The model returned a tool call that could not be used.",
         "Retry; if it keeps happening, change tool_mode for this profile or try another "
         "profile (`darkroom models test` compares them).",
+    ),
+    ErrorCode.LLM_REQUEST_FAILED: (
+        "The local model server answered with an error.",
+        "Read the message above. Check that the model named in the profile is downloaded and can "
+        "be loaded in the local model server, then retry.",
     ),
     ErrorCode.CONFIG_INVALID: (
         "The configuration is not valid.",
