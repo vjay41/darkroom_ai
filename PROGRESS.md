@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 3, 4, 5, 6 done; waiting for the user to apply the firewall rules for item 2; then message review, README, gate
+## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1-6 done; the firewall rules are STILL ON (the user removes them); remaining: confirm the rules are gone, message review, README, gate
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -387,7 +387,20 @@ offline `--help`, pip-audit 2.10.1). Result: "No known vulnerabilities found", e
 `.venv` (main + dev; the `ml` extra is not installed and so was not audited). pip-audit wrote no file because it had
 nothing to report; the assistant wrote the outcome to `logs\pip_audit_20261121.txt` (git-ignored). No dependency changed.
 
-Item 2 (firewall run): instructions given to the user; waiting for the rules to be applied.
+Item 2 DONE, firewall run (2026-11-21): the user added the 3 outbound block rules (real `python3.13.exe`, its alias, the
+project's `.venv\Scripts\python.exe`) in an elevated PowerShell and confirmed the block works (their example.com test
+failed with WinError 10013). The assistant saw the 3 rules enabled before and after. Under the block, everything worked
+and no error mentioned a network:
+- `darkroom doctor`: all checks passed (Lightroom 15.2.1 / plug-in 0.3.0, Photoshop running, Qwen loaded on GPU 0).
+- `scripts/offline_proof.py --with-adobe --photo TEST_2459-39.jpg`: text model tests 4/4 and 2/2, MCP server object,
+  doctor, `get_photo_info` + `analyze_photo`; audit hook saw only 127.0.0.1 (8 connects, 12 lookups). PASS.
+- Agent run, lighting only, on the virtual copy of `TEST_2459-39.jpg`: highlights -20 (3.3 s + 2.5 s model time, 7.1 s),
+  then undo; all 171 settings equal the start state; master and SHA-256 unchanged; ALL CHECKS PASSED.
+- Select Subject on a copy of `TEST_2457-37.jpg` (Photoshop worker child process, Device mode): 7.2 s, coverage 69.937 %
+  (same as the baseline), all checks passed. New mask `outputs\masks\TEST_2457-37_subject.png`.
+What this proves: darkroom_ai's own Python processes (including the Photoshop worker child) need no connection other
+than loopback. What it does NOT prove: anything about Lightroom, Photoshop or LM Studio themselves, which were not
+blocked. Rules still ON at the time of writing; the user removes them and the assistant then checks the count is 0.
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error
