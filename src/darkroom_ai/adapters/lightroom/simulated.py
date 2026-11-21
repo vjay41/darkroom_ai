@@ -16,6 +16,7 @@ import numpy as np
 from darkroom_ai.adapters.lightroom.models import (
     BridgeStatus,
     CatalogPage,
+    CommandList,
     ExportedTiff,
     FolderImport,
     FolderScan,
@@ -34,6 +35,7 @@ from darkroom_ai.adapters.lightroom.models import (
     Snapshot,
     SnapshotResult,
 )
+from darkroom_ai.compat import REQUIRED_PLUGIN_COMMANDS
 from darkroom_ai.errors import DarkroomError, ErrorCode
 
 DEFAULT_SETTINGS: dict[str, Any] = {
@@ -127,6 +129,12 @@ class SimulatedLightroom:
             catalog_path="D:\\cat\\Test.lrcat",
             configured_catalog="D:\\cat\\Test.lrcat",
             writes_allowed=True,
+        )
+
+    def list_commands(self) -> CommandList:
+        self.calls.append("list_commands")
+        return CommandList(
+            plugin_version="0.9.1", read=tuple(sorted(REQUIRED_PLUGIN_COMMANDS)), write=()
         )
 
     def get_selection(self) -> Selection:

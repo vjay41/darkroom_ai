@@ -5,10 +5,12 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from darkroom_ai.compat import (
+    EXPECTED_PROTOCOL,
     Feature,
     VersionAssessment,
     assess_version,
     load_compatibility,
+    missing_plugin_commands,
     plugin_is_recent_enough,
 )
 from darkroom_ai.errors import DarkroomError
@@ -30,6 +32,10 @@ class GetCapabilitiesInput(BaseModel):
 class PluginState(BaseModel):
     version: str | None
     recent_enough: bool | None
+    protocol: int | None = None
+    protocol_matches: bool | None = None
+    # Commands the server uses that the plug-in loaded in Lightroom does not have. Empty = complete.
+    missing_commands: list[str] = []
     note: str
 
 
@@ -42,12 +48,19 @@ class GetCapabilitiesResult(ToolResult):
     advice: str
 
 
-def _lightroom(ctx: ToolContext) -> tuple[str | None, str | None]:
+def _lightroom(ctx: ToolContext) -> tuple[str | None, str | None, int | None, list[str] | None]:
+    """Lightroom version, plug-in version, plug-in protocol, and the commands the plug-in lacks
+    (None when the plug-in could not say)."""
     try:
         info = ctx.lightroom.ping()
     except DarkroomError:
-        return None, None
-    return info.lightroom_version, info.plugin_version
+        return None, None, None, None
+    try:
+        commands = ctx.lightroom.list_commands()
+        missing: list[str] | None = missing_plugin_commands([*commands.read, *commands.write])
+    except DarkroomError:
+        missing = None
+    return info.lightroom_version, info.plugin_version, info.protocol, missing
 
 
 def _photoshop(ctx: ToolContext) -> str | None:
@@ -65,24 +78,43 @@ def _photoshop(ctx: ToolContext) -> str | None:
         return None
 
 
+def _plugin_note(
+    minimum: str,
+    version: str | None,
+    recent: bool | None,
+    protocol: int | None,
+    missing: list[str] | None,
+) -> str:
+    fix = "git pull, run `darkroom lightroom setup`, then Reload Plug-in in Lightroom."
+    if version is None:
+        return "The plug-in did not answer."
+    problems: list[str] = []
+    if not recent:
+        problems.append(f"The plug-in is older than {minimum}.")
+    if protocol is not None and protocol != EXPECTED_PROTOCOL:
+        problems.append(
+            f"The plug-in speaks protocol {protocol}, this server expects {EXPECTED_PROTOCOL}."
+        )
+    if missing:
+        problems.append(f"The plug-in lacks: {', '.join(missing)}.")
+    if problems:
+        return " ".join(problems) + " " + fix
+    if missing is None:
+        return "The plug-in version and protocol match; its command list could not be read."
+    return "The plug-in version, protocol and commands all match."
+
+
 def get_capabilities(ctx: ToolContext, args: GetCapabilitiesInput) -> Outcome:
     data = load_compatibility()
-    lr_version, plugin_version = _lightroom(ctx)
+    lr_version, plugin_version, protocol, missing = _lightroom(ctx)
+    recent = None if plugin_version is None else plugin_is_recent_enough(plugin_version, data)
     plugin = PluginState(
         version=plugin_version,
-        recent_enough=None
-        if plugin_version is None
-        else plugin_is_recent_enough(plugin_version, data),
-        note=(
-            "The plug-in did not answer."
-            if plugin_version is None
-            else (
-                "The plug-in version is recent enough."
-                if plugin_is_recent_enough(plugin_version, data)
-                else f"The plug-in is older than {data.plugin.min_version}: update and reload it "
-                "(darkroom lightroom setup, then Reload Plug-in in Lightroom)."
-            )
-        ),
+        recent_enough=recent,
+        protocol=protocol,
+        protocol_matches=None if protocol is None else protocol == EXPECTED_PROTOCOL,
+        missing_commands=missing or [],
+        note=_plugin_note(data.plugin.min_version, plugin_version, recent, protocol, missing),
     )
     lightroom = assess_version("lightroom", lr_version, data)
     photoshop = assess_version("photoshop", _photoshop(ctx), data)

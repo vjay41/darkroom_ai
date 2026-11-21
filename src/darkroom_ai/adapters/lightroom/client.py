@@ -39,6 +39,7 @@ from darkroom_ai.adapters.lightroom.models import (
     Snapshot,
     SnapshotResult,
 )
+from darkroom_ai.compat import EXPECTED_PROTOCOL
 from darkroom_ai.config import Settings
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.net.loopback import Connection, open_tcp
@@ -177,7 +178,10 @@ class LightroomClient:
                 self._requests, second = self._open(self._request_port, attempt_deadline)
                 if max(first, second) > _SLOW_CONNECT_S:
                     raise ConnectionError("the plug-in is still re-opening its sockets")
-                self._exchange(self._requests, self._responses, "ping", {}, attempt_deadline)
+                hello = self._exchange(
+                    self._requests, self._responses, "ping", {}, attempt_deadline
+                )
+                self._check_protocol(hello)
             except DarkroomError:
                 raise
             except OSError:
@@ -185,6 +189,20 @@ class LightroomClient:
                 if time.monotonic() >= deadline:
                     raise
         return self._requests, self._responses
+
+    @staticmethod
+    def _check_protocol(hello: Any) -> None:
+        """Refuse to talk to a plug-in whose message protocol differs from this server's."""
+        protocol = hello.get("protocol") if isinstance(hello, dict) else None
+        if protocol is not None and protocol != EXPECTED_PROTOCOL:
+            raise DarkroomError(
+                ErrorCode.LR_COMMAND_FAILED,
+                f"The Lightroom plug-in speaks protocol {protocol}; this darkroom_ai expects "
+                f"{EXPECTED_PROTOCOL}. Nothing was sent to Lightroom.",
+                next_step="git pull, run `darkroom lightroom setup`, then choose Reload "
+                "Plug-in for darkroom in Lightroom's Plug-in Manager.",
+                details={"plugin_protocol": protocol, "expected_protocol": EXPECTED_PROTOCOL},
+            )
 
     # -- protocol -----------------------------------------------------------------------------
 

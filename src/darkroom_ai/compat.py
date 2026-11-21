@@ -8,6 +8,7 @@ when it really fails (and `darkroom selftest` shows which ones do).
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -126,3 +127,45 @@ def _numbers(version: str) -> tuple[int, ...]:
 def plugin_is_recent_enough(version: str, data: Compatibility | None = None) -> bool:
     minimum = (data or load_compatibility()).plugin.min_version
     return _numbers(version) >= _numbers(minimum)
+
+
+# The plug-in <-> server contract. Bump EXPECTED_PROTOCOL together with PROTOCOL_VERSION in
+# Commands.lua when a command's request or reply shape changes incompatibly.
+EXPECTED_PROTOCOL = 1
+
+# Commands the server sends that the plug-in running inside Lightroom must have registered.
+# tests/unit/test_compat.py checks this list against Commands.lua, so it cannot drift silently.
+REQUIRED_PLUGIN_COMMANDS: frozenset[str] = frozenset(
+    {
+        "apply_preset",
+        "apply_settings",
+        "apply_snapshot",
+        "create_mask",
+        "create_snapshot",
+        "create_virtual_copy",
+        "export_preview",
+        "export_tiff",
+        "find_photo",
+        "get_metadata",
+        "get_photo",
+        "get_preset",
+        "get_selection",
+        "import_folder",
+        "inspect_masks",
+        "list_commands",
+        "list_photos",
+        "list_presets",
+        "list_snapshots",
+        "mask_operation",
+        "ping",
+        "probe",
+        "scan_folder",
+        "selftest",
+        "set_mask_values",
+    }
+)
+
+
+def missing_plugin_commands(registered: Iterable[str]) -> list[str]:
+    """Required commands the running plug-in does not have (empty when it is complete)."""
+    return sorted(REQUIRED_PLUGIN_COMMANDS - set(registered))

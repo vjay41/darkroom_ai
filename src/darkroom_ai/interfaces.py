@@ -17,6 +17,7 @@ from typing import Any, Protocol
 from darkroom_ai.adapters.lightroom.models import (
     BridgeStatus,
     CatalogPage,
+    CommandList,
     ExportedTiff,
     FolderImport,
     FolderScan,
@@ -63,6 +64,8 @@ class LightroomAdapter(Protocol):
     """What the tools need from Lightroom. Photos are addressed by their catalog UUID."""
 
     def ping(self) -> PingInfo: ...
+
+    def list_commands(self) -> CommandList: ...
 
     def get_selection(self) -> Selection: ...
 

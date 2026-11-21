@@ -8,9 +8,11 @@ import pytest
 from test_tools import make_settings
 
 from darkroom_ai.compat import (
+    EXPECTED_PROTOCOL,
     Compatibility,
     assess_version,
     load_compatibility,
+    missing_plugin_commands,
     plugin_is_recent_enough,
 )
 from darkroom_ai.config import GuardrailSettings
@@ -209,3 +211,51 @@ def test_selftest_reads_masks_without_needing_the_lightroom_screen(tmp_path: Pat
     report = run_selftest(lightroom, None, GuardrailSettings(), write=True)
     probe = next(p for p in report.probes if p.name == "read masks")
     assert probe.status == "pass" and not report.failed
+
+
+def test_required_plugin_commands_are_all_registered_in_the_lua_plugin() -> None:
+    import re
+
+    lua = (
+        Path(__file__).parents[2]
+        / "src/darkroom_ai/adapters/lightroom/plugin/darkroom.lrplugin/Commands.lua"
+    ).read_text(encoding="utf-8")
+    registered = set(re.findall(r"^function Commands\.(?:read|write)\.([a-z_]+)", lua, re.M))
+    assert missing_plugin_commands(registered) == []
+    protocol = re.search(r"^local PROTOCOL_VERSION = (\d+)", lua, re.M)
+    assert protocol is not None and int(protocol.group(1)) == EXPECTED_PROTOCOL
+
+
+def test_get_capabilities_reports_a_plugin_missing_commands(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    full = registry._context.lightroom.list_commands()
+    trimmed = full.model_copy(update={"read": tuple(c for c in full.read if c != "inspect_masks")})
+    registry._context.lightroom.list_commands = lambda: trimmed  # type: ignore[method-assign]
+    plugin = registry.call("get_capabilities", {})["plugin"]
+    assert plugin["missing_commands"] == ["inspect_masks"]
+    assert "lacks: inspect_masks" in plugin["note"] and "Reload Plug-in" in plugin["note"]
+
+
+def test_get_capabilities_reports_a_different_protocol(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    real = registry._context.lightroom.ping()
+    registry._context.lightroom.ping = lambda: real.model_copy(update={"protocol": 2})  # type: ignore[method-assign]
+    plugin = registry.call("get_capabilities", {})["plugin"]
+    assert plugin["protocol_matches"] is False and "protocol 2" in plugin["note"]
+
+
+def test_complete_plugin_is_reported_as_matching(tmp_path: Path) -> None:
+    plugin = _registry(tmp_path).call("get_capabilities", {})["plugin"]
+    assert plugin["protocol_matches"] is True and plugin["missing_commands"] == []
+    assert "all match" in plugin["note"]
+
+
+def test_client_refuses_a_plugin_with_another_protocol() -> None:
+    from darkroom_ai.adapters.lightroom.client import LightroomClient
+
+    LightroomClient._check_protocol({"protocol": EXPECTED_PROTOCOL})
+    LightroomClient._check_protocol({})  # an old plug-in that does not say: tolerated
+    with pytest.raises(DarkroomError) as caught:
+        LightroomClient._check_protocol({"protocol": EXPECTED_PROTOCOL + 1})
+    assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
+    assert "Reload Plug-in" in caught.value.next_step

@@ -1749,3 +1749,9 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Guard verified live (refusal in <1 s, nothing asked, error names the shown photo). Windows `make quality`: 363 passed, 8 skipped.
 - Side effect of the first guard test: the copy FF6FB2BE now holds two empty people masks (Person 1, Person 2); test catalog only, harmless.
 - Stray backups moved to profiles/darkroom/_to_delete/ (deletion is user-only).
+
+## 21 Nov 2026 - P1c remainder
+- Handshake: server refuses a plug-in whose `protocol` differs from `EXPECTED_PROTOCOL` (checked on the connect ping).
+- Capability probe: `get_capabilities.plugin` now reports protocol, `protocol_matches`, `missing_commands` (plug-in's `list_commands` vs `REQUIRED_PLUGIN_COMMANDS`); a test checks that list and PROTOCOL_VERSION against Commands.lua.
+- Upgrade runbook: docs/UPGRADE.md.
+- Not done in P1c: nothing blocking; Lua-side syntax test still needs DARKROOM_LUAC.
