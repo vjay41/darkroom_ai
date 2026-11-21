@@ -429,9 +429,31 @@ def _created_outcome(
     )
 
 
+def _require_photo_in_develop(ctx: ToolContext, photo_id: str) -> None:
+    """The person makes the people mask on whatever photo Lightroom shows, and the tool watches
+    `photo_id`. If they differ the mask lands on the wrong photo (possibly a master) and the
+    tool times out unseen, so stop before asking for anything."""
+    shown = ctx.lightroom.get_selection().active
+    if shown is not None and shown.id == photo_id:
+        return
+    name = shown.file_name if shown is not None else "no photo"
+    if shown is not None and shown.copy_name:
+        name = f"{name} / {shown.copy_name}"
+    raise DarkroomError(
+        ErrorCode.LR_COMMAND_FAILED,
+        f"Lightroom is showing {name}, not the working copy the people mask is made on "
+        f"({photo_id}). A mask made now would land on the wrong photo. Nothing was changed.",
+        next_step="In Lightroom select the working copy (the darkroom_ai virtual copy, in the "
+        "same stack as the original) and open it in Develop, then call create_mask again. "
+        "get_selected_photos shows which photo Lightroom is showing.",
+        details={"photo_id": photo_id, "shown_photo_id": shown.id if shown else None},
+    )
+
+
 def _create_people(ctx: ToolContext, photo_id: str, created: bool) -> Outcome:
     """Lightroom makes a people mask only after a person is chosen and 'Create Mask' is pressed in
     its panel, so the person does that step; the tool waits for the mask and checks it."""
+    _require_photo_in_develop(ctx, photo_id)
     previous = _stored_masks(ctx, photo_id)
     require_confirmation(
         ctx.confirmer,

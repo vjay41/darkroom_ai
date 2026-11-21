@@ -80,6 +80,8 @@ class SimulatedLightroom:
         self.calls: list[str] = []
         # Mask subtypes this simulated Lightroom does not create (as the real one with "people").
         self.refused_mask_subtypes: set[str] = set()
+        # The photo Lightroom shows in Develop; a new virtual copy is selected, as in Lightroom.
+        self.selected_id = "master-1"
         self.add_photo("master-1", "TEST_0001.jpg", file_format=file_format)
 
     def add_photo(self, photo_id: str, file_name: str, *, file_format: str = "JPG") -> None:
@@ -128,7 +130,8 @@ class SimulatedLightroom:
         )
 
     def get_selection(self) -> Selection:
-        return Selection(active=self._info("master-1"), photos=(self._info("master-1"),))
+        shown = self._info(self.selected_id)
+        return Selection(active=shown, photos=(shown,))
 
     def get_metadata(self, photo_id: str) -> PhotoMetadata:
         self.calls.append("get_metadata")
@@ -287,6 +290,7 @@ class SimulatedLightroom:
             "copy_name": copy_name,
         }
         self.settings[copy_id] = dict(self.settings[photo_id])
+        self.selected_id = copy_id
         return PhotoInfo.model_validate(self.photos[copy_id])
 
     def create_snapshot(self, photo_id: str, name: str) -> SnapshotResult:

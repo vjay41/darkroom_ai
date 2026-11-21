@@ -1737,3 +1737,12 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
   The "read masks" probe failed LR_BUSY_USER: my probe called the raw inspect_masks, which needs the photo showing in Develop; only the mask TOOLS do the
   takeover. Probe bug, not an Adobe problem. Fix: the probe reads MaskGroupBasedCorrections from the develop settings (no screen needed), runs read-only too.
   Needs a connector restart (code changed) and one more selftest run to see 10/10.
+
+## 21 Nov 2026 - people-mask retest passed; displayed-photo guard
+- People mask end to end verified on the virtual copy (create_mask ok 21:12:52, list_masks count 1).
+- Cause of three earlier timeouts: Vijay made the mask on the master shown in Develop while the
+  tool watched the bridge's working copy. Master reverted to its import state via History.
+- Fix: `create_mask` (people) refuses before asking for a go-ahead unless Lightroom shows the
+  watched photo; sim selection now follows the new copy; test added (362 passed, 8 skipped on Linux).
+- Skill note added to mask-tools.md (backup .bak-pre-people-guard-20261121).
+- Open: the 21:12:49 approval was not clicked by Claude (Vijay presumably); earlier 'choice=once' still unexplained.

@@ -1238,6 +1238,30 @@ def test_people_mask_that_never_appears_says_what_to_do(tmp_path: Path) -> None:
     assert "Create Mask" in caught.value.next_step
 
 
+class RecordsQuestions:
+    def __init__(self) -> None:
+        self.asked: list[str] = []
+
+    def confirm(self, action: str, details: Any) -> bool:
+        self.asked.append(action)
+        return True
+
+
+def test_people_mask_is_refused_when_lightroom_shows_another_photo(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    asked = RecordsQuestions()
+    rig.context.confirmer = asked  # type: ignore[assignment]
+    rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="subject")
+    rig.lightroom.selected_id = MASTER  # the person is looking at the master, not the copy
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="people")
+    assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
+    assert "not the working copy" in caught.value.message
+    assert "select the working copy" in caught.value.next_step
+    assert asked.asked == []  # nobody was asked to do anything
+    assert rig.call("list_masks", photo_id=MASTER)["count"] == 1  # the earlier subject mask only
+
+
 def test_list_masks_explains_the_stored_scale(rig: Rig) -> None:
     rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="subject")
     assert "slider EV / 4" in rig.call("list_masks", photo_id=MASTER)["note"]
