@@ -68,15 +68,21 @@ TOOLS: tuple[Tool, ...] = (
     _tool("adjust_hsl", lightroom_tools.AdjustHslInput, lightroom_tools.adjust_hsl, writes=True),
     _tool("crop", lightroom_tools.CropInput, lightroom_tools.crop, writes=True),
     _tool(
-        "apply_preset", lightroom_tools.ApplyPresetInput, lightroom_tools.apply_preset, writes=True
-    ),
-    _tool(
         "replace_background",
         background.ReplaceBackgroundInput,
         background.replace_background,
         writes=True,
     ),
     _tool("undo", lightroom_tools.UndoInput, lightroom_tools.undo, writes=True),
+)
+
+
+# Built but NOT exposed: apply_preset has not been run against Lightroom yet (user decision,
+# 2026-11-21). Move it into TOOLS only after a live test.
+UNTESTED_TOOLS: tuple[Tool, ...] = (
+    _tool(
+        "apply_preset", lightroom_tools.ApplyPresetInput, lightroom_tools.apply_preset, writes=True
+    ),
 )
 
 

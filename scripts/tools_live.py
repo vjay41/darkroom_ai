@@ -4,8 +4,7 @@ Only photos under lightroom.test_photos_dir are accepted. The edits go to a virt
 step takes all of them back and checks that the copy is at its starting values, that the master
 photo's settings never changed, and that the original file is byte-identical.
 
-Usage:  poetry run python scripts/tools_live.py --photo PATH [--preset NAME] [--background NAME]
-        [--skip-photoshop]
+Usage:  poetry run python scripts/tools_live.py --photo PATH [--background NAME] [--skip-photoshop]
 """
 
 from __future__ import annotations
@@ -132,14 +131,8 @@ def run(args: argparse.Namespace) -> None:
     tiny = {"left": 0.4, "top": 0.4, "right": 0.6, "bottom": 0.6}
     check("a crop below the minimum is refused", refused(tools, "crop", photo | tiny))
 
-    print("7. apply_preset")
-    print(f"  {len(lightroom.list_presets())} develop presets known to Lightroom")
-    if args.preset:
-        preset = tools.call("apply_preset", photo | {"preset_name": args.preset})
-        print(f"  applied '{preset['preset']}', {preset['changed_count']} settings changed")
-        check("preset applied to the working copy", preset["photo_id"] == copy_id)
-    else:
-        print("  skipped: no --preset given")
+    print("7. apply_preset: skipped - not exposed to the tools until it is tested live")
+    check("apply_preset is not among the tools", "apply_preset" not in tools.names)
 
     if args.skip_photoshop:
         print("8. replace_background: skipped (--skip-photoshop)")
@@ -180,7 +173,6 @@ def run(args: argparse.Namespace) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--photo", type=Path, required=True)
-    parser.add_argument("--preset", default=None, help="exact name of a develop preset to apply")
     parser.add_argument("--background", default=None, help="file name in the backgrounds folder")
     parser.add_argument("--skip-photoshop", action="store_true")
     parser.add_argument("--config", type=Path, default=None)

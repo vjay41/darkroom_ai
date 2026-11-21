@@ -17,7 +17,7 @@ from darkroom_ai.interfaces import LightroomAdapter, PhotoshopAdapter
 from darkroom_ai.safety.guardrails import Limit, clamp_change
 from darkroom_ai.tools.background import resolve_background
 from darkroom_ai.tools.context import ToolContext
-from darkroom_ai.tools.registry import ToolRegistry
+from darkroom_ai.tools.registry import TOOLS, UNTESTED_TOOLS, ToolRegistry
 from fakes import AllowAll, FakeLightroom, FakePhotoshop, InMemoryJournal
 
 MASTER = "master-1"
@@ -37,7 +37,14 @@ def make_settings(tmp_path: Path, **sections: Any) -> Settings:
 
 
 class Rig:
-    def __init__(self, tmp_path: Path, *, file_format: str = "JPG", confirmer: Any = None) -> None:
+    def __init__(
+        self,
+        tmp_path: Path,
+        *,
+        file_format: str = "JPG",
+        confirmer: Any = None,
+        with_untested: bool = False,
+    ) -> None:
         self.tmp_path = tmp_path
         self.lightroom = FakeLightroom(tmp_path, file_format=file_format)
         self.photoshop = FakePhotoshop(tmp_path / "outputs" / "photoshop")
@@ -53,7 +60,8 @@ class Rig:
             masks=SyntheticMaskProvider(),
             **kwargs,
         )
-        self.tools = ToolRegistry(self.context)
+        tools = TOOLS + UNTESTED_TOOLS if with_untested else TOOLS
+        self.tools = ToolRegistry(self.context, tools)
 
     def call(self, name: str, **arguments: Any) -> dict[str, Any]:
         return self.tools.call(name, arguments)
@@ -82,11 +90,14 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "adjust_white_balance",
         "adjust_hsl",
         "crop",
-        "apply_preset",
         "replace_background",
         "undo",
     )
     assert "run_photoshop_script" not in rig.tools.names  # left out of v1 on purpose
+    assert "apply_preset" not in rig.tools.names  # not exposed until tested live
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("apply_preset", photo_id=MASTER, preset_name="Soft Warm")
+    assert caught.value.code is ErrorCode.LLM_BAD_TOOL_CALL
     schemas = rig.tools.schemas()
     json.dumps(schemas)  # must be plain JSON
     for schema in schemas:
@@ -327,7 +338,8 @@ def test_crop_and_its_minimum(rig: Rig) -> None:
     assert [rig.value(copy_id, k) for k in ("CropLeft", "CropRight", "CropAngle")] == [0, 1, 0]
 
 
-def test_apply_preset(rig: Rig) -> None:
+def test_apply_preset(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, with_untested=True)
     result = rig.call("apply_preset", photo_id=MASTER, preset_name="soft warm")
     copy_id = result["photo_id"]
     assert result["preset"] == "Soft Warm"
@@ -338,7 +350,8 @@ def test_apply_preset(rig: Rig) -> None:
     assert rig.value(copy_id, "Contrast2012") == 0
 
 
-def test_preset_beyond_the_total_limit_is_taken_back(rig: Rig) -> None:
+def test_preset_beyond_the_total_limit_is_taken_back(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, with_untested=True)
     copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.5)["photo_id"]
     with pytest.raises(DarkroomError) as caught:
         rig.call("apply_preset", photo_id=MASTER, preset_name="Hard Push")
@@ -347,7 +360,8 @@ def test_preset_beyond_the_total_limit_is_taken_back(rig: Rig) -> None:
     assert rig.value(copy_id, "Exposure2012") == 0.5  # exactly as before the preset
 
 
-def test_unknown_and_ambiguous_presets(rig: Rig) -> None:
+def test_unknown_and_ambiguous_presets(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, with_untested=True)
     with pytest.raises(DarkroomError) as caught:
         rig.call("apply_preset", photo_id=MASTER, preset_name="Soft")
     assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
