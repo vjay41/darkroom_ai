@@ -37,6 +37,16 @@ Connector = Callable[..., Connection]
 _RECV_BYTES = 65536
 _CONNECT_RETRY_S = 0.25
 _HANDSHAKE_S = 2.0
+# A connect that takes longer than this means the port was not listening yet, i.e. the plug-in is
+# in the middle of re-opening its two sockets and they would belong to different sessions.
+_SLOW_CONNECT_S = 0.25
+# Waits between connection attempts, as multiples of reconnect_delay_s. They grow so that retries
+# cannot stay in step with the plug-in's own restart cycle (observed: a fixed 1 s retry never
+# recovered, because the two ports come back about 0.5 s apart).
+_BACKOFF = (1.0, 1.5, 2.2, 3.0)
+
+# When each plug-in endpoint was last disconnected by ANY client object in this process.
+_LAST_CLOSE: dict[tuple[str, int, int], float] = {}
 
 
 class LightroomClient:
@@ -49,11 +59,13 @@ class LightroomClient:
         token: str,
         timeout_s: float = 10.0,
         export_timeout_s: float = 120.0,
+        connect_timeout_s: float = 20.0,
         reconnect_delay_s: float = 1.0,
         connect: Connector = open_tcp,
     ) -> None:
+        self._connect_timeout_s = connect_timeout_s
         self._reconnect_delay_s = reconnect_delay_s
-        self._closed_at: float | None = None
+        self._endpoint = (host, request_port, response_port)
         self._host = host
         self._request_port = request_port
         self._response_port = response_port
@@ -74,14 +86,15 @@ class LightroomClient:
             token=bridge.token,
             timeout_s=settings.lightroom.timeout_s,
             export_timeout_s=settings.lightroom.export_timeout_s,
+            connect_timeout_s=settings.lightroom.connect_timeout_s,
         )
 
     # -- connection ---------------------------------------------------------------------------
 
     def close(self) -> None:
-        for connection in (self._requests, self._responses):
+        for connection in (self._responses, self._requests):
             if connection is not None:
-                self._closed_at = time.monotonic()
+                _LAST_CLOSE[self._endpoint] = time.monotonic()
                 with contextlib.suppress(OSError):
                     connection.close()
         self._requests = None
@@ -99,38 +112,53 @@ class LightroomClient:
     ) -> None:
         self.close()
 
-    def _open(self, port: int, deadline: float) -> Connection:
-        # After a client disconnects the plug-in needs a moment to listen again, so retry briefly.
+    def _open(self, port: int, deadline: float) -> tuple[Connection, float]:
+        """Connect to one port; returns the connection and how long the final connect took."""
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError(f"no listener on port {port}")
+            started = time.monotonic()
             try:
-                return self._connect(self._host, port, timeout_s=remaining)
+                connection = self._connect(self._host, port, timeout_s=remaining)
+                return connection, time.monotonic() - started
             except ConnectionError:
                 time.sleep(min(_CONNECT_RETRY_S, max(0.0, deadline - time.monotonic())))
+
+    def _wait_after_last_close(self, factor: float, deadline: float) -> None:
+        last = _LAST_CLOSE.get(self._endpoint)
+        if last is None:
+            return
+        wait = last + self._reconnect_delay_s * factor - time.monotonic()
+        if wait > 0:
+            time.sleep(min(wait, max(0.0, deadline - time.monotonic())))
 
     def _ensure_connected(self, deadline: float) -> tuple[Connection, Connection]:
         """Connect both sockets and prove the plug-in answers before any real command is sent.
 
-        After a client disconnects, the plug-in closes and re-opens its sockets. A connection made
-        in that window is dropped or never served, so a harmless `ping` is exchanged first and the
-        connection is retried until it answers. Real commands are therefore never re-sent.
+        Observed on Lightroom 15.2.1: after a client disconnects, the plug-in closes and re-opens
+        its two sockets, and they come back about half a second apart. A client that connects in
+        that window gets one socket of the old session and one of the new and is dropped. So:
+        - no connection is attempted within reconnect_delay_s of the last disconnect made by any
+          client in this process;
+        - an attempt whose connect was slow (the port was not listening yet) is abandoned;
+        - a harmless `ping` is exchanged before any real command, so real commands are never
+          re-sent;
+        - failed attempts are retried with growing waits until the connect deadline.
         """
+        attempt = 0
         while self._requests is None or self._responses is None:
             self.close()
-            # Measured on Lightroom 15.2.1: reconnecting 1 s after a disconnect always works,
-            # reconnecting within ~0.3 s hits the sockets the plug-in is still closing.
-            if self._closed_at is not None:
-                wait = self._closed_at + self._reconnect_delay_s - time.monotonic()
-                if wait > 0:
-                    time.sleep(min(wait, max(0.0, deadline - time.monotonic())))
+            self._wait_after_last_close(_BACKOFF[min(attempt, len(_BACKOFF) - 1)], deadline)
+            attempt += 1
             if time.monotonic() >= deadline:
                 raise TimeoutError("no time left to connect")
             attempt_deadline = min(deadline, time.monotonic() + _HANDSHAKE_S)
             try:
-                self._responses = self._open(self._response_port, attempt_deadline)
-                self._requests = self._open(self._request_port, attempt_deadline)
+                self._responses, first = self._open(self._response_port, attempt_deadline)
+                self._requests, second = self._open(self._request_port, attempt_deadline)
+                if max(first, second) > _SLOW_CONNECT_S:
+                    raise ConnectionError("the plug-in is still re-opening its sockets")
                 self._exchange(self._requests, self._responses, "ping", {}, attempt_deadline)
             except DarkroomError:
                 raise
@@ -194,9 +222,10 @@ class LightroomClient:
     ) -> dict[str, Any]:
         """Send one command and return its result. Raises DarkroomError on any failure."""
         timeout = self._timeout_s if timeout_s is None else timeout_s
-        deadline = time.monotonic() + timeout
         try:
-            requests, responses = self._ensure_connected(deadline)
+            # Connecting has its own deadline; the command's deadline starts once connected.
+            requests, responses = self._ensure_connected(time.monotonic() + self._connect_timeout_s)
+            deadline = time.monotonic() + timeout
             message = self._exchange(requests, responses, command, params or {}, deadline)
         except DarkroomError:
             self.close()
@@ -205,8 +234,12 @@ class LightroomClient:
             self.close()
             raise DarkroomError(
                 ErrorCode.LR_NOT_REACHABLE,
-                f"Lightroom did not answer '{command}' within {timeout:g} s ({exc}).",
-                details={"command": command, "timeout_s": timeout},
+                f"Lightroom did not answer '{command}' in time ({exc}).",
+                details={
+                    "command": command,
+                    "timeout_s": timeout,
+                    "connect_timeout_s": self._connect_timeout_s,
+                },
             ) from exc
 
         if message.get("ok") is True:

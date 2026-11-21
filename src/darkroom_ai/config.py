@@ -69,6 +69,8 @@ class LightroomSettings(_Section):
     response_port: int = Field(default=58764, ge=1024, le=65535)
     timeout_s: float = Field(default=10.0, gt=0.0, le=600.0)
     export_timeout_s: float = Field(default=120.0, gt=0.0, le=1800.0)
+    # Longest wait for the plug-in to accept a connection (it needs about 1 s after a disconnect).
+    connect_timeout_s: float = Field(default=20.0, gt=0.0, le=300.0)
     # The plug-in refuses every write unless Lightroom has exactly this catalog open.
     test_catalog: Path | None = None
     # Development edits are only made to photos whose files are under this folder (test copies).

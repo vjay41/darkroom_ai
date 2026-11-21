@@ -40,8 +40,20 @@ Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show t
 - Original `TEST_2457-37.jpg`: same size, modified time and SHA-256 (`F8BFDC77...46F8`) before the run, after the export and
   after the edit + revert; no `.xmp` sidecar.
 
+### Wrong-catalog refusal test — DONE live (2026-11-21 08:00), PASSED
+- `bridge.json` backed up outside the repo, pointed at `D:\darkroom_test\DOES_NOT_EXIST\Dummy.lrcat`, restored in a `finally`
+  block (byte-identical afterwards, backup deleted).
+- With the dummy path: `ping` reported the dummy as configured and writes NOT allowed; reads still worked; a no-op write
+  (`Exposure2012` set to its current value on the `TEST_2457-37.jpg` virtual copy) was refused with `LR_WRONG_CATALOG`; the
+  setting was unchanged. After the restore: writes allowed again and the same no-op write succeeded.
+- The plug-in picks up `bridge.json` when the next client connects (no reload needed).
+- Client bug found by the first attempt of this test and fixed: a second client object created right after another one closed
+  (same process) connected at once, got one socket of the plug-in's old session and one of the new (the two ports come back
+  about 0.5 s apart), and a fixed 1 s retry never recovered. Now the last-disconnect time is shared process-wide, slow connects
+  are abandoned, retries back off (1.0 / 1.5 / 2.2 / 3.0 x), and connecting has its own deadline (`lightroom.connect_timeout_s`,
+  20 s) separate from the command timeout. Verified against Lightroom: back-to-back clients 6/6.
+
 ### Open threads
-- Due before Phase 5: live wrong-catalog refusal test (dummy path in `bridge.json`, then restore it).
 - Rules in force: edits only on virtual copies of photos under `D:\darkroom_test`; gallery photos are off limits; Photoshop
   works only on copies inside `outputs\photoshop`; no add-photos command (user decision).
 - Not tested: which TIFF compression key spelling Lightroom honours (the file is uncompressed, as intended, but both

@@ -22,6 +22,7 @@ def _client(plugin: FakeLightroomPlugin, *, token: str | None = None, timeout_s:
         token=token or plugin.token,
         timeout_s=timeout_s,
         export_timeout_s=timeout_s,
+        connect_timeout_s=timeout_s,
         reconnect_delay_s=0.05,
     )
 
@@ -232,7 +233,12 @@ def test_nothing_listening_is_lr_not_reachable() -> None:
     with FakeLightroomPlugin() as fake:
         ports = (fake.request_port, fake.response_port)
     lightroom = LightroomClient(
-        host="127.0.0.1", request_port=ports[0], response_port=ports[1], token="t" * 64, timeout_s=1
+        host="127.0.0.1",
+        request_port=ports[0],
+        response_port=ports[1],
+        token="t" * 64,
+        timeout_s=1,
+        connect_timeout_s=1,
     )
     with pytest.raises(DarkroomError) as caught:
         lightroom.ping()
@@ -256,6 +262,32 @@ def test_garbage_response_is_reported() -> None:
     ):
         lightroom.ping()
     assert caught.value.code is ErrorCode.LR_COMMAND_FAILED
+
+
+def test_a_second_client_right_after_the_first_connects(plugin: FakeLightroomPlugin) -> None:
+    # Two client objects in the same process, back to back (this failed against real Lightroom
+    # before the disconnect time was shared between client objects).
+    for _ in range(3):
+        with _client(plugin) as lightroom:
+            assert lightroom.ping().protocol == 1
+
+
+def test_command_deadline_starts_after_connecting() -> None:
+    with FakeLightroomPlugin(silent=True) as fake:
+        lightroom = LightroomClient(
+            host="127.0.0.1",
+            request_port=fake.request_port,
+            response_port=fake.response_port,
+            token=fake.token,
+            timeout_s=30,
+            connect_timeout_s=0.6,
+            reconnect_delay_s=0.05,
+        )
+        started = time.monotonic()
+        with pytest.raises(DarkroomError) as caught:
+            lightroom.ping()
+        assert caught.value.code is ErrorCode.LR_NOT_REACHABLE
+        assert time.monotonic() - started < 5
 
 
 def test_client_reconnects_after_close(plugin: FakeLightroomPlugin) -> None:
