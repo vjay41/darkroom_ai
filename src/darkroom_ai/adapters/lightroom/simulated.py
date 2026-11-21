@@ -68,6 +68,7 @@ class SimulatedLightroom:
         ("Hard Push", "preset-2", {"Exposure2012": 4.5}),
         ("Twin", "preset-3", {"Contrast2012": 5}),
         ("Twin", "preset-4", {"Contrast2012": 6}),
+        ("Cropped Look", "preset-5", {"Contrast2012": 8, "CropLeft": 0.1}),
     )
 
     def __init__(self, files_dir: Path, *, file_format: str = "JPG") -> None:

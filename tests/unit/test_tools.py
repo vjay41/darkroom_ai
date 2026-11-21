@@ -132,12 +132,9 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "replace_background",
         "undo",
         "list_presets",
+        "apply_preset",
     )
     assert "run_photoshop_script" not in rig.tools.names  # left out of v1 on purpose
-    assert "apply_preset" not in rig.tools.names  # not exposed until tested live
-    with pytest.raises(DarkroomError) as caught:
-        rig.call("apply_preset", photo_id=MASTER, preset_name="Soft Warm")
-    assert caught.value.code is ErrorCode.LLM_BAD_TOOL_CALL
     schemas = rig.tools.schemas()
     json.dumps(schemas)  # must be plain JSON
     for schema in schemas:
@@ -628,7 +625,6 @@ def test_list_presets_is_read_only_and_filtered(rig: Rig) -> None:
     if everything["total"] > 1:
         assert "more match" in one["note"]
     assert rig.call("list_presets", contains="no-such-preset-xyz")["matching"] == 0
-    assert "apply_preset" not in rig.tools.names  # listing does not expose applying
     assert all(e.undo is None for e in rig.journal.entries()[before:])
     assert "create_virtual_copy" not in rig.lightroom.calls
 
@@ -1061,3 +1057,14 @@ def test_iso_band_reads_lightroom_text() -> None:
         "unknown",
         "unknown",
     ]
+
+
+def test_preset_that_changes_the_crop_is_taken_back(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.2)["photo_id"]
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("apply_preset", photo_id=MASTER, preset_name="Cropped Look")
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+    assert "CropLeft" in caught.value.message
+    assert rig.value(copy_id, "CropLeft") == 0
+    assert rig.value(copy_id, "Contrast2012") == 0

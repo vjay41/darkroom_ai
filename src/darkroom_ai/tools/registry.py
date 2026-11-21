@@ -161,16 +161,13 @@ TOOLS: tuple[Tool, ...] = (
         lightroom_tools.list_presets,
         writes=False,
     ),
-)
-
-
-# Built but NOT exposed: apply_preset has not been run against Lightroom yet (user decision,
-# 2026-11-21). Move it into TOOLS only after a live test.
-UNTESTED_TOOLS: tuple[Tool, ...] = (
     _tool(
         "apply_preset", lightroom_tools.ApplyPresetInput, lightroom_tools.apply_preset, writes=True
     ),
 )
+
+
+UNTESTED_TOOLS: tuple[Tool, ...] = ()
 
 
 class ToolRegistry:

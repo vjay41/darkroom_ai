@@ -1546,3 +1546,9 @@ Commits (local, dev): up to c6a9661. Pushed to origin: up to e448450.
 - LIVE PASS (server restarted 18:05, commit 8993c21): scan_folder -> 1 new; import_folder asked via Hermes' approval prompt, accepted,
   added 1 (IMPORT_TEST_1.jpg); catalog_summary total 120 -> 121; ISO bands now real values. Gap 6 (confirmation from Hermes) works live.
   Still to check: Hermes approval mode must be manual (answers came back in ~3 s). import_folder is not undoable by the undo tool.
+
+## 2026-11-21 - Presets (gap 5)
+- apply_preset moved from UNTESTED_TOOLS into TOOLS (UNTESTED_TOOLS is now empty). Safety: result lists every changed setting
+  (before/after, big structures summarised); a preset that changes ProcessVersion/crop/aspect keys is taken back and refused
+  (use the crop tool); total-limit check on exposure etc. unchanged; undo restores exactly the settings it changed.
+  UNVERIFIED live: applyDevelopPreset on a virtual copy, undo of a preset that includes masks/curves tables.

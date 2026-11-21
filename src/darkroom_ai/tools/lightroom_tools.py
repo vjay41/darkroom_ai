@@ -695,8 +695,39 @@ def list_presets(ctx: ToolContext, args: ListPresetsInput) -> Outcome:
     return Outcome(result)
 
 
+# A preset may carry framing or processing settings. Those are not part of a "look": cropping has
+# its own tool, and the process version decides how every other setting is rendered. A preset that
+# changes any of them is taken back (the person can apply it in Lightroom themselves).
+PRESET_PROTECTED_KEYS = frozenset(
+    {
+        "ProcessVersion",
+        "CropLeft",
+        "CropTop",
+        "CropRight",
+        "CropBottom",
+        "CropAngle",
+        "CropConstrainToWarp",
+        "HasCrop",
+        "AspectRatio",
+        "orientation",
+        "UprightVersion",
+    }
+)
+
+
+def _compact(value: Any) -> Any:
+    """Keep results readable: big structures (masks, curves) become a short description."""
+    if isinstance(value, dict | list | tuple):
+        return f"<{type(value).__name__} with {len(value)} entries>"
+    return value
+
+
 class ApplyPresetInput(_Input):
-    """Apply one of Lightroom's develop presets by its exact name."""
+    """Apply one of Lightroom's develop presets (a saved look) to the photo's virtual copy, by its
+    exact name from list_presets. The result lists every setting the preset changed, with before
+    and after, so look at get_preview and judge it. A preset that moves exposure far from the
+    original, or changes the crop or process version, is taken back automatically. Undo with the
+    undo tool."""
 
     preset_name: str = Field(min_length=1)
 
@@ -706,7 +737,9 @@ class ApplyPresetResult(ToolResult):
     working_copy_created: bool
     preset: str
     changed: dict[str, Any]
+    before: dict[str, Any]
     changed_count: int
+    note: str = ""
 
 
 def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
@@ -734,6 +767,20 @@ def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
     copy, created = working_copy(ctx, args.photo_id)
     change = ctx.lightroom.apply_preset(copy.id, matches[0].uuid)
 
+    protected = sorted(PRESET_PROTECTED_KEYS & set(change.after))
+    if protected:
+        if change.before:
+            ctx.lightroom.apply_develop_settings(
+                copy.id, change.before, "darkroom_ai: preset taken back"
+            )
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"The preset '{matches[0].name}' also changes {', '.join(protected)} (framing or "
+            "processing, not a look). It was taken back; nothing is changed.",
+            next_step="Use the crop tool for framing, or apply this preset yourself in Lightroom.",
+            details={"settings": protected},
+        )
+
     # A preset can set anything, so check its result against the total limits and take it back
     # if it goes beyond them.
     caps = capped_keys(ctx.settings.guardrails)
@@ -759,8 +806,12 @@ def apply_preset(ctx: ToolContext, args: ApplyPresetInput) -> Outcome:
         photo_id=copy.id,
         working_copy_created=created,
         preset=matches[0].name,
-        changed=change.after,
+        changed={key: _compact(value) for key, value in change.after.items()},
+        before={key: _compact(value) for key, value in change.before.items()},
         changed_count=len(change.after),
+        note="Look at get_preview to judge the result; undo takes the whole preset back."
+        if change.after
+        else "The preset changed nothing: the photo already had these values.",
     )
     return Outcome(
         result,
