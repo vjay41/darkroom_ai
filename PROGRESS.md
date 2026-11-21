@@ -1689,3 +1689,8 @@ Finding: darkroom profile had no `approvals.mode`, so Hermes ran smart mode; its
 incl. the people-mask prompt at 19:31:29, answered 19:31:33) -> the "ask before" rule was not reaching the user. Fix: `approvals.mode: manual` added to
 profiles/darkroom/config.yaml (backup config.yaml.bak-pre-approvals-manual-20261121, CRLF kept, YAML parses, deny list unchanged). Needs a NEW Hermes session.
 Verify: the next confirmation must show a prompt that waits for the user. Not yet verified live. Earlier "confirmed" write tests were auto-approved.
+
+### 2026-11-21 19:45 - Hermes skill reference corrected (applied with user's go-ahead)
+profiles/darkroom/skills/photo/darkroom-ai-lightroom/references/mask-tools.md: six stale statements fixed (confirmation claim, create_mask signature, ADOBE_FEATURE_UNAVAILABLE
+blame, scale "unverified" -> EV/4 verified, colour/depth reason, gradient/radial/luminance direction verified). Hermes' other additions kept. CRLF kept.
+Backup: mask-tools.md.bak-pre-claude-20261121 (same folder). Aborted if the file had changed since the diff was shown (checked by compare).
