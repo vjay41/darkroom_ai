@@ -69,6 +69,7 @@ def _registry(tmp_path: Path) -> ToolRegistry:
         lightroom=FakeLightroom(tmp_path),
         journal=InMemoryJournal(),
         photoshop=FakePhotoshop(tmp_path / "outputs" / "photoshop"),
+        processes=_Processes(True),
     )
     return ToolRegistry(context)
 
@@ -161,3 +162,39 @@ def test_run_selftest_write_mode_needs_a_go_ahead(tmp_path: Path) -> None:
     )
     got = ToolRegistry(context).call("run_selftest", {"write": True})
     assert got["wrote_a_virtual_copy"] is True and got["all_passed"] is True
+
+
+class _Processes:
+    def __init__(self, running: bool | None) -> None:
+        self.running = running
+
+    def is_running(self, image_name: str) -> bool | None:
+        return self.running
+
+    def start(self, exe: Path, arguments: list[str] | None = None) -> None:
+        raise AssertionError("a read-only tool must never start an app")
+
+
+def test_capabilities_never_asks_a_photoshop_that_is_not_running(tmp_path: Path) -> None:
+    class Exploding(FakePhotoshop):
+        def info(self):  # type: ignore[no-untyped-def]
+            raise AssertionError("Photoshop would have been started")
+
+    for running in (False, None):
+        context = ToolContext(
+            settings=make_settings(tmp_path),
+            lightroom=FakeLightroom(tmp_path),
+            journal=InMemoryJournal(),
+            photoshop=Exploding(tmp_path / "ps"),
+            processes=_Processes(running),
+        )
+        got = ToolRegistry(context).call("get_capabilities", {})
+        assert got["photoshop"]["status"] == "unknown"
+    context = ToolContext(
+        settings=make_settings(tmp_path),
+        lightroom=FakeLightroom(tmp_path),
+        journal=InMemoryJournal(),
+        photoshop=FakePhotoshop(tmp_path / "ps"),
+        processes=_Processes(True),
+    )
+    assert ToolRegistry(context).call("get_capabilities", {})["photoshop"]["status"] == "tested"

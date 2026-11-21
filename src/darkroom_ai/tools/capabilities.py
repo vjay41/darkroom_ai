@@ -51,7 +51,13 @@ def _lightroom(ctx: ToolContext) -> tuple[str | None, str | None]:
 
 
 def _photoshop(ctx: ToolContext) -> str | None:
+    """Photoshop's version, only if it is already running: asking must never start it."""
     if ctx.photoshop is None:
+        return None
+    if (
+        ctx.processes is None
+        or ctx.processes.is_running(ctx.settings.apps.photoshop_process) is not True
+    ):
         return None
     try:
         return ctx.photoshop.info().version

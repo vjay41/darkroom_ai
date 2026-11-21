@@ -1723,3 +1723,7 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
   gateway still serves the old list. Needs a Hermes gateway restart (affects the user's other bots/cron) or Hermes' own /reload-mcp: LEFT TO THE USER.
 - Hermes footer now shows "Manual" approvals in the darkroom profile (verified in the desktop UI after a new session).
 - Connector verified live current: running code b78dc128faa11866 == disk at 20:23; Lightroom 15.2.1, plug-in 0.9.1 ready.
+- BUG found live (20:42): get_capabilities asked Photoshop for its version without checking it was running, and the Photoshop adapter auto-starts Photoshop, so a
+  read-only tool launched Photoshop. Fixed (only asks when the process is already running; test added with a Photoshop fake that fails if started).
+  Photoshop was left running (not closed: it may hold the user's work now).
+- Hermes gateway restarted with `hermes gateway restart` (scheduled task Hermes_Gateway, new pid 33664) so the 30-tool list is picked up.
