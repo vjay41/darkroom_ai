@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: live `darkroom chat` run DONE, edit NOT yet reverted (the user runs `darkroom revert`); Part B waits for Muse + the user's confirmation
+## CURRENT STATE — 2026-11-21: Phase 6: live `darkroom chat` run DONE, edit NOT yet reverted (the user runs `darkroom revert`); Part B and Muse/fast DEFERRED to Phase 8
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -209,8 +209,12 @@ never rely on JIT loading; the first attempt was stopped because no model was lo
 - NOT YET DONE: the user runs `poetry run darkroom revert --photo D:\darkroom_test\TEST_2461-41.jpg`; then the
   after-revert checks (copy equals the recorded start values, nothing pending, hash).
 
-Still owed before the Phase 6 gate: the revert + checks above; the Select Subject re-measurement with both models loaded
-(Part B; starts only after the user loads Muse and confirms); `darkroom chat`, `darkroom revert` and MCP over real stdio are
+DEFERRED to the Phase 8 bake-off (user decision 2026-11-21; Muse is not to be loaded, Qwen is the only loaded model):
+- Part B: the Select Subject re-measurement with both models loaded. NOT RUN. The only GPU measurement so far is the
+  one with Qwen alone on GPU 0.
+- The Muse (`glimmer`) and `fast` profile tests (vision, tool calling, prompt injection). UNTESTED.
+
+Still owed before the Phase 6 gate: the revert + checks above; `darkroom chat`, `darkroom revert` and MCP over real stdio are
 unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
