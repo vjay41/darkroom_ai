@@ -334,7 +334,16 @@ class LightroomClient:
                 details=details,
             )
         if code == "MASK_PHOTO_NOT_SHOWN":
-            return DarkroomError(ErrorCode.LR_BUSY_USER, text or None, details=details)
+            return DarkroomError(
+                ErrorCode.LR_BUSY_USER,
+                text or None,
+                next_step="Do not click in Lightroom while a mask tool runs. If the working copy "
+                "is hidden in a collapsed stack (a virtual copy is stacked with its original), "
+                "Lightroom cannot show it: in the Library module, with a folder or All "
+                "Photographs as the source, choose Photo > Stacking > Expand All Stacks, then "
+                "retry.",
+                details=details,
+            )
         if code == "UNAUTHORIZED":
             return DarkroomError(
                 ErrorCode.LR_COMMAND_FAILED,

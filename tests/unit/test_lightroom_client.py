@@ -348,3 +348,11 @@ def test_bridge_status_is_available_and_timeout_replies_say_to_check_state(
         "ping", {"code": "BRIDGE_BUSY", "message": "busy", "retry_after_s": 20}
     )
     assert "about 20 s" in busy.next_step and busy.details["retry_after_s"] == 20
+
+
+def test_photo_not_shown_error_mentions_collapsed_stacks() -> None:
+    error = LightroomClient._error(
+        "inspect_masks", {"code": "MASK_PHOTO_NOT_SHOWN", "message": "showing another photo"}
+    )
+    assert error.code is ErrorCode.LR_BUSY_USER
+    assert "Expand All Stacks" in error.next_step and "Do not click" in error.next_step
