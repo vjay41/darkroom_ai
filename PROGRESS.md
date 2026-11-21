@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1 and 4 done; `clean-outputs` list shown, waiting for the user to run it; then the live error cases (one at a time), pip-audit, firewall run
+## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error case 1 of 5 done (Lightroom is CLOSED right now); next: cases 2-5 with the user, pip-audit, firewall run
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -332,7 +332,17 @@ Item 5 list shown (nothing removed; the user answers the y/N): 44 files, 807 MB 
 Flagged: the 3 masks include `TEST_2457-37_subject.png`, the Select Subject mask whose visual check by the user is
 still pending from the Phase 4 gate.
 
-Still waiting: the user's y/N for `clean-outputs`; the five live error cases; pip-audit; the firewall run. Earlier list:
+Item 5 DONE: the user ran `darkroom clean-outputs` and answered y; afterwards "Nothing to remove", 10 finals kept.
+
+Item 3, live error cases (2026-11-21):
+1. Lightroom closed (no Lightroom process): `darkroom doctor` -> `[FAIL] Lightroom: [LR_NOT_REACHABLE] Lightroom did not
+   answer 'ping' in time (timed out)` + next step (open Lightroom, plug-in enabled, no dialog waiting); exit 1 after 21 s;
+   the other checks still ran. `darkroom lightroom ping` -> same code and text, exit 2 after 21 s. Correct code and a
+   usable next step. To improve in the message review: it waits the full 20 s connect deadline and says "did not answer in
+   time" although nothing is listening; say "nothing is listening on the plug-in's port" when the connection is refused.
+2-5 (plug-in not loaded, wrong catalog, model unloaded, Photoshop dialog open): pending, one at a time.
+
+Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error
 cases; MCP against the real Lightroom; `clean-outputs` on the real folder; pip-audit (command shown first). Then: review
 of every error message, README, gate.
