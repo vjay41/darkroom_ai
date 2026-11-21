@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: both agent runs PASSED on `primary` and are undone; `glimmer` / `fast` still owed; not yet at the gate
+## CURRENT STATE — 2026-11-21: Phase 6: `glimmer` / `fast` DEFERRED to Phase 8; live `darkroom chat` plan shown, waiting for the go
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -165,8 +165,20 @@ Change after the run: a pass in which only `replace_background` succeeded (no Li
 re-measures or sends a new preview; the model is told the last measurements still hold. A Lightroom edit in the same step
 still triggers both. Unit-tested (305 tests, `make quality` clean); not re-run live.
 
-Still owed before the Phase 6 gate: profiles `glimmer` and `fast` (tool-calling, injection, vision; after the user confirms
-LM Studio's auto-unload or switches models by hand); `darkroom chat`, `darkroom revert` and MCP over real stdio are
+Profiles `glimmer` and `fast`: UNTESTED and DEFERRED to the Phase 8 bake-off (user decision 2026-11-21: no more model
+switching for now; Qwen stays the only loaded model).
+- The user confirmed LM Studio's auto-unload is on, and it worked (requesting `glimmer` unloaded Qwen; one model at a time).
+- A `glimmer` run was started and then overtaken by the change of plan. Its output is INCONCLUSIVE and not a test result:
+  vision 5/5 on the synthetic picture in 102 s (includes loading the model); all four tool scenarios failed with server
+  errors, not model answers (a 120 s read timeout, then "Model unloaded by user or API request", "Model is unloaded",
+  "Failed to load model ... Engine protocol startup was aborted"); the two injection runs afterwards worked (ignored,
+  guardrails held). Cause of the unload not established. `fast` was not started.
+- Qwen was brought back with one text-only request (14.4 s) and is the only loaded model again.
+- NEW since the reload: Qwen is now spread over BOTH GPUs (GPU 0 24.8 GB, GPU 1 11.1 GB used) instead of GPU 0 only
+  (26.7 GB before). Not pinned to GPU 0 as the user wants; LM Studio's GPU setting was not touched by the assistant.
+  Gap: `doctor` does not warn in this case (it only warns when the model server is absent from the configured GPU).
+
+Still owed before the Phase 6 gate: a live `darkroom chat` run (plan shown, waiting for the go); `darkroom chat`, `darkroom revert` and MCP over real stdio are
 unit-tested only (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
