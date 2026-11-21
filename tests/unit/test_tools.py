@@ -91,6 +91,7 @@ def change(result: dict[str, Any], name: str) -> dict[str, Any]:
 def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
     assert rig.tools.names == (
         "get_photo_info",
+        "get_preview",
         "analyze_photo",
         "adjust_lighting",
         "adjust_white_balance",

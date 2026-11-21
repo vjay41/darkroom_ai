@@ -48,6 +48,12 @@ TOOLS: tuple[Tool, ...] = (
         writes=False,
     ),
     _tool(
+        "get_preview",
+        lightroom_tools.GetPreviewInput,
+        lightroom_tools.get_preview,
+        writes=False,
+    ),
+    _tool(
         "analyze_photo",
         lightroom_tools.AnalyzePhotoInput,
         lightroom_tools.analyze_photo,

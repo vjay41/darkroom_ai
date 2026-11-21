@@ -90,6 +90,39 @@ def get_photo_info(ctx: ToolContext, args: GetPhotoInfoInput) -> Outcome:
     return Outcome(result)
 
 
+# -- get_preview ----------------------------------------------------------------------------------
+
+
+class GetPreviewInput(_Input):
+    """Render the photo as Lightroom shows it right now and return the picture itself, so you can
+    look at it. Use it to judge how the photo looks before and after an edit. Changes nothing."""
+
+    long_edge: int = Field(
+        default=PREVIEW_LONG_EDGE,
+        ge=256,
+        le=2048,
+        description="Longest side of the picture in pixels (256-2048).",
+    )
+
+
+class GetPreviewResult(ToolResult):
+    photo_id: str
+    image_path: str
+    long_edge: int
+    note: str = "The picture is attached to this result. It shows the photo as it is now."
+
+
+def get_preview(ctx: ToolContext, args: GetPreviewInput) -> Outcome:
+    target = resolve_copy(ctx, args.photo_id)
+    preview = ctx.lightroom.export_preview(
+        target.id, f"view-{uuid.uuid4().hex[:12]}", args.long_edge
+    )
+    result = GetPreviewResult(
+        photo_id=target.id, image_path=str(preview.path), long_edge=preview.long_edge
+    )
+    return Outcome(result, applied={"photo_id": target.id, "preview": str(preview.path)})
+
+
 # -- analyze_photo --------------------------------------------------------------------------------
 
 
