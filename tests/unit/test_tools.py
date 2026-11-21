@@ -70,6 +70,12 @@ class Rig:
         return self.lightroom.settings[photo_id][key]
 
 
+@pytest.fixture(autouse=True)
+def no_real_waiting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tools poll Lightroom for missing values; tests must not really sleep."""
+    monkeypatch.setattr("darkroom_ai.tools.context._sleep", lambda _seconds: None)
+
+
 @pytest.fixture
 def rig(tmp_path: Path) -> Rig:
     return Rig(tmp_path)
@@ -604,7 +610,8 @@ def test_raw_white_balance_without_a_current_value_is_refused(tmp_path: Path) ->
         rig.call("adjust_white_balance", photo_id=MASTER, temperature=500)
     assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
     assert "no current value for temperature" in caught.value.message
-    assert "fixed white balance" in caught.value.next_step
+    assert "Make a lighting edit on this photo first" in caught.value.next_step
+    assert "waited 5 s" in caught.value.message
     assert rig.value(copy_id, "Temperature") is None  # nothing was written
 
     rig.lightroom.settings[copy_id]["Temperature"] = 5200
@@ -669,3 +676,37 @@ def test_white_balance_total_limit_jpg_and_confirmed_override(tmp_path: Path) ->
         2000,
         40,
     )
+
+
+def test_raw_white_balance_waits_read_only_for_the_numbers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rig = Rig(tmp_path, file_format="RAW")
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.1)["photo_id"]
+    rig.lightroom.settings[copy_id]["Temperature"] = None
+    rig.lightroom.settings[copy_id]["Tint"] = None
+    polls: list[float] = []
+
+    def numbers_appear_after_two_polls(seconds: float) -> None:
+        polls.append(seconds)
+        if len(polls) == 2:  # Lightroom has worked the numbers out by now
+            rig.lightroom.settings[copy_id]["Temperature"] = 4200
+            rig.lightroom.settings[copy_id]["Tint"] = 4
+
+    monkeypatch.setattr("darkroom_ai.tools.context._sleep", numbers_appear_after_two_polls)
+    writes_before = rig.lightroom.calls.count("apply_develop_settings")
+    result = rig.call("adjust_white_balance", photo_id=MASTER, temperature=500)
+    assert polls == [0.5, 0.5]
+    assert change(result, "temperature")["before"] == 4200
+    assert rig.value(copy_id, "Temperature") == 4700
+    # Exactly one write: the requested change. Nothing was written to force the numbers.
+    assert rig.lightroom.calls.count("apply_develop_settings") == writes_before + 1
+
+
+def test_playbooks_put_lighting_before_white_balance_for_raw() -> None:
+    from darkroom_ai.agent.loop import load_playbook
+
+    for name in ("portrait", "landscape"):
+        text = load_playbook(name)
+        assert "lighting changes BEFORE white-balance changes" in text
+        assert "do not repeat it" in text

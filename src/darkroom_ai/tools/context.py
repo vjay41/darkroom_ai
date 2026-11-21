@@ -153,6 +153,12 @@ def check_process_version(settings: Mapping[str, Any]) -> None:
         )
 
 
+# How long to wait (read-only polling) for Lightroom to report values it has not worked out yet.
+WAIT_FOR_VALUES_S = 5.0
+POLL_S = 0.5
+_sleep = time.sleep
+
+
 def _number(value: Any) -> float:
     return float(value) if isinstance(value, int | float) else 0.0
 
@@ -179,21 +185,33 @@ def apply_slider_changes(
     keys = [limit.key for limit, _ in requests]
     current = ctx.lightroom.get_develop_settings(copy.id, [*keys, "ProcessVersion"])
     check_process_version(current)
-    unknown = [
-        limit.name
-        for limit, _ in requests
-        if limit.needs_current and not isinstance(current.get(limit.key), int | float)
-    ]
+
+    def unknown_now() -> list[str]:
+        return [
+            limit.name
+            for limit, _ in requests
+            if limit.needs_current and not isinstance(current.get(limit.key), int | float)
+        ]
+
+    unknown = unknown_now()
+    waited = 0.0
+    while unknown and waited < WAIT_FOR_VALUES_S:
+        # Lightroom reports a RAW copy's white-balance numbers about a second after the copy's
+        # first edit. Wait for them with reads only; nothing is ever written to force them.
+        _sleep(POLL_S)
+        waited += POLL_S
+        current = ctx.lightroom.get_develop_settings(copy.id, [*keys, "ProcessVersion"])
+        unknown = unknown_now()
     if unknown:
         # Never guess: treating an unknown Kelvin value as 0 would set a wildly wrong value.
         raise DarkroomError(
             ErrorCode.GUARDRAIL_REJECTED,
             f"Lightroom reports no current value for {', '.join(unknown)} on this photo (a RAW "
-            "file whose white balance is 'As Shot' has no fixed number), so a relative change "
-            "cannot be worked out. Nothing was changed.",
-            next_step="In Lightroom, give the virtual copy a fixed white balance once (for "
-            "example move the Temp slider slightly or pick a preset such as Daylight), then "
-            "retry.",
+            "file whose white balance is 'As Shot' has no fixed number until the copy has been "
+            f"edited once), so a relative change cannot be worked out (waited {waited:g} s). "
+            "Nothing was changed.",
+            next_step="Make a lighting edit on this photo first (for example a small exposure "
+            "change), then ask for the white-balance change again.",
             details={"settings": unknown, "photo_id": copy.id},
         )
     originals = original_values(ctx, copy.id, {key: current.get(key) for key in keys})

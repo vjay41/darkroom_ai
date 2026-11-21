@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW acceptance accepted; WB total limits built; timing test done; waiting for the user's go on the live total-limit test and on the agent runs. Not pushed.
+## CURRENT STATE — 2026-11-21: Phase 8 in progress: RAW total limits pass live; STOPPED on a serious finding: a JPG white-balance edit is lost after one preview export (not fixed, not understood); agent runs not started. Not pushed.
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -423,6 +423,41 @@ User decisions after the RAW test (2026-11-21): RAW acceptance ACCEPTED.
   `make quality` clean). Live test on the RAW copy: plan with expected values shown to the user; waiting for the go.
 - Agent runs on Qwen (multi-pass lighting, HSL, crop, landscape playbook, two more TEST_ photos, one RAW copy): plan
   shown; waiting for the go.
+
+User decisions (2026-11-21, later): timing fix go (wait up to 5 s, poll every 0.5 s, read-only, then refuse; never write to
+force the numbers; hint "make a lighting edit first"; playbooks put lighting before white balance for RAW); live
+total-limit test go, plus a short JPG check; agent runs go, one at a time with a report after each, TEST_ files and RAW
+copies only, including a strong "much brighter" request and a white-balance request on a RAW copy; check
+`require_loaded` before each run and `lms ps` before the first.
+- Timing fix BUILT: `apply_slider_changes` polls (reads only) every 0.5 s for up to 5 s when a value that is needed is
+  not reported yet, then refuses with "(waited 5 s)" and the next step "Make a lighting edit on this photo first".
+  Unit test checks that exactly one write happens (the requested change). Both playbooks now say: RAW files, lighting
+  before white balance; accept a refusal or clamp, do not repeat it. 325 tests, `make quality` clean. Not run live.
+- Live total-limit test, RAW copy of `RAW_DSC00480.ARW` (expected values written down first): ALL AS EXPECTED.
+  +1000 K -> 5100 (none); +1000 K -> 6100 (none, exactly at the total); +1000 K -> applied 0, stays 6100, rule "total"
+  ("Clamped - temperature: asked +1000, applied +0 (total limit)"); -500 K -> 5600 (allowed, towards the original);
+  +1000 K with `allow_beyond_total` -> refused `CONFIRMATION_REQUIRED`, stays 5600; tint +30 -> 39; tint +30 -> applied
+  +10, 49, rule "total". Lightroom reported each value. Undo all (5 steps) -> 4100 / 9; all 172 settings equal the fresh
+  snapshot exactly; nothing pending; master unchanged; hash unchanged. Preview cast returned to the start numbers.
+- Live JPG check on the virtual copy of `TEST_2459-39.jpg`: NOT AS EXPECTED, and it uncovered a serious problem.
+  Expected +30 -> 30, +30 -> 60, third clamped. Actual: each +30 was applied from 0 again (30, 30, 30).
+  Diagnosis (three small runs on the same copy, each undone; copy back at 0, nothing pending):
+  * Right after an edit Lightroom reports `IncrementalTemperature` 30, and two edits in a row add up (30 -> 60).
+  * After ONE preview export the edit is GONE: the first export after the edit still shows it (blue_yellow 0.0649 vs
+    0.0083 without the edit), but afterwards Lightroom reports 0, and the NEXT export measures 0.0083 again. It stays 0
+    after 5 s and through a second connection. So the JPG white-balance edit does not survive a preview export; this
+    is a real loss of the edit, not a misreport.
+  * RAW Kelvin edits and lighting edits (highlights, exposure) DO survive exports (seen in the RAW test and in the agent
+    runs).
+  * Contradiction, not understood: in the Phase 6 chat run (`TEST_2461-41.jpg`, temperature -10) the edit was still
+    reported, and still measured, after two exports. Differences since then: Lightroom was restarted, the plug-in was
+    reloaded (0.4.0; the export code is unchanged), a different copy with a longer history, and +30 instead of -10.
+  * Consequences if it holds generally: the agent's re-measurement after a pass discards a JPG white-balance edit;
+    JPG white-balance totals cannot accumulate; `replace_background`'s TIFF export may not include it. In every observed
+    case the white-balance label stayed "As Shot".
+  * NOT fixed. Candidate to test with the user's OK: write `WhiteBalance = "Custom"` together with the incremental
+    values, and restore "As Shot" on undo. Until this is understood, JPG white-balance results are UNRELIABLE.
+- Agent runs: NOT started (the JPG white-balance problem comes first; `lms ps` not run yet).
 
 ### Phase 7 progress (2026-11-21)
 User answers: pip-audit yes, one-off, not in `make quality`, exact command shown first, report to a file; throwaway venv yes
