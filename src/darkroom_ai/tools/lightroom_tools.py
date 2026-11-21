@@ -6,6 +6,7 @@ are recorded with the values needed to undo them.
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Sequence
 from typing import Any, Literal, Self
@@ -322,6 +323,126 @@ def analyze_photo(ctx: ToolContext, args: AnalyzePhotoInput) -> Outcome:
         readback_note=readback_note(differences),
     )
     return Outcome(result, applied={"photo_id": target.id, "preview": str(preview.path)})
+
+
+# -- analyze_batch --------------------------------------------------------------------------------
+
+BATCH_LONG_EDGE = 512
+BATCH_MAX_PHOTOS = 25
+BATCH_MAX_CONSECUTIVE_ERRORS = 3
+_BATCH_STOP_CODES = frozenset({ErrorCode.LR_NOT_REACHABLE, ErrorCode.ADOBE_VERSION_UNSUPPORTED})
+
+
+class AnalyzeBatchInput(BaseModel):
+    """Measure many photos in one call and return a few numbers per photo (tones, clipping,
+    colour cast). Numbers only: no pictures, no faces, no verdicts. Use it to compare or group a
+    large set cheaply before looking at individual photos. Reads only; changes nothing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    photo_ids: list[str] = Field(
+        min_length=1,
+        max_length=BATCH_MAX_PHOTOS,
+        description=f"Catalog ids to measure (1-{BATCH_MAX_PHOTOS}); repeats are ignored.",
+    )
+    long_edge: int = Field(
+        default=BATCH_LONG_EDGE,
+        ge=256,
+        le=1024,
+        description="Longest side of the measured preview in pixels (256-1024). Smaller is faster.",
+    )
+    time_budget_s: float = Field(
+        default=90.0,
+        ge=1.0,
+        le=300.0,
+        description="Stop starting new photos after this many seconds; the rest are listed in "
+        "not_processed so you can call again with them.",
+    )
+
+
+class BatchPhotoNumbers(BaseModel):
+    """The numbers measured for one photo, or why it could not be measured."""
+
+    model_config = ConfigDict(frozen=True)
+
+    photo_id: str
+    measured_id: str | None = None
+    file_name: str | None = None
+    is_working_copy: bool | None = None
+    median: float | None = None
+    p05: float | None = None
+    p95: float | None = None
+    highlights_clipped_pct: float | None = None
+    shadows_clipped_pct: float | None = None
+    red_high_pct: float | None = None
+    color_cast: str | None = None
+    color_cast_strength: float | None = None
+    error: str | None = None
+
+
+class AnalyzeBatchResult(ToolResult):
+    results: tuple[BatchPhotoNumbers, ...]
+    not_processed: tuple[str, ...] = ()
+    long_edge: int
+    note: str = ""
+
+
+def _batch_numbers(ctx: ToolContext, photo_id: str, long_edge: int) -> BatchPhotoNumbers:
+    target = resolve_copy(ctx, photo_id)
+    preview = ctx.lightroom.export_preview(target.id, f"batch-{uuid.uuid4().hex[:12]}", long_edge)
+    analysis = analyze(load_image(preview.path))
+    return BatchPhotoNumbers(
+        photo_id=photo_id,
+        measured_id=target.id,
+        file_name=target.file_name,
+        is_working_copy=target.is_virtual_copy,
+        median=analysis.tones.p50,
+        p05=analysis.tones.p05,
+        p95=analysis.tones.p95,
+        highlights_clipped_pct=analysis.clipping.highlights_pct,
+        shadows_clipped_pct=analysis.clipping.shadows_pct,
+        red_high_pct=analysis.clipping.red_high_pct,
+        color_cast=analysis.color_cast.description,
+        color_cast_strength=analysis.color_cast.strength,
+    )
+
+
+def analyze_batch(ctx: ToolContext, args: AnalyzeBatchInput) -> Outcome:
+    ids = list(dict.fromkeys(args.photo_ids))
+    began = time.monotonic()
+    results: list[BatchPhotoNumbers] = []
+    errors_in_a_row = 0
+    stopped = ""
+    done = 0
+    for photo_id in ids:
+        if time.monotonic() - began >= args.time_budget_s:
+            stopped = f"the {args.time_budget_s:g} s time budget ran out"
+            break
+        if errors_in_a_row >= BATCH_MAX_CONSECUTIVE_ERRORS:
+            stopped = f"{BATCH_MAX_CONSECUTIVE_ERRORS} photos in a row failed"
+            break
+        try:
+            results.append(_batch_numbers(ctx, photo_id, args.long_edge))
+            errors_in_a_row = 0
+        except DarkroomError as exc:
+            if exc.code in _BATCH_STOP_CODES:
+                raise
+            errors_in_a_row += 1
+            results.append(
+                BatchPhotoNumbers(photo_id=photo_id, error=f"[{exc.code.value}] {exc.message}")
+            )
+        done += 1
+    rest = tuple(ids[done:])
+    note = (
+        "Numbers only, from a small preview of each photo as it is now; "
+        "they are evidence, not verdicts."
+    )
+    if rest:
+        note += f" Stopped early: {stopped}. Call again with not_processed."
+    result = AnalyzeBatchResult(
+        results=tuple(results), not_processed=rest, long_edge=args.long_edge, note=note
+    )
+    return Outcome(result, applied={"photos": len(results), "not_processed": len(rest)})
 
 
 # -- adjust_lighting ------------------------------------------------------------------------------
@@ -919,6 +1040,7 @@ __all__ = [
     "adjust_hsl",
     "adjust_lighting",
     "adjust_white_balance",
+    "analyze_batch",
     "analyze_photo",
     "applied_differences",
     "apply_preset",

@@ -24,7 +24,7 @@ verified_on = "Lightroom 15.2.1"
 
 [[features]]
 name = "Preview and numeric analysis"
-tools = ["get_preview", "analyze_photo"]
+tools = ["get_preview", "analyze_photo", "analyze_batch"]
 status = "verified"
 verified_on = "Lightroom 15.2.1"
 

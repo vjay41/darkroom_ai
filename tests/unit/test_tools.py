@@ -94,6 +94,7 @@ NOT_ABOUT_ONE_PHOTO = {
     "scan_folder",
     "import_folder",
     "list_develop_parameters",
+    "analyze_batch",
 }
 
 
@@ -120,6 +121,7 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "find_photo",
         "get_preview",
         "analyze_photo",
+        "analyze_batch",
         "adjust_lighting",
         "adjust_white_balance",
         "list_develop_parameters",
@@ -1270,3 +1272,44 @@ def test_list_masks_explains_the_stored_scale(rig: Rig) -> None:
 def test_list_develop_parameters_names_the_readable_lens_profile_settings(rig: Rig) -> None:
     listed = rig.call("list_develop_parameters")
     assert "LensProfileName" in listed["readable_text_settings"]
+
+
+# -- analyze_batch --------------------------------------------------------------------------------
+
+
+def test_analyze_batch_returns_numbers_for_many_photos_and_changes_nothing(rig: Rig) -> None:
+    result = rig.call("analyze_batch", photo_ids=[MASTER, MASTER, "no-such-photo"])
+    assert [r["photo_id"] for r in result["results"]] == [
+        MASTER,
+        "no-such-photo",
+    ]  # repeats dropped
+    good, bad = result["results"]
+    assert good["median"] == pytest.approx(100 / 255, abs=0.01)
+    assert good["error"] is None and good["measured_id"] == MASTER
+    assert bad["error"] is not None and bad["median"] is None
+    assert result["not_processed"] == []
+    assert result["long_edge"] == 512
+    assert rig.lightroom.calls.count("create_virtual_copy") == 0
+
+
+def test_analyze_batch_stops_after_the_time_budget(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ticks = iter([0.0, 0.0, 5.0, 5.0, 5.0, 5.0])
+    monkeypatch.setattr("darkroom_ai.tools.lightroom_tools.time.monotonic", lambda: next(ticks))
+    result = rig.call("analyze_batch", photo_ids=[MASTER, "b", "c"], time_budget_s=1)
+    assert len(result["results"]) == 1
+    assert result["not_processed"] == ["b", "c"]
+    assert "Call again with not_processed" in result["note"]
+
+
+def test_analyze_batch_stops_after_repeated_failures(rig: Rig) -> None:
+    result = rig.call("analyze_batch", photo_ids=["x1", "x2", "x3", "x4", "x5"])
+    assert len(result["results"]) == 3
+    assert result["not_processed"] == ["x4", "x5"]
+    assert "in a row failed" in result["note"]
+
+
+def test_analyze_batch_refuses_more_than_the_limit(rig: Rig) -> None:
+    with pytest.raises(Exception, match=r"25"):
+        rig.call("analyze_batch", photo_ids=[f"p{i}" for i in range(26)])

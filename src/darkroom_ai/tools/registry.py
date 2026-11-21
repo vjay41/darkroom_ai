@@ -125,6 +125,12 @@ TOOLS: tuple[Tool, ...] = (
         writes=False,
     ),
     _tool(
+        "analyze_batch",
+        lightroom_tools.AnalyzeBatchInput,
+        lightroom_tools.analyze_batch,
+        writes=False,
+    ),
+    _tool(
         "adjust_lighting",
         lightroom_tools.AdjustLightingInput,
         lightroom_tools.adjust_lighting,

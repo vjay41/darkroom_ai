@@ -1796,3 +1796,9 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Verified: skills load and the look / edit / measure / compare / report loop works end to end. Still judged by preview and Hermes' own read; the user's eyes at full size are the final check.
 - Observed cost: the numeric ranking of 12 photos took many minutes and Hermes wrote its own parsing script -> motivates read-only `analyze_batch` + list filters (next).
 - Left on the test catalog: working copy 1894FC78 with Highlights -10 (keep or undo at the user's choice).
+
+## Batch work, step 1 (2026-11-21)
+- New read-only tool `analyze_batch`: numbers (median, p05, p95, clipping, red clip, cast) for up to 25 photos per call at a small preview size, per-photo errors, time budget, stops after 3 photos in a row fail, returns `not_processed` to resume. No pictures, no faces, no copies. Tests added; Linux quality green (406 passed, 8 skipped).
+- New knowledge skill `lr-batch-operations` (scope, numeric triage, group, pilot, chunked rollout with stop conditions, review). Installed in the Hermes profile; in the repo `hermes/skills/`.
+- Not done: list filters (needs plug-in change), batch writes (batch id, batch undo, chunk/error limits) - needs a PRD addendum and the user's sign-off first.
+- Live check of `analyze_batch` through Hermes: pending (needs connector restart / MCP reload).
