@@ -122,6 +122,12 @@ class _Soak:
     def _masks(self) -> int:
         return int(self.call("list_masks", {"photo_id": self.photo_id})["count"])
 
+    def _masks_now(self) -> int:
+        try:
+            return self._masks()
+        except DarkroomError:
+            return self.mask_count
+
     def mask_baseline(self) -> str:
         self.mask_count = self._masks()
         return f"{self.mask_count} masks"
@@ -140,13 +146,20 @@ class _Soak:
         now = self._masks()
         if now != self.mask_count + 1:
             raise RuntimeError(f"expected {self.mask_count + 1} masks after create, found {now}")
+        if not self.mask_id:
+            raise RuntimeError(
+                "the mask exists but Lightroom gave no mask id: " + got.get("note", "")
+            )
         return f"mask {self.mask_id}"
 
     def mask_delete(self) -> str:
-        self.call("delete_mask", {"photo_id": self.photo_id, "mask_id": self.mask_id})
+        if self.mask_id:
+            self.call("delete_mask", {"photo_id": self.photo_id, "mask_id": self.mask_id})
+        else:  # no id to delete by: take the creation back with undo
+            self.call("undo", {"photo_id": self.photo_id, "scope": "last"})
         now = self._masks()
         if now != self.mask_count:
-            raise RuntimeError(f"expected {self.mask_count} masks after delete, found {now}")
+            raise RuntimeError(f"expected {self.mask_count} masks after clean-up, found {now}")
         return "back to baseline"
 
     def run_cycle(self) -> None:
@@ -156,11 +169,11 @@ class _Soak:
             return
         if self.step("edit + read back", self.edit_and_read_back):
             self.step("undo + check", self.undo_and_check)
-        made = self.step("mask count", self.mask_baseline) and self.step(
-            "create gradient mask", self.mask_create
-        )
-        if made and self.mask_id:
-            self.step("delete mask", self.mask_delete)
+        if self.step("mask count", self.mask_baseline):
+            self.mask_id = None
+            self.step("create gradient mask", self.mask_create)
+            if self._masks_now() != self.mask_count:  # always leave the photo as found
+                self.step("clean up mask", self.mask_delete)
 
 
 def run_soak(call: Call, *, cycles: int, photo_id: str | None = None) -> SoakReport:

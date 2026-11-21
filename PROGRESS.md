@@ -1761,3 +1761,7 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 ## 21 Nov 2026 - P6 soak runner
 - `darkroom soak [--cycles N] --yes`: repeats list, preview, exposure edit + read-back + undo, gradient mask create/list/delete on one working copy of a master (test catalog; refuses if the plug-in says writes are not allowed). Report: outputs/soak-<date>.json. Unit tests against the simulator (370 passed, 8 skipped on Linux); they caught a bad `undo` call (photo_id required) in my first draft.
 - Live run: see next entry.
+- Live soak (5 cycles, test catalog, working copy of IMPORT_TEST_1.jpg, run through Hermes' terminal): 0 tool errors, but it exposed two things:
+  1. `create_mask` (written gradient) took 51 s in every cycle and returned `mask_id: None` (the mask itself was created: count +1). `inspect_masks` called alone later answered at once with ids, so the delay is in the id lookup after creation (takeover wait, `_created_outcome`); cause not yet found. OPEN.
+  2. My first runner never cleaned those masks up (it deleted only when an id was known): 5 empty masks were left on the copy. Runner now flags a missing id as a failure and cleans up with `undo`; the 5 masks were removed with `delete_mask` (journal 13:42 UTC).
+- Also: a command I typed for the terminal pane landed in Hermes' chat instead and Hermes ran it (same test-catalog command); computer-use typing into the Hermes terminal pane is unreliable.
