@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 6: thinking setting, GPU threshold and playbooks updated; first agent run plan shown, waiting for the go
+## CURRENT STATE — 2026-11-21: Phase 6: first agent run PASSED on `primary` (lighting + white balance, undone); waiting for the user
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -107,7 +107,25 @@ User decisions (2026-11-21) and what was built for them:
   not tuned.
 - 300 tests pass, `make quality` clean.
 
-Still owed: the first agent run (plan shown, waiting for the go); profiles `glimmer` and `fast` after that (the user will
+First agent run (`scripts/agent_run.py`, 2026-11-21, `primary`, portrait playbook, `TEST_2459-39.jpg`, existing virtual copy;
+tools offered: `adjust_lighting`, `adjust_white_balance`; no confirmer):
+- Before the run: only the latest preview is kept in the conversation (older ones are replaced by a short note; unit test).
+- Turn 1 (3.4 s, 385 completion tokens, 306 thinking): `adjust_lighting` highlights -20; requested -20, applied -20, not
+  clamped. Turn 2 (2.9 s, 393 tokens, 162 thinking): finished with a summary. 1 pass, 2 turns, 2 previews (164 kB, 163 kB),
+  7.5 s in total.
+- Measurements before -> after: highlights clipped 1.245 % -> 0.172 %; p50 0.567 -> 0.555; p95 0.910 -> 0.886; shadows
+  0.566 % -> 0.570 %; cast "no noticeable cast" both times.
+- Matches the prediction from the numbers: exposure untouched, highlights lowered, white balance untouched.
+- Undo: `undo all` took back 1 step, which was the only pending edit and belonged to this run's session. All 171 develop
+  settings of the copy equal the start state recorded before the run; the master's 170 settings never changed; original
+  SHA-256 unchanged; nothing left pending.
+- The model's summary (819 characters) is in `logs\agent_run_20261121-094450.txt` (git-ignored); not read by the assistant.
+- Design fact: the `undo` tool's scope "all" is NOT limited to a session; it takes back every not-yet-undone darkroom_ai
+  edit on the copy, across sessions. The script made it equal to "this run" by refusing to start if earlier edits were
+  pending and by checking the undone entries' session. Open decision: add a scope "session" to the tool.
+- One photo, one request: no evidence yet for white-balance changes, multi-pass runs, or other photos.
+
+Still owed: `replace_background` as a second agent run (after the user's go); profiles `glimmer` and `fast` (the user will
 confirm LM Studio's auto-unload or switch models by hand).
 
 Earlier note (done): a downscaled preview of a TEST_ photo to the local model with a numeric comparison of its

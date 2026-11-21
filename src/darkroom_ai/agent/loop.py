@@ -54,6 +54,20 @@ Rules:
 """
 
 
+PREVIEW_REMOVED = (
+    "[An earlier preview was shown here. It has been removed; rely on the measurements.]"
+)
+
+
+def drop_previews(messages: list[Message]) -> None:
+    """Remove every picture from the conversation so far (only the newest one is ever sent)."""
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            text = "\n".join(str(p.get("text", "")) for p in content if p.get("type") == "text")
+            message["content"] = f"{text}\n{PREVIEW_REMOVED}"
+
+
 class AgentStep(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -232,6 +246,12 @@ class Agent:
             )
             plan_next = False
             reply = self._llm.chat(messages, reasoning_effort=effort, **self._options)
+            thinking = (reply.usage.get("completion_tokens_details") or {}).get("reasoning_tokens")
+            self._say(
+                f"turn {turn}: model answered in {reply.seconds} s (reasoning effort "
+                f"{effort or 'default'}; completion tokens "
+                f"{reply.usage.get('completion_tokens')}, of which thinking {thinking})"
+            )
             messages.append(assistant_message(mode, reply))
             try:
                 parsed = parse_reply(mode, reply)
@@ -286,6 +306,7 @@ class Agent:
                     f"{analysis_text(analysis)}\nContinue only if something still needs fixing; "
                     "otherwise finish with your summary."
                 )
+                drop_previews(messages)  # older previews are not carried along
                 messages.append(self._user_message(text, analysis.get("preview_path")))
                 plan_next = True
 

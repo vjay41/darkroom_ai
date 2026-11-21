@@ -728,3 +728,28 @@ def test_valid_call_rate_and_measured_note() -> None:
         ).gpu.min_free_mb
         == 3000
     )
+
+
+def test_only_the_latest_preview_is_in_a_request(tmp_path: Path) -> None:
+    from darkroom_ai.agent.loop import PREVIEW_REMOVED
+
+    replies = [
+        call("adjust_lighting", photo_id=MASTER, exposure=0.2),
+        call("adjust_lighting", photo_id=MASTER, exposure=0.2),
+        ChatReply("Done."),
+    ]
+    rig = Rig(tmp_path, replies, profile=profile(vision=True, max_image_px=64))
+    report = rig.agent.run("Brighten", MASTER)
+    assert report.images_sent == 3
+    for request in rig.llm.sent:
+        pictures = [
+            part
+            for message in request
+            if isinstance(message["content"], list)
+            for part in message["content"]
+            if part["type"] == "image_url"
+        ]
+        assert len(pictures) == 1
+    last = rig.llm.sent[-1]
+    assert PREVIEW_REMOVED in last[1]["content"]  # the original preview is gone from history
+    assert "USER REQUEST: Brighten" in last[1]["content"]  # ... its text is kept
