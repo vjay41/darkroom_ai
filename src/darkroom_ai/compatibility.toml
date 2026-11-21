@@ -63,8 +63,9 @@ verified_on = "Lightroom 15.2.1"
 [[features]]
 name = "People mask"
 tools = ["create_mask"]
-status = "known_issue"
-note = "Interactive: the person picks someone in Lightroom and presses Create Mask within about a minute. Not yet confirmed end to end with approvals set to manual."
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+note = "Interactive: after the go-ahead the person picks someone in Lightroom (Select People) on the working copy shown in Develop and presses Create Mask within about a minute. Confirmed end to end 2026-11-21 with approvals set to manual."
 
 [[features]]
 name = "Colour range and depth range masks"

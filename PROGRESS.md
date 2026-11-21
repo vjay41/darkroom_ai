@@ -1755,3 +1755,5 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Capability probe: `get_capabilities.plugin` now reports protocol, `protocol_matches`, `missing_commands` (plug-in's `list_commands` vs `REQUIRED_PLUGIN_COMMANDS`); a test checks that list and PROTOCOL_VERSION against Commands.lua.
 - Upgrade runbook: docs/UPGRADE.md.
 - Not done in P1c: nothing blocking; Lua-side syntax test still needs DARKROOM_LUAC.
+- P1c verified live (Hermes get_capabilities: protocol 1, protocol_matches true, missing_commands []). Connector restarted with `--stop-stale`.
+- People mask feature set to `verified` in compatibility.toml (confirmed end to end 2026-11-21, approvals manual, copy shown in Develop).
