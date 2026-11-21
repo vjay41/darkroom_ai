@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1-6 done; the firewall rules are STILL ON (the user removes them); remaining: confirm the rules are gone, message review, README, gate
+## CURRENT STATE — 2026-11-21: Phase 7: all live items done, firewall rules removed; message review + README shown as drafts, waiting for the user's approval; then commit and gate
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -400,7 +400,13 @@ and no error mentioned a network:
   (same as the baseline), all checks passed. New mask `outputs\masks\TEST_2457-37_subject.png`.
 What this proves: darkroom_ai's own Python processes (including the Photoshop worker child) need no connection other
 than loopback. What it does NOT prove: anything about Lightroom, Photoshop or LM Studio themselves, which were not
-blocked. Rules still ON at the time of writing; the user removes them and the assistant then checks the count is 0.
+blocked. Rules REMOVED by the user afterwards (elevated `Remove-NetFirewallRule`); the assistant checked read-only that
+0 rules named `darkroom_ai offline proof*` remain.
+
+Remaining Phase 7 items (2026-11-21): the message review and the README are shown to the user as DRAFTS and are not
+committed until approved (README draft outside the repository; `README.md` unchanged). Already done earlier in this
+phase: the throwaway-venv install check and the `replace_background` note. `clean-outputs` would now remove 4 files
+(3 previews, 1 mask from the firewall run); left for the user to run.
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error
