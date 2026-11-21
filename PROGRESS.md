@@ -1767,3 +1767,13 @@ apps.lightroom_exe at a path that cannot exist. Verified on Linux only (346 pass
 - Also: a command I typed for the terminal pane landed in Hermes' chat instead and Hermes ran it (same test-catalog command); computer-use typing into the Hermes terminal pane is unreliable.
 - ROOT CAUSE of the 51 s / no-mask-id defect (and of the earlier wrong-photo mask): Lightroom stacks each virtual copy with its master; a copy in a COLLAPSED stack cannot be selected, so the Develop view never shows it (MASK_PHOTO_NOT_SHOWN -> LR_BUSY_USER after the takeover wait). After Photo > Stacking > Expand All Stacks the same soak ran clean: create_mask 2.6 s with the mask id, clean-up ok, 2/2 cycles, no failures. The Lightroom SDK has no stack operations (Adobe community request open since 2011), so the plug-in cannot expand stacks itself. Mitigations: the error now says how to fix it (client.py), skill note in mask-tools.md (backup .bak-pre-stacks-20261121), `connectors --stop-all` added. Still open: make this a precondition the tools check before the takeover wait, and consider a doctor warning.
 - P6 test-catalog soak gate: 20 cycles, 0 failures (slowest step 2.7 s, create_mask + id). Run on 2026-11-21 with stacks expanded. Production catalog NOT allowlisted: that is Vijay's decision (PRD decision 4).
+
+## P7 - Hermes knowledge skills (draft, 2026-11-21)
+- Seven knowledge-only skills drafted in `hermes/skills/`: lr-masking, lr-lens-corrections, lr-presets,
+  lr-genre-knowledge, lr-safe-operations, lr-user-guidance, lr-upgrade. Principles and failure modes only;
+  no slider values or recipes (enforced by `tests/unit/test_hermes_skills.py`, which also checks that every
+  tool named exists in the registry and is listed in `uses_tools`).
+- NOT installed into the Hermes profile yet: waiting for the user to review the drafts.
+- Open: the existing profile skill `darkroom-ai-lightroom` (v1.2.0) and its `references/editing-principles.md`
+  contain slider-number ranges, which conflicts with the "no recipes" principle. Proposal: keep the tool docs
+  and hard rules, move the numbers out. Needs the user's decision.
