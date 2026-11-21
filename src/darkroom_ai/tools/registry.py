@@ -127,6 +127,15 @@ TOOLS: tuple[Tool, ...] = (
     ),
     _tool("list_masks", masks.ListMasksInput, masks.list_masks, writes=False),
     _tool("create_mask", masks.CreateMaskInput, masks.create_mask, writes=True),
+    _tool("inspect_masks", masks.InspectMasksInput, masks.inspect_masks, writes=False),
+    _tool(
+        "set_mask_adjustments",
+        masks.SetMaskAdjustmentsInput,
+        masks.set_mask_adjustments,
+        writes=True,
+    ),
+    _tool("invert_mask", masks.InvertMaskInput, masks.invert_mask, writes=True),
+    _tool("delete_mask", masks.DeleteMaskInput, masks.delete_mask, writes=True),
     _tool("adjust_hsl", lightroom_tools.AdjustHslInput, lightroom_tools.adjust_hsl, writes=True),
     _tool("crop", lightroom_tools.CropInput, lightroom_tools.crop, writes=True),
     _tool(

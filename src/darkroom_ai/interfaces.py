@@ -18,6 +18,9 @@ from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     ExportedTiff,
     MaskCreation,
+    MaskInspection,
+    MaskOperation,
+    MaskValues,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
@@ -98,6 +101,14 @@ class LightroomAdapter(Protocol):
     def create_mask(
         self, photo_id: str, mask_type: str, subtype: str | None = None
     ) -> MaskCreation: ...
+
+    def inspect_masks(self, photo_id: str) -> MaskInspection: ...
+
+    def set_mask_values(
+        self, photo_id: str, mask_id: str | None, values: Mapping[str, Mapping[str, float]]
+    ) -> MaskValues: ...
+
+    def mask_operation(self, photo_id: str, mask_id: str, operation: str) -> MaskOperation: ...
 
     def list_presets(self) -> tuple[PresetInfo, ...]: ...
 

@@ -21,6 +21,8 @@ WRITE_COMMANDS = {
     "export_tiff",
     "apply_preset",
     "create_mask",
+    "set_mask_values",
+    "mask_operation",
 }
 
 
@@ -261,7 +263,53 @@ class FakeLightroomPlugin:
 
     def _cmd_create_mask(self, params: dict[str, Any]) -> dict[str, Any]:
         self._photo(params)
-        return {"created": True, "masks_before": 0, "masks_after": 1, "waited_s": 0.0}
+        masks = self.__dict__.setdefault("_masks", {}).setdefault(params["photo_id"], {})
+        masks[f"m{len(masks) + 1}"] = {}
+        return {
+            "created": True,
+            "masks_before": len(masks) - 1,
+            "masks_after": len(masks),
+            "waited_s": 0.0,
+            "mask_id": f"m{len(masks)}",
+        }
+
+    def _cmd_inspect_masks(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._photo(params)
+        masks = self.__dict__.setdefault("_masks", {}).get(params["photo_id"], {})
+        return {
+            "masks": [{"maskId": key} for key in masks],
+            "selected_mask": next(iter(masks), None),
+        }
+
+    def _cmd_set_mask_values(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._photo(params)
+        masks = self.__dict__.setdefault("_masks", {}).get(params["photo_id"], {})
+        mask_id = params.get("mask_id") or next(iter(masks), None)
+        if mask_id not in masks:
+            raise PluginError("MASK_NOT_FOUND", "No mask is selected in Lightroom")
+        before, after = {}, {}
+        for key, spec in params["values"].items():
+            current = float(masks[mask_id].get(key, 0.0))
+            step = spec.get("max_step", abs(spec["change"]))
+            change = max(-step, min(step, spec["change"]))
+            masks[mask_id][key] = max(spec["min"], min(spec["max"], current + change))
+            before[key], after[key] = current, masks[mask_id][key]
+        return {"mask_id": mask_id, "before": before, "after": after}
+
+    def _cmd_mask_operation(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._photo(params)
+        masks = self.__dict__.setdefault("_masks", {}).get(params["photo_id"], {})
+        if params["mask_id"] not in masks:
+            raise PluginError("MASK_OPERATION_FAILED", "unknown mask")
+        before = len(masks)
+        if params["operation"] == "delete":
+            del masks[params["mask_id"]]
+        return {
+            "operation": params["operation"],
+            "masks_before": before,
+            "masks_after": len(masks),
+            "accepted": True,
+        }
 
     def _cmd_find_photo(self, params: dict[str, Any]) -> dict[str, Any]:
         wanted = str(params.get("path", "")).lower()

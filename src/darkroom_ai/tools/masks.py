@@ -11,7 +11,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from darkroom_ai.adapters.lightroom.models import MaskCreation
+from darkroom_ai.adapters.lightroom.models import MaskCreation, MaskValues
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult, resolve_copy, working_copy
 
@@ -108,6 +108,7 @@ class CreateMaskResult(ToolResult):
     photo_id: str
     working_copy_created: bool
     creation: MaskCreation
+    mask_id: str | None = None
     masks: tuple[MaskEntry, ...]
     note: str = ""
 
@@ -132,10 +133,177 @@ def create_mask(ctx: ToolContext, args: CreateMaskInput) -> Outcome:
         working_copy_created=created,
         creation=creation,
         masks=summarize_masks(after),
-        note="Mask created. It has no adjustments yet.",
+        mask_id=creation.mask_id,
+        note="Mask created and selected. It has no adjustments yet: use set_mask_adjustments "
+        "with this mask_id (call inspect_masks if mask_id is empty).",
     )
     return Outcome(
         result,
         applied={"photo_id": copy.id, "mask_type": args.mask_type, "subtype": args.subtype},
         undo={"photo_id": copy.id, "settings": {MASKS_KEY: previous}},
     )
+
+
+# -- inspect, adjust, invert, delete -------------------------------------------------------------
+
+# Local (mask) adjustment names Lightroom's SDK accepts, with slider ranges. This is DATA: it says
+# what exists and what values are valid, not what an edit should be.
+LOCAL_PARAMETERS: dict[str, tuple[float, float, str]] = {
+    "local_Exposure": (-5.0, 5.0, "EV"),
+    "local_Contrast": (-100, 100, ""),
+    "local_Highlights": (-100, 100, ""),
+    "local_Shadows": (-100, 100, ""),
+    "local_Whites": (-100, 100, ""),
+    "local_Blacks": (-100, 100, ""),
+    "local_Temperature": (-100, 100, "relative: cooler/warmer"),
+    "local_Tint": (-100, 100, ""),
+    "local_Saturation": (-100, 100, ""),
+    "local_Clarity": (-100, 100, ""),
+    "local_Texture": (-100, 100, ""),
+    "local_Dehaze": (-100, 100, ""),
+    "local_Sharpness": (-100, 100, ""),
+    "local_LuminanceNoise": (0, 100, "noise reduction"),
+    "local_Moire": (0, 100, ""),
+    "local_Defringe": (0, 100, ""),
+    "local_ToningHue": (0, 360, "colour tint hue"),
+    "local_ToningSaturation": (0, 100, "colour tint amount"),
+}
+PER_PASS_SHARE = 0.25
+EXPOSURE_STEP_EV = 1.5
+
+
+class InspectMasksInput(BaseModel):
+    """Show the masks of a photo's working copy as Lightroom reports them, including each mask's
+    id (needed by set_mask_adjustments, invert_mask and delete_mask). Lightroom switches to the
+    Develop module while this runs. Changes nothing in the picture."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    photo_id: str = Field(min_length=1)
+
+
+class InspectMasksResult(ToolResult):
+    photo_id: str
+    selected_mask: str | None = None
+    masks: Any = None
+    note: str = (
+        "Mask ids are in the entries (maskId or similar). selected_mask is the mask currently "
+        "open in Lightroom."
+    )
+
+
+def inspect_masks(ctx: ToolContext, args: InspectMasksInput) -> Outcome:
+    copy = resolve_copy(ctx, args.photo_id)
+    seen = ctx.lightroom.inspect_masks(copy.id)
+    return Outcome(
+        InspectMasksResult(photo_id=copy.id, selected_mask=seen.selected_mask, masks=seen.masks)
+    )
+
+
+class SetMaskAdjustmentsInput(BaseModel):
+    """Change local adjustments inside ONE mask, so only the masked area changes. Each value is the
+    CHANGE to apply (positive or negative), not the final value, limited to the parameter's range
+    and to a per-call amount (exposure 1.5 EV; others a quarter of their range). Names: see
+    LOCAL_PARAMETERS in the error text if you use a wrong one. mask_id comes from create_mask or
+    inspect_masks; leave it out to use the mask currently selected in Lightroom. Undo with the
+    undo tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    photo_id: str = Field(min_length=1)
+    mask_id: str | None = None
+    changes: dict[str, float] = Field(min_length=1, max_length=12)
+
+
+class SetMaskAdjustmentsResult(ToolResult):
+    photo_id: str
+    mask: MaskValues
+    requested_change: dict[str, float]
+    applied_change: dict[str, float]
+    note: str = ""
+
+
+def _local_spec(key: str, change: float) -> dict[str, float]:
+    low, high, _unit = LOCAL_PARAMETERS[key]
+    step = EXPOSURE_STEP_EV if key == "local_Exposure" else (high - low) * PER_PASS_SHARE
+    return {"change": float(change), "min": float(low), "max": float(high), "max_step": float(step)}
+
+
+def set_mask_adjustments(ctx: ToolContext, args: SetMaskAdjustmentsInput) -> Outcome:
+    unknown = [key for key in args.changes if key not in LOCAL_PARAMETERS]
+    if unknown:
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"Not a mask adjustment: {', '.join(unknown)}.",
+            next_step="Use one of: " + ", ".join(sorted(LOCAL_PARAMETERS)),
+        )
+    copy = resolve_copy(ctx, args.photo_id)
+    before_masks = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY]).get(MASKS_KEY)
+    values = {key: _local_spec(key, change) for key, change in args.changes.items()}
+    got = ctx.lightroom.set_mask_values(copy.id, args.mask_id, values)
+    applied = {key: round(got.after[key] - got.before[key], 4) for key in got.after}
+    result = SetMaskAdjustmentsResult(
+        photo_id=copy.id,
+        mask=got,
+        requested_change=dict(args.changes),
+        applied_change=applied,
+        note="Values are inside the mask only. Use get_preview to look at the result.",
+    )
+    previous = before_masks if isinstance(before_masks, list) else []
+    return Outcome(
+        result,
+        applied={"photo_id": copy.id, "mask_id": got.mask_id, "changes": applied},
+        undo={"photo_id": copy.id, "settings": {MASKS_KEY: previous}},
+    )
+
+
+class MaskTargetInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    photo_id: str = Field(min_length=1)
+    mask_id: str = Field(min_length=1, description="From create_mask or inspect_masks.")
+
+
+class InvertMaskInput(MaskTargetInput):
+    """Invert one mask so it covers everything it did not (for example: select the subject, then
+    invert to adjust the background). Undo with the undo tool."""
+
+
+class DeleteMaskInput(MaskTargetInput):
+    """Delete one mask from the working copy (the original photo is never touched). Undo with the
+    undo tool restores it."""
+
+
+class MaskOperationResult(ToolResult):
+    photo_id: str
+    operation: str
+    masks_before: int
+    masks_after: int
+
+
+def _mask_operation(ctx: ToolContext, args: MaskTargetInput, operation: str) -> Outcome:
+    copy = resolve_copy(ctx, args.photo_id)
+    previous = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY]).get(MASKS_KEY)
+    got = ctx.lightroom.mask_operation(copy.id, args.mask_id, operation)
+    result = MaskOperationResult(
+        photo_id=copy.id,
+        operation=operation,
+        masks_before=got.masks_before,
+        masks_after=got.masks_after,
+    )
+    return Outcome(
+        result,
+        applied={"photo_id": copy.id, "mask_id": args.mask_id, "operation": operation},
+        undo={
+            "photo_id": copy.id,
+            "settings": {MASKS_KEY: previous if isinstance(previous, list) else []},
+        },
+    )
+
+
+def invert_mask(ctx: ToolContext, args: InvertMaskInput) -> Outcome:
+    return _mask_operation(ctx, args, "invert")
+
+
+def delete_mask(ctx: ToolContext, args: DeleteMaskInput) -> Outcome:
+    return _mask_operation(ctx, args, "delete")

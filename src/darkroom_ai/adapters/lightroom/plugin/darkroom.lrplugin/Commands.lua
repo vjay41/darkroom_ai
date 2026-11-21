@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.6.0"
+local PLUGIN_VERSION = "0.7.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -597,6 +597,51 @@ local function maskCount()
 	return nil
 end
 
+local function plainCopy(value, depth)
+	local kind = type(value)
+	if kind == "string" or kind == "number" or kind == "boolean" then
+		return value
+	end
+	if kind == "table" and depth > 0 then
+		local out = {}
+		for key, inner in pairs(value) do
+			if type(key) == "string" or type(key) == "number" then
+				out[key] = plainCopy(inner, depth - 1)
+			end
+		end
+		return out
+	end
+	return nil
+end
+
+-- What Lightroom reports for the masks of the photo shown in Develop. The exact shape of each entry
+-- is not documented, so it is passed through (scalars only, three levels deep) for the caller.
+local function maskDump()
+	local ok, masks = LrTasks.pcall(function()
+		return LrDevelopController.getAllMasks()
+	end)
+	local selected = nil
+	LrTasks.pcall(function()
+		selected = LrDevelopController.getSelectedMask()
+	end)
+	return {
+		masks = ok and plainCopy(masks, 3) or {},
+		selected_mask = selected,
+	}
+end
+
+local function showInMasking(ctx, photo)
+	ctx.catalog:setSelectedPhotos(photo, {})
+	LrApplicationView.switchToModule("develop")
+	LrTasks.sleep(1.0)
+	local target = ctx.catalog:getTargetPhoto()
+	if not target or target:getRawMetadata("uuid") ~= photo:getRawMetadata("uuid") then
+		fail("MASK_PHOTO_NOT_SHOWN", "Lightroom's Develop module is not showing the requested photo")
+	end
+	LrDevelopController.goToMasking()
+	LrTasks.sleep(0.5)
+end
+
 function Commands.write.create_mask(params, ctx)
 	local photo = findWritablePhoto(ctx, params.photo_id, true)
 	local maskType, subtype = params.mask_type, params.subtype
@@ -611,15 +656,7 @@ function Commands.write.create_mask(params, ctx)
 		subtype = nil
 	end
 
-	ctx.catalog:setSelectedPhotos(photo, {})
-	LrApplicationView.switchToModule("develop")
-	LrTasks.sleep(1.0)
-	local target = ctx.catalog:getTargetPhoto()
-	if not target or target:getRawMetadata("uuid") ~= photo:getRawMetadata("uuid") then
-		fail("MASK_PHOTO_NOT_SHOWN", "Lightroom's Develop module is not showing the requested photo")
-	end
-	LrDevelopController.goToMasking()
-	LrTasks.sleep(0.5)
+	showInMasking(ctx, photo)
 
 	local before = maskCount()
 	local ok, err = LrTasks.pcall(function()
@@ -640,7 +677,84 @@ function Commands.write.create_mask(params, ctx)
 		masks_before = before,
 		masks_after = after,
 		waited_s = waited,
+		mask_id = maskDump().selected_mask,
 	}
+end
+
+function Commands.read.inspect_masks(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	showInMasking(ctx, photo)
+	return maskDump()
+end
+
+-- Sets local adjustments inside one mask. Each entry of params.values is
+-- { change, min, max, max_step }: the new value is the current one plus the change, the change is
+-- limited to +-max_step and the result to min..max. Returns before/after so the caller can undo.
+function Commands.write.set_mask_values(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	if type(params.values) ~= "table" or next(params.values) == nil then
+		fail("INVALID_PARAMS", "values must be a non-empty object")
+	end
+	showInMasking(ctx, photo)
+	if type(params.mask_id) == "string" and params.mask_id ~= "" then
+		local ok, err = LrTasks.pcall(function()
+			LrDevelopController.selectMask(params.mask_id)
+		end)
+		if not ok then
+			fail("MASK_NOT_FOUND", "Lightroom could not select mask " .. params.mask_id .. ": " .. tostring(err))
+		end
+		LrTasks.sleep(0.3)
+	end
+	local selected = nil
+	LrTasks.pcall(function()
+		selected = LrDevelopController.getSelectedMask()
+	end)
+	if not selected then
+		fail("MASK_NOT_FOUND", "No mask is selected in Lightroom")
+	end
+	local before, after = {}, {}
+	for key, spec in pairs(params.values) do
+		if type(key) ~= "string" or string.sub(key, 1, 6) ~= "local_" or type(spec) ~= "table" then
+			fail("INVALID_PARAMS", "values keys must be local_* names with a spec object")
+		end
+		local current = LrDevelopController.getValue(key)
+		if type(current) ~= "number" then
+			fail("MASK_PARAM_UNAVAILABLE", key .. " is not available for the selected mask")
+		end
+		local step = spec.max_step or math.abs(spec.change)
+		local change = math.max(-step, math.min(step, spec.change))
+		local target = math.max(spec.min, math.min(spec.max, current + change))
+		before[key] = current
+		LrDevelopController.setValue(key, target)
+		LrTasks.sleep(0.15)
+		after[key] = LrDevelopController.getValue(key)
+	end
+	return { mask_id = selected, before = before, after = after }
+end
+
+-- Inverts or deletes one mask of the photo shown in Develop.
+function Commands.write.mask_operation(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local operation = params.operation
+	if operation ~= "invert" and operation ~= "delete" then
+		fail("INVALID_PARAMS", "operation must be invert or delete")
+	end
+	if type(params.mask_id) ~= "string" or params.mask_id == "" then
+		fail("INVALID_PARAMS", "mask_id is required")
+	end
+	showInMasking(ctx, photo)
+	local before = #(maskDump().masks)
+	local ok, result = LrTasks.pcall(function()
+		if operation == "invert" then
+			return LrDevelopController.invertMask(params.mask_id)
+		end
+		return LrDevelopController.deleteMask(params.mask_id)
+	end)
+	if not ok then
+		fail("MASK_OPERATION_FAILED", "Lightroom refused to " .. operation .. " the mask: " .. tostring(result))
+	end
+	LrTasks.sleep(0.5)
+	return { operation = operation, masks_before = before, masks_after = #(maskDump().masks), accepted = result }
 end
 
 function Commands.write.apply_preset(params, ctx)

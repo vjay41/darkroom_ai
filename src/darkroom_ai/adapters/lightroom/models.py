@@ -87,6 +87,29 @@ class MaskCreation(_Result):
     masks_before: int | None = None
     masks_after: int | None = None
     waited_s: float = 0.0
+    mask_id: str | None = None
+
+
+class MaskInspection(_Result):
+    """What Lightroom reports for the masks of a photo (shape passed through as received)."""
+
+    masks: Any = Field(default_factory=list)
+    selected_mask: str | None = None
+
+
+class MaskValues(_Result):
+    """Local adjustment values of one mask before and after a change."""
+
+    mask_id: str
+    before: dict[str, float] = Field(default_factory=dict)
+    after: dict[str, float] = Field(default_factory=dict)
+
+
+class MaskOperation(_Result):
+    operation: str
+    masks_before: int
+    masks_after: int
+    accepted: Any = None
 
 
 class Selection(_Result):

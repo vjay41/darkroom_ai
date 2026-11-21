@@ -117,6 +117,10 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "set_develop_parameters",
         "list_masks",
         "create_mask",
+        "inspect_masks",
+        "set_mask_adjustments",
+        "invert_mask",
+        "delete_mask",
         "adjust_hsl",
         "crop",
         "replace_background",
@@ -988,3 +992,31 @@ def test_create_mask_rejects_a_wrong_subtype(rig: Rig) -> None:
     assert caught.value.code is ErrorCode.LLM_BAD_TOOL_CALL
     with pytest.raises(DarkroomError):
         rig.call("create_mask", photo_id=MASTER, mask_type="gradient", subtype="sky")
+
+
+def test_mask_adjustments_are_bounded_per_call_and_undoable(rig: Rig) -> None:
+    made = rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="sky")
+    copy, mask_id = made["photo_id"], made["mask_id"]
+    got = rig.call(
+        "set_mask_adjustments",
+        photo_id=copy,
+        mask_id=mask_id,
+        changes={"local_Exposure": -4.0, "local_Contrast": 80},
+    )
+    assert got["applied_change"]["local_Exposure"] == -1.5  # exposure step limit
+    assert got["applied_change"]["local_Contrast"] == 50  # quarter of the -100..100 range
+    assert rig.call("undo", photo_id=copy)["undone_steps"] == 1
+
+
+def test_mask_adjustments_reject_unknown_names(rig: Rig) -> None:
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("set_mask_adjustments", photo_id=MASTER, changes={"Exposure2012": 1})
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+
+
+def test_invert_and_delete_mask(rig: Rig) -> None:
+    made = rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="subject")
+    copy, mask_id = made["photo_id"], made["mask_id"]
+    assert rig.call("invert_mask", photo_id=copy, mask_id=mask_id)["operation"] == "invert"
+    assert rig.call("delete_mask", photo_id=copy, mask_id=mask_id)["masks_after"] == 0
+    assert rig.call("inspect_masks", photo_id=copy)["masks"] == []

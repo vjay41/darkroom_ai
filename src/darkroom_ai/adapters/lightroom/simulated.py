@@ -17,6 +17,9 @@ from darkroom_ai.adapters.lightroom.models import (
     CatalogPage,
     ExportedTiff,
     MaskCreation,
+    MaskInspection,
+    MaskOperation,
+    MaskValues,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
@@ -163,11 +166,67 @@ class SimulatedLightroom:
         self.calls.append("create_mask")
         self._copy_only(photo_id)
         masks = list(self.settings[photo_id].get("MaskGroupBasedCorrections") or [])
+        mask_id = f"mask-{len(masks) + 1}"
         masks.append(
-            {"CorrectionName": f"{mask_type} {subtype or ''}".strip(), "CorrectionMasks": []}
+            {
+                "CorrectionName": f"{mask_type} {subtype or ''}".strip(),
+                "CorrectionID": mask_id,
+                "CorrectionMasks": [],
+            }
         )
         self.settings[photo_id]["MaskGroupBasedCorrections"] = masks
-        return MaskCreation(created=True, masks_before=len(masks) - 1, masks_after=len(masks))
+        return MaskCreation(
+            created=True, masks_before=len(masks) - 1, masks_after=len(masks), mask_id=mask_id
+        )
+
+    def _mask(self, photo_id: str, mask_id: str | None) -> dict[str, Any]:
+        self._copy_only(photo_id)
+        masks = self.settings[photo_id].get("MaskGroupBasedCorrections") or []
+        for mask in masks:
+            if mask_id is None or mask.get("CorrectionID") == mask_id:
+                return mask  # type: ignore[no-any-return]
+        raise DarkroomError(ErrorCode.ADOBE_FEATURE_UNAVAILABLE, f"no mask {mask_id}")
+
+    def inspect_masks(self, photo_id: str) -> MaskInspection:
+        self.calls.append("inspect_masks")
+        self._copy_only(photo_id)
+        masks = self.settings[photo_id].get("MaskGroupBasedCorrections") or []
+        return MaskInspection(
+            masks=[{"maskId": m.get("CorrectionID")} for m in masks],
+            selected_mask=masks[-1].get("CorrectionID") if masks else None,
+        )
+
+    def set_mask_values(
+        self, photo_id: str, mask_id: str | None, values: Mapping[str, Mapping[str, float]]
+    ) -> MaskValues:
+        self.calls.append("set_mask_values")
+        mask = self._mask(photo_id, mask_id)
+        before: dict[str, float] = {}
+        after: dict[str, float] = {}
+        for key, spec in values.items():
+            current = float(mask.get(key, 0.0))
+            step = spec.get("max_step", abs(spec["change"]))
+            change = max(-step, min(step, spec["change"]))
+            target = max(spec["min"], min(spec["max"], current + change))
+            before[key] = current
+            mask[key] = target
+            after[key] = target
+        return MaskValues(mask_id=str(mask["CorrectionID"]), before=before, after=after)
+
+    def mask_operation(self, photo_id: str, mask_id: str, operation: str) -> MaskOperation:
+        self.calls.append("mask_operation")
+        mask = self._mask(photo_id, mask_id)
+        masks = self.settings[photo_id]["MaskGroupBasedCorrections"]
+        if operation == "delete":
+            self.settings[photo_id]["MaskGroupBasedCorrections"] = [
+                m for m in masks if m is not mask
+            ]
+        else:
+            mask["Inverted"] = not mask.get("Inverted", False)
+        count = len(self.settings[photo_id]["MaskGroupBasedCorrections"])
+        return MaskOperation(
+            operation=operation, masks_before=len(masks), masks_after=count, accepted=True
+        )
 
     def find_photo(self, path: str) -> PhotoInfo | None:
         for photo in self.photos.values():

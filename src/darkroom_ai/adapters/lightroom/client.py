@@ -22,6 +22,9 @@ from darkroom_ai.adapters.lightroom.models import (
     CommandList,
     ExportedTiff,
     MaskCreation,
+    MaskInspection,
+    MaskOperation,
+    MaskValues,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
@@ -423,6 +426,28 @@ class LightroomClient:
             params["subtype"] = subtype
         data = self.call("create_mask", params, timeout_s=self._export_timeout_s)
         return self._typed(MaskCreation, "create_mask", data)
+
+    def inspect_masks(self, photo_id: str) -> MaskInspection:
+        data = self.call("inspect_masks", {"photo_id": photo_id}, timeout_s=self._export_timeout_s)
+        return self._typed(MaskInspection, "inspect_masks", data)
+
+    def set_mask_values(
+        self, photo_id: str, mask_id: str | None, values: Mapping[str, Mapping[str, float]]
+    ) -> MaskValues:
+        """Change local adjustments inside one mask; each spec has change, min, max, max_step."""
+        params: dict[str, Any] = {
+            "photo_id": photo_id,
+            "values": {k: dict(v) for k, v in values.items()},
+        }
+        if mask_id:
+            params["mask_id"] = mask_id
+        data = self.call("set_mask_values", params, timeout_s=self._export_timeout_s)
+        return self._typed(MaskValues, "set_mask_values", data)
+
+    def mask_operation(self, photo_id: str, mask_id: str, operation: str) -> MaskOperation:
+        params = {"photo_id": photo_id, "mask_id": mask_id, "operation": operation}
+        data = self.call("mask_operation", params, timeout_s=self._export_timeout_s)
+        return self._typed(MaskOperation, "mask_operation", data)
 
     def export_tiff(self, photo_id: str, name: str, color_space: str = "sRGB") -> ExportedTiff:
         """Export a full-size 16-bit TIFF of a virtual copy into the hand-off folder."""
