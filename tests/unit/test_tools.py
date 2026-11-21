@@ -703,13 +703,18 @@ def test_raw_white_balance_waits_read_only_for_the_numbers(
     assert rig.lightroom.calls.count("apply_develop_settings") == writes_before + 1
 
 
-def test_playbooks_put_lighting_before_white_balance_for_raw() -> None:
-    from darkroom_ai.agent.loop import load_playbook
+def test_raw_white_balance_is_stated_as_a_fact_without_an_order() -> None:
+    """The earlier playbook line 'lighting BEFORE white balance' was read as a step to carry out
+    and caused an unrequested lighting edit. It is now a fact in both modes, with no order."""
+    from darkroom_ai.agent.loop import SYSTEM_FACTS, SYSTEM_RULES, load_playbook
 
     for name in ("portrait", "landscape"):
         text = load_playbook(name)
-        assert "lighting changes BEFORE white-balance changes" in text
-        assert "do not repeat it" in text
+        assert "BEFORE white-balance" not in text and "RAW files:" not in text
+    for text in (SYSTEM_RULES, SYSTEM_FACTS):
+        assert "only after the copy's first edit" in text
+        assert "request is refused, and the tool result says so" in text
+        assert "lighting changes BEFORE" not in text and "lighting first" not in text.lower()
 
 
 # -- JPG white balance is written together with its mode; read-back -------------------------------

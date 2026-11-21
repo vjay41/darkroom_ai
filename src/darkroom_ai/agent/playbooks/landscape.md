@@ -22,7 +22,3 @@ bright ends; `highlights_pct` and `shadows_pct` are the clipped share of the fra
 7. After each pass read the NEW MEASUREMENTS and judge the change by them. Stop when the numbers
    are inside the ranges above.
 8. Do not crop and do not replace the background unless the user asked for it.
-
-RAW files: make lighting changes BEFORE white-balance changes. Lightroom reports a RAW copy's
-white-balance numbers only after the copy's first edit; a white-balance request before that is
-refused. If a white-balance request is refused or clamped, accept it; do not repeat it.
