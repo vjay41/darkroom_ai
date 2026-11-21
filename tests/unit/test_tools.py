@@ -893,3 +893,34 @@ def test_crop_returns_measured_before_and_after(rig: Rig) -> None:
     edit = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.2)
     assert edit["measured"]["before"] == measured["after"]
     assert rig.lightroom.calls.count("export_preview") == exports + 1
+
+
+# -- "no change" is information, only for absolute settings ---------------------------------------
+
+
+def test_identical_crop_is_reported_as_no_change_and_writes_nothing(rig: Rig) -> None:
+    box = {"left": 0.1, "top": 0.1, "right": 0.9, "bottom": 0.9}
+    first = rig.call("crop", photo_id=MASTER, **box)
+    assert first["no_change"] is False and first["measured"] is not None
+    writes = rig.lightroom.calls.count("apply_develop_settings")
+    exports = rig.lightroom.calls.count("export_preview")
+    again = rig.call("crop", photo_id=MASTER, **box)  # accepted, never refused
+    assert again["no_change"] is True
+    assert again["note"] == "No change: the photo already has these values. Nothing was written."
+    assert again["measured"] is None and again["before"] == again["after"]
+    assert rig.lightroom.calls.count("apply_develop_settings") == writes
+    assert rig.lightroom.calls.count("export_preview") == exports
+    entry = rig.journal.entries()[-1]
+    assert entry.tool == "crop" and entry.status == "ok" and entry.undo is None
+    assert rig.call("undo", photo_id=MASTER)["undone_steps"] == 1  # only the real crop
+
+    different = rig.call("crop", photo_id=MASTER, left=0.2, top=0.1, right=0.9, bottom=0.9)
+    assert different["no_change"] is False
+
+
+def test_a_repeated_relative_slider_call_is_a_new_request(rig: Rig) -> None:
+    first = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.3)
+    second = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.3)
+    assert not first.get("no_change") and not second.get("no_change")
+    assert change(second, "exposure")["after"] == pytest.approx(0.6)
+    assert second["measured"] is not None

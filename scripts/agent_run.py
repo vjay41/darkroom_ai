@@ -233,7 +233,11 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
         state_file = log_dir / STATE_NAME
         state_file.write_text(json.dumps(state, indent=1), encoding="utf-8")
         print(f"PAUSED: nothing was undone. State saved to {state_file}")
-        print(f"virtual copy to look at in Lightroom: id {copy_id} (copy of {args.photo.name})")
+        shown = lightroom.get_photo(copy_id)
+        print(
+            f"virtual copy to look at in Lightroom: '{shown.copy_name}' "
+            f"(copy of {args.photo.name}, id {copy_id})"
+        )
     else:
         undo_and_check(context, state)
     print("ALL CHECKS PASSED" if not failures else "FAILED: " + ", ".join(failures))

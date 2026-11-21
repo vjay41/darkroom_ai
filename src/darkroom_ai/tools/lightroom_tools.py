@@ -351,6 +351,16 @@ class CropResult(ToolResult):
     kept_fraction: float
     # Measured on real preview renders before and after the crop.
     measured: dict[str, Any] | None = None
+    # True when the photo already had exactly these values: nothing was written.
+    no_change: bool = False
+    note: str = ""
+
+
+NO_CHANGE_NOTE = "No change: the photo already has these values. Nothing was written."
+
+
+def _same_number(current: Any, wanted: float) -> bool:
+    return isinstance(current, int | float) and abs(float(current) - float(wanted)) <= 1e-6
 
 
 def crop(ctx: ToolContext, args: CropInput) -> Outcome:
@@ -372,6 +382,20 @@ def crop(ctx: ToolContext, args: CropInput) -> Outcome:
         "CropBottom": args.bottom,
         "CropAngle": args.angle,
     }
+    if all(_same_number(before.get(key), value) for key, value in wanted.items()):
+        # An absolute setting that is already in place: information, not a refusal.
+        current = {key: before.get(key) for key in CROP_KEYS}
+        return Outcome(
+            CropResult(
+                photo_id=copy.id,
+                working_copy_created=created,
+                before=current,
+                after=current,
+                kept_fraction=round(kept, 4),
+                no_change=True,
+                note=NO_CHANGE_NOTE,
+            )
+        )
     before_measured = measurement_before(ctx, copy.id, args.photo_id, created)
     change = ctx.lightroom.apply_develop_settings(copy.id, wanted, "darkroom_ai: crop")
     measured = {

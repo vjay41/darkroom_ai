@@ -386,9 +386,12 @@ class Agent:
                 if step.ok:
                     bad_calls = 0
                     working_copy = result.get("photo_id") or working_copy
-                    edited = edited or call.name in EDIT_TOOLS
+                    # A call that found the photo already in the requested state wrote nothing:
+                    # it is information for the model and does not count as a pass.
+                    changed = call.name in EDIT_TOOLS and not result.get("no_change")
+                    edited = edited or changed
                     lightroom_changed = lightroom_changed or (
-                        call.name in EDIT_TOOLS and call.name not in OUTPUT_ONLY_TOOLS
+                        changed and call.name not in OUTPUT_ONLY_TOOLS
                     )
                 elif result.get("error") == ErrorCode.LLM_BAD_TOOL_CALL.value:
                     bad_calls += 1

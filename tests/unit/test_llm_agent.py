@@ -1062,3 +1062,15 @@ def test_no_example_numbers_in_rules_or_tool_text() -> None:
             assert not re.search(r"\d", leftovers), (tool.name, text)
     exposure = TOOLS[2].schema()["parameters"]["properties"]["exposure"]["description"]
     assert exposure == "Change in EV; positive brightens, negative darkens."
+
+
+def test_a_no_change_call_does_not_count_as_a_pass(tmp_path: Path) -> None:
+    box = {"photo_id": MASTER, "left": 0.1, "top": 0.1, "right": 0.9, "bottom": 0.9}
+    replies = [call("crop", **box), call("crop", **box), ChatReply("Done.")]
+    rig = Rig(tmp_path, replies, allowed_tools=("crop",))
+    report = rig.agent.run("Crop it", MASTER)
+    assert [(s.tool, s.ok) for s in report.steps] == [("crop", True), ("crop", True)]
+    assert report.passes == 1  # the repeat changed nothing
+    assert report.stopped_because == "finished"
+    # The model was told, as data, that nothing changed.
+    assert "No change: the photo already has these values" in json.dumps(rig.llm.sent[2])
