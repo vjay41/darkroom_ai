@@ -124,6 +124,16 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
         raise SystemExit(f"Refusing: {args.photo} is not under the test-photo folder ({root}).")
     tools = tuple(name.strip() for name in args.tools.split(",") if name.strip())
     profile = settings.llm.active
+    if settings.llm.require_loaded:  # before anything touches Lightroom
+        probe = LocalLlmClient(profile)
+        try:
+            probe.ensure_loaded()
+        except DarkroomError as exc:
+            raise SystemExit(
+                f"[{exc.code.value}] {exc.message}\nNext step: {exc.next_step}"
+            ) from exc
+        finally:
+            probe.close()
     context = build_tool_context(settings)  # default confirmer: refuses anything gated
     lightroom, journal = context.lightroom, context.journal
     registry = RecordingRegistry(context)

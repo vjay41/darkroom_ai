@@ -220,6 +220,13 @@ def _models_test(settings: Settings, names: list[str], skip_vision: bool, as_jso
 
 def _chat(settings: Settings, args: argparse.Namespace) -> int:
     profile = settings.llm.profiles[args.profile or settings.llm.active_profile]
+    if settings.llm.require_loaded:
+        # First of all, before anything touches Lightroom: is the model loaded?
+        probe = LocalLlmClient(profile)
+        try:
+            probe.ensure_loaded()
+        finally:
+            probe.close()
     context = build_tool_context(settings, confirmer=AskUser())
     registry = ToolRegistry(context)
     if args.photo:

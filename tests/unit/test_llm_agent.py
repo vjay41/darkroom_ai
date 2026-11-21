@@ -894,3 +894,34 @@ def test_doctor_reports_listed_but_not_loaded(
     out = capsys.readouterr().out
     assert "listed but NOT loaded (state: not-loaded)" in out
     assert "2 problem(s) found" in out
+
+
+def test_chat_checks_the_model_before_touching_lightroom(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "darkroom.toml"
+    config.write_text(
+        '[llm]\nactive_profile = "m"\n[llm.profiles.m]\n'
+        'base_url = "http://127.0.0.1:1234/v1"\nmodel = "local-model"\n',
+        encoding="utf-8",
+    )
+
+    class NotLoaded:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def ensure_loaded(self) -> None:
+            raise DarkroomError(ErrorCode.LLM_MODEL_NOT_LOADED, "listed but not loaded")
+
+        def close(self) -> None:
+            pass
+
+    def must_not_be_called(*_: Any, **__: Any) -> None:
+        raise AssertionError("Lightroom was touched before the model check")
+
+    monkeypatch.setattr(cli, "LocalLlmClient", NotLoaded)
+    monkeypatch.setattr(cli, "build_tool_context", must_not_be_called)
+    code = cli.main(["--config", str(config), "chat", "Brighten", "--photo", "D:/x.jpg"])
+    assert code == cli.EXIT_ERROR
+    err = capsys.readouterr().err
+    assert "[LLM_MODEL_NOT_LOADED]" in err and "Next step:" in err

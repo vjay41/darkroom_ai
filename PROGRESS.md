@@ -3,7 +3,7 @@
 Running log, updated at the end of every phase. PRD.md section 12 is edited only when one of its open questions is answered.
 Plan of record: phases 0-8 with a GATE after each (stop and wait for an explicit "proceed").
 
-## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error cases 1-3 of 5 done; next: case 4 (model unloaded) and 5 (Photoshop dialog) with the user, pip-audit, firewall run
+## CURRENT STATE — 2026-11-21: Phase 7 in progress: items 1, 4, 5 done; live error cases 1-4 of 5 done (Qwen is UNLOADED right now, the user reloads it); next: case 5 (Photoshop dialog), pip-audit, firewall run
 
 Do not push `dev`. Before touching Lightroom or Photoshop for a new step, show the plan and wait for the user's go.
 
@@ -360,7 +360,15 @@ Item 3, live error cases (2026-11-21):
    `darkroom lightroom ping` in that state: exit 0, "writes allowed: NO (different catalog open)" with both paths.
    `darkroom doctor` in that state: only "[warn] ... WRITES REFUSED (other catalog open)" without paths or next step.
    IMPROVED afterwards (not re-run live): doctor now prints FAIL with the code, both catalog paths and the next step.
-4-5 (model unloaded, Photoshop dialog open): pending, one at a time.
+4. Model unloaded (Qwen ejected in LM Studio, server running; GPU 0 at 1.9 GB): `darkroom doctor` -> `[FAIL] model of the
+   active profile is listed but NOT loaded (state: not-loaded). Load it in the local model server; darkroom_ai does not
+   load models by itself.` `darkroom chat ... --photo TEST_2461-41.jpg` -> `[LLM_MODEL_NOT_LOADED] 'qwen/qwen3.8-27b' is
+   listed but not loaded (state: not-loaded). No request was sent.` + next step (load the model; `require_loaded = false`
+   to allow on-demand loading); exit 2 after 1.1 s. Afterwards LM Studio still listed no loaded model and GPU memory was
+   unchanged, so nothing was loaded on demand. Change asked for by the user and built first: chat (and
+   `scripts/agent_run.py`) check the model BEFORE anything touches Lightroom; the plug-in log shows only doctor's two
+   pings at that time and no command from the chat attempt. Unit test added (316 tests).
+5 (Photoshop dialog open): pending.
 
 Still waiting: error cases 2-5; pip-audit; the firewall run. Earlier list:
 offline proof with Lightroom / Photoshop and under the firewall block; the five live error
