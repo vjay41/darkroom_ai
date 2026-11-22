@@ -214,11 +214,11 @@ def main() -> None:
         if not names:
             return {"ok": True, "skipped": "no metadata presets in this catalog"}
         copy_id = call("get_photo_info", photo_id=m1)["working_copy_id"]
-        out = call("apply_metadata_preset", photo_ids=[copy_id], preset=names[0])
-        info = call("get_photo_metadata", photo_id=copy_id)
-        seen = "darkroom-test-preset" in short(info, 4000)
-        call("set_photo_metadata", photo_id=copy_id, copyright="")
-        return {"ok": out["applied"] == 1 and seen, "preset": names[0], "copyright_seen": seen}
+        name = "darkroom caption test" if "darkroom caption test" in names else names[0]
+        out = call("apply_metadata_preset", photo_ids=[copy_id], preset=name)
+        cleared = call("set_photo_metadata", photo_id=copy_id, caption="")
+        seen = "darkroom-test-preset" in short(cleared, 4000)
+        return {"ok": out["applied"] == 1 and seen, "preset": name, "caption_seen": seen}
 
     def s_copy_settings() -> dict[str, Any]:
         src = st["c1"]

@@ -211,13 +211,17 @@ def remove_distracting_people(ctx: ToolContext, args: RemoveDistractingPeopleInp
     )
     done = ctx.lightroom.remove_distracting_people(copy.id)
     ctx.measurements.pop(copy.id, None)
-    if not done.callback_called and done.retouch_after == done.retouch_before:
+    if done.retouch_after == done.retouch_before:
         raise DarkroomError(
             ErrorCode.ADOBE_FEATURE_UNAVAILABLE,
-            "Lightroom did not remove anyone: its callback never fired and the spot count did "
-            "not change.",
-            next_step="Look at Lightroom for an error dialog or an open Remove panel (press "
-            "Cancel), then try again or use remove_objects. Nothing was applied.",
+            "Lightroom removed nobody: the spot count did not change"
+            + ("" if done.callback_called else " and its callback never fired")
+            + ". Either no distracting people were found, or Lightroom could not reach Adobe "
+            "Firefly, which generates the fill.",
+            next_step="Check Lightroom for an error dialog ('We've encountered an issue...') and "
+            "press OK. If it appeared, sign in to Adobe in Lightroom (Help > Sign In) and try "
+            "again; the owner must do that. Otherwise use remove_objects on the person. Nothing "
+            "was applied; the pre-edit snapshot is kept.",
             details={"snapshot": done.snapshot.name if done.snapshot else None},
         )
     added = (

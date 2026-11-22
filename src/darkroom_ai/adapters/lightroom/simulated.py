@@ -659,13 +659,14 @@ class SimulatedLightroom:
         self._copy_only(photo_id)
         snapshot = self.create_snapshot(photo_id, "darkroom_ai before remove people").snapshot
         areas = list(self.settings[photo_id].get("RetouchAreas", []))
-        self.settings[photo_id]["RetouchAreas"] = [*areas, {"SpotType": "removal"}]
+        added = [] if getattr(self, "people_blocked", False) else [{"SpotType": "removal"}]
+        self.settings[photo_id]["RetouchAreas"] = [*areas, *added]
         return DistractionsResult(
             photo_id=photo_id,
             snapshot=snapshot,
             callback_called=True,
             retouch_before=len(areas),
-            retouch_after=len(areas) + 1,
+            retouch_after=len(areas) + len(added),
         )
 
     def get_retouch_state(self, photo_id: str) -> RetouchState:

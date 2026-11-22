@@ -1767,6 +1767,15 @@ def test_remove_distracting_people_reports_spots_added(tmp_path: Path) -> None:
     assert state["state"]["spot_count"] == 1
 
 
+def test_remove_distracting_people_errors_when_nothing_changed(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    rig.lightroom.people_blocked = True
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("remove_distracting_people", photo_id=MASTER)
+    assert caught.value.code == ErrorCode.ADOBE_FEATURE_UNAVAILABLE
+    assert "Sign In" in (caught.value.next_step or "")
+
+
 def test_rotate_photo_turns_the_working_copy(rig: Rig) -> None:
     right = rig.call("rotate_photo", photo_id=MASTER, direction="right")
     left = rig.call("rotate_photo", photo_id=right["photo_id"], direction="left")
