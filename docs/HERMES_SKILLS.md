@@ -15,6 +15,9 @@ backs up anything it replaces.
 | `lr-safe-operations` | What the tools protect, which actions need a person's go-ahead, checks before and after a write, recognising a stale connector or wrong photo, when to stop and ask. |
 | `lr-user-guidance` | How to talk with a beginner photographer: state the intent, explain in plain words, show before and after, admit limits, teach a little. |
 | `lr-upgrade` | How to read `get_capabilities` and `run_selftest` after an Adobe or darkroom_ai update and what to report. |
+| `lr-noise-reduction` | Telling luminance from colour noise, measuring it (`noise_luma`, `noise_chroma`), global versus masked reduction, the cost in detail, small passes and re-measuring. |
+| `lr-sharpening-clarity` | What sharpening, texture, clarity and dehaze do, protecting skin, halos, order of work, checking with `edge_strength` and the picture. |
+| `lr-skin-tone` | Measuring skin patches with `measure_region`, telling a colour cast from a skin-only problem, choosing white balance, HSL or a local mask, keeping faces consistent. |
 | `lr-batch-operations` | Working through many photos in phases: scope, numeric triage (`analyze_batch`), group, pilot, chunked rollout with stop conditions, review; the batch write tools (plan, one go-ahead per chunk, stop at first failure, `undo_batch`). |
 
 ## Rules for writing a skill

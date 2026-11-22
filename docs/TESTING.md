@@ -46,6 +46,9 @@ a second venv and never install Poetry into `.venv`. In a Linux sandbox (where t
 | `darkroom soak --cycles N --yes` | Reliability: per cycle list, preview, edit + read-back, undo, gradient mask create + delete | Test catalog only; writes only on one working copy; saves `outputs/soak-<date>.json`; flags missing mask ids and cleans up |
 | `scripts/mcp_live.py --photo PATH` | A real MCP client over real stdio: list tools, one read, one gated call refused | Changes nothing |
 | `scripts/tools_live.py --photo PATH` | Each tool once on a virtual copy, then everything undone and the original verified byte-identical | Only photos under `lightroom.test_photos_dir` |
+| `scripts/catalog_live.py` | Catalog management end to end: allowlist prompt, import, collections, keywords, master metadata, undo | Rehearsal catalog only; leaves a few scratch photos and a test keyword |
+| `scripts/detail_live.py [--raw]` | Noise reduction and sharpening on a high-ISO photo: measure, small passes, a local mask, undo, restore check | Virtual copy only; master checked unchanged |
+| `scripts/portrait_live.py --list N` / `--photo-id ID --skin BOX --neutral BOX` | Skin tone (white balance, HSL, a local mask) and an S-curve, measured with `measure_region` before and after, then undo | Virtual copy only; master checked unchanged |
 | `scripts/offline_proof.py` | Records every address the process touches; pass = loopback only | Child processes are not seen; use `scripts/firewall_rules.ps1` output for those |
 
 The plug-in serves one client at a time. Stop Hermes' connector first: `darkroom connectors --stop-all`.

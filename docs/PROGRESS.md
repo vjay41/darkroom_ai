@@ -148,5 +148,19 @@ PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (owner decisions in section 6). Bui
 - Skills: lr-noise-reduction, lr-sharpening-clarity (installed in the Hermes profile; restart the connector to pick up the new numbers).
 - Live pilot `scripts/detail_live.py` passes (see compatibility.toml). Lesson: mask edits render in Lightroom about 3 s late; the first run
   looked like "local noise reduction does nothing" because it measured too early. The skill now says to wait about 5 s.
-- Not done: skin-tone and S-curve live pilots (offered, not yet approved).
+
+## Skin tone, S-curve, RAW and large catalogs (built and verified 2026-11-22)
+- New read tool `measure_region` (up to 6 boxes per call): CIELAB lightness, a*, b*, hue angle, chroma, median RGB, clipping and the spread
+  between boxes, from a 1024 px render. No face model is needed: the agent looks at the preview and places the boxes (face detection stays
+  optional with a user-provided YuNet file). New skill `lr-skin-tone` (installed in the Hermes profile).
+- Live pilots (`scripts/portrait_live.py`, `scripts/detail_live.py --raw`) pass on a JPG and an ARW; Hermes drove a skin-tone job and a RAW
+  noise + S-curve job through the connector, measured before and after, and undid everything (see compatibility.toml for the numbers).
+- Defect found by the live runs and fixed: `list_photos` walked every photo with several calls each, so a 248-photo catalog took 7 s and timed
+  out. Plug-in 0.13.1 uses one batch metadata call (0.1 s); the client gives catalog-wide reads 60 s. Needs a full Lightroom restart.
+- Test-script lessons: RAW `Temperature` and `Tint` read as unset on an unedited master (compare only keys the master reports); the noise estimate
+  stops falling near 0.3, so a further local drop cannot be measured there (the script says SKIP and checks the stored mask value instead).
+- Hermes patched `lr-skin-tone` in its profile on its own (prefer a mask when other things share the skin's hue); the useful sentence was
+  taken back into the repository skill.
+- Still open: people masks for skin tone need the person chosen in Lightroom's panel; a catalog of tens of thousands of photos is untested;
+  the owner's real catalog is not on the allowlist (by design).
 

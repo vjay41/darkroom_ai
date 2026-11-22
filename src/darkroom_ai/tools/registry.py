@@ -23,6 +23,7 @@ from darkroom_ai.tools import (
     library_tools,
     lightroom_tools,
     masks,
+    region_tools,
     tone_curve,
 )
 from darkroom_ai.tools.context import Outcome, ToolContext
@@ -198,6 +199,12 @@ TOOLS: tuple[Tool, ...] = (
         "analyze_batch",
         lightroom_tools.AnalyzeBatchInput,
         lightroom_tools.analyze_batch,
+        writes=False,
+    ),
+    _tool(
+        "measure_region",
+        region_tools.MeasureRegionInput,
+        region_tools.measure_region,
         writes=False,
     ),
     _tool(

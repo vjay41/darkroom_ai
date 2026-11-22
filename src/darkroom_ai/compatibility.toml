@@ -154,4 +154,19 @@ name = "Noise and sharpness measurement + noise reduction / sharpening skills"
 tools = ["analyze_photo", "analyze_batch", "set_develop_parameters", "create_mask", "set_mask_adjustments", "undo"]
 status = "verified"
 verified_on = "Lightroom 15.2.1 (plug-in 0.13.0, rehearsal catalog, high-ISO JPG)"
-note = "`scripts/detail_live.py` ran live: colour noise reduction took chroma noise 0.494 -> 0.0, luminance smoothing lowered luma noise, sharpening kept or raised edge strength (0.2186 -> 0.2229), a luminance mask with local luminance noise lowered noise (0.373 -> 0.318), undo restored the baseline and the master never changed. Lightroom re-renders mask edits about 3 seconds late, so measure after waiting. NOT verified: skin-tone and S-curve flows (pilots not run), RAW files, and the noise numbers are estimates from flat areas, not lab measurements."
+note = "`scripts/detail_live.py` ran live: colour noise reduction took chroma noise 0.494 -> 0.0, luminance smoothing lowered luma noise, sharpening kept or raised edge strength (0.2186 -> 0.2229), a luminance mask with local luminance noise lowered noise (0.373 -> 0.318), undo restored the baseline and the master never changed. Lightroom re-renders mask edits about 3 seconds late, so measure after waiting. Repeated on a RAW (ARW, ISO 1250): luma noise 0.494 -> 0.247 and edges kept; the local-mask effect cannot be measured there because the estimate is already at its floor (about 0.3), so only the stored mask value is checked. NOT verified: the noise numbers are estimates from flat areas, not lab measurements."
+
+[[features]]
+name = "Skin-tone measurement and correction (measure_region + lr-skin-tone) and S-curve"
+tools = ["measure_region", "adjust_white_balance", "adjust_hsl", "create_mask", "set_mask_adjustments", "get_tone_curve", "adjust_tone_curve", "undo"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (plug-in 0.13.1, rehearsal catalog, one portrait JPG and one RAW)"
+note = "`scripts/portrait_live.py` ran live on a JPG and an ARW: warmer white balance raised skin hue and moved a neutral patch, orange HSL saturation lowered skin chroma and orange luminance lightened it, a radial mask with a local temperature moved only the skin (the neutral patch did not move), an S-curve widened the tone spread (p95-p05 0.6815 -> 0.7254 on the JPG, 0.7490 -> 0.7958 on the RAW), and undo restored every value; masters never changed. Hermes also did both jobs on its own through the connector (skin: local mask, neutral patch bit-for-bit unchanged; RAW: luma noise halved, S-curve spread 0.7487 -> 0.7912, everything undone). Faces are NOT detected (no face model by design): the agent places the boxes from the preview. NOT verified: people masks for skin (need the person chosen in Lightroom), blemish retouching (out of scope)."
+
+[[features]]
+name = "Large-catalog reads (list_photos, catalog_info, scan_folder use batch metadata calls)"
+tools = ["list_catalog_photos", "catalog_summary", "get_catalog_info", "scan_folder"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (plug-in 0.13.1, rehearsal catalog of 248 photos)"
+note = "Found by the live run: with 248 photos a list call took 7 s and timed out at the client's 10 s. The plug-in now reads the needed fields for all photos in one batch call (0.1 s for 30 photos) and the client waits up to 60 s for catalog-wide reads. All filters (ISO, format, rating, flag, date, keyword, path) were re-run after the change. NOT verified: a catalog of tens of thousands of photos."
+

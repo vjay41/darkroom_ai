@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.13.0"
+local PLUGIN_VERSION = "0.13.1"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -442,9 +442,18 @@ local function listFilters(params)
 	return filters
 end
 
-local function matchesFilters(photo, filters)
+-- Value of a raw metadata key: from the batch row when Lightroom returned it, else asked of the photo.
+local function rawValue(photo, row, key)
+	local value = row and row[key]
+	if value == nil then
+		value = photo:getRawMetadata(key)
+	end
+	return value
+end
+
+local function matchesFilters(photo, filters, row)
 	if filters.min_rating or filters.max_rating then
-		local rating = photo:getRawMetadata("rating") or 0
+		local rating = rawValue(photo, row, "rating") or 0
 		if filters.min_rating and rating < filters.min_rating then
 			return false
 		end
@@ -452,16 +461,16 @@ local function matchesFilters(photo, filters)
 			return false
 		end
 	end
-	if filters.pick ~= nil and (photo:getRawMetadata("pickStatus") or 0) ~= filters.pick then
+	if filters.pick ~= nil and (rawValue(photo, row, "pickStatus") or 0) ~= filters.pick then
 		return false
 	end
 	if filters.file_format then
-		if string.upper(tostring(photo:getRawMetadata("fileFormat") or "")) ~= filters.file_format then
+		if string.upper(tostring(rawValue(photo, row, "fileFormat") or "")) ~= filters.file_format then
 			return false
 		end
 	end
 	if filters.min_iso or filters.max_iso then
-		local iso = photo:getRawMetadata("isoSpeedRating")
+		local iso = rawValue(photo, row, "isoSpeedRating")
 		if type(iso) ~= "number" then
 			return false -- no recorded ISO: it cannot be in a range
 		end
@@ -473,7 +482,7 @@ local function matchesFilters(photo, filters)
 		end
 	end
 	if filters.captured_from or filters.captured_to then
-		local stamp = photo:getRawMetadata("dateTimeOriginalISO8601")
+		local stamp = rawValue(photo, row, "dateTimeOriginalISO8601")
 		if type(stamp) ~= "string" or #stamp < 10 then
 			return false -- no capture date: it cannot be in a range
 		end
@@ -512,15 +521,36 @@ function Commands.read.list_photos(params, ctx)
 	end
 	local filters = listFilters(params)
 	local matches = {}
-	for _, photo in ipairs(ctx.catalog:getAllPhotos()) do
-		local isCopy = photo:getRawMetadata("isVirtualCopy") and true or false
+	local everyPhoto = ctx.catalog:getAllPhotos()
+	-- One batch call for the values every photo needs: far faster than a call per photo and key
+	-- (a large catalog otherwise takes longer than the client waits).
+	local keys = { "path", "isVirtualCopy" }
+	if filters.min_rating or filters.max_rating then
+		keys[#keys + 1] = "rating"
+	end
+	if filters.pick ~= nil then
+		keys[#keys + 1] = "pickStatus"
+	end
+	if filters.file_format then
+		keys[#keys + 1] = "fileFormat"
+	end
+	if filters.min_iso or filters.max_iso then
+		keys[#keys + 1] = "isoSpeedRating"
+	end
+	if filters.captured_from or filters.captured_to then
+		keys[#keys + 1] = "dateTimeOriginalISO8601"
+	end
+	local rows = ctx.catalog:batchGetRawMetadata(everyPhoto, keys) or {}
+	for index, photo in ipairs(everyPhoto) do
+		if index % 100 == 0 then
+			ctx.checkpoint()
+		end
+		local row = rows[photo]
+		local isCopy = rawValue(photo, row, "isVirtualCopy") and true or false
 		if params.include_virtual_copies or not isCopy then
-			local path = photo:getRawMetadata("path") or ""
+			local path = rawValue(photo, row, "path") or ""
 			if not wanted or string.find(string.lower(path), wanted, 1, true) then
-				if filters.active then
-					ctx.checkpoint()
-				end
-				if not filters.active or matchesFilters(photo, filters) then
+				if not filters.active or matchesFilters(photo, filters, row) then
 					matches[#matches + 1] = { path = path, photo = photo }
 				end
 			end
@@ -575,9 +605,10 @@ local function nameIndex(ctx)
 		return nil
 	end
 	local names = {}
+	local rows = ctx.catalog:batchGetFormattedMetadata(photos, { "fileName" }) or {}
 	for _, photo in ipairs(photos) do
-		ctx.checkpoint()
-		local name = photo:getFormattedMetadata("fileName")
+		local row = rows[photo]
+		local name = row and row.fileName or photo:getFormattedMetadata("fileName")
 		if type(name) == "string" then
 			names[string.lower(name)] = true
 		end
@@ -1787,9 +1818,10 @@ end
 function Commands.read.catalog_info(_, ctx)
 	local photos = ctx.catalog:getAllPhotos()
 	local copies = 0
+	local rows = ctx.catalog:batchGetRawMetadata(photos, { "isVirtualCopy" }) or {}
 	for _, photo in ipairs(photos) do
-		ctx.checkpoint()
-		if photo:getRawMetadata("isVirtualCopy") then
+		local row = rows[photo]
+		if rawValue(photo, row, "isVirtualCopy") then
 			copies = copies + 1
 		end
 	end

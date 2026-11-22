@@ -106,6 +106,7 @@ NOT_ABOUT_ONE_PHOTO = {
     "import_folder",
     "list_develop_parameters",
     "analyze_batch",
+    "measure_region",
     "batch_set_library_state",
     "batch_set_develop_parameters",
     "undo_batch",
@@ -147,6 +148,7 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "get_preview",
         "analyze_photo",
         "analyze_batch",
+        "measure_region",
         "adjust_lighting",
         "adjust_white_balance",
         "list_develop_parameters",
@@ -1377,3 +1379,36 @@ def test_analyze_batch_stops_after_repeated_failures(rig: Rig) -> None:
 def test_analyze_batch_refuses_more_than_the_limit(rig: Rig) -> None:
     with pytest.raises(Exception, match=r"25"):
         rig.call("analyze_batch", photo_ids=[f"p{i}" for i in range(26)])
+
+
+# -- measure_region -------------------------------------------------------------------------------
+
+
+def test_measure_region_reads_boxes_without_changing_anything(rig: Rig) -> None:
+    result = rig.call(
+        "measure_region",
+        photo_id=MASTER,
+        regions=[
+            {"name": "left", "box": [0.0, 0.0, 0.5, 1.0]},
+            {"name": "right", "box": [0.5, 0.0, 1.0, 1.0]},
+        ],
+    )
+    assert [r["name"] for r in result["readings"]] == ["left", "right"]
+    assert result["readings"][0]["chroma"] < 1.0  # the test picture is flat grey
+    assert result["spread"]["hue_range_deg"] >= 0
+    assert Path(result["preview_path"]).is_file()
+    assert rig.lightroom.calls.count("create_virtual_copy") == 0
+
+
+def test_measure_region_rejects_duplicate_names_and_bad_boxes(rig: Rig) -> None:
+    box = [0.0, 0.0, 1.0, 1.0]
+    with pytest.raises(DarkroomError):
+        rig.call(
+            "measure_region",
+            photo_id=MASTER,
+            regions=[{"name": "a", "box": box}, {"name": "a", "box": box}],
+        )
+    with pytest.raises(DarkroomError):
+        rig.call(
+            "measure_region", photo_id=MASTER, regions=[{"name": "a", "box": [0.6, 0, 0.4, 1]}]
+        )

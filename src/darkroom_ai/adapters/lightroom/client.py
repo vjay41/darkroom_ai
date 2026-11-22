@@ -78,6 +78,10 @@ _LAST_CLOSE: dict[tuple[str, int, int], float] = {}
 NEWER_FILTERS = ("file_format", "min_iso", "max_iso", "captured_from", "captured_to")
 
 
+LONG_READ_TIMEOUT_S = 60.0
+LONG_READS = frozenset({"list_photos", "scan_folder", "catalog_info", "collection_photos"})
+
+
 class LightroomClient:
     def __init__(
         self,
@@ -272,7 +276,15 @@ class LightroomClient:
         timeout_s: float | None = None,
     ) -> dict[str, Any]:
         """Send one command and return its result. Raises DarkroomError on any failure."""
-        timeout = self._timeout_s if timeout_s is None else timeout_s
+        timeout = timeout_s
+        if timeout is None:
+            # Reads that walk the whole catalog grow with its size; give them more time than a
+            # single-photo call (the plug-in also stops itself at the client's deadline).
+            timeout = (
+                max(self._timeout_s, LONG_READ_TIMEOUT_S)
+                if command in LONG_READS
+                else self._timeout_s
+            )
         self._saw_listener = self._requests is not None and self._responses is not None
         try:
             # Connecting has its own deadline; the command's deadline starts once connected.

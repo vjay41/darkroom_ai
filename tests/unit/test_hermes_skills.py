@@ -22,6 +22,7 @@ EXPECTED = {
     "lr-presets",
     "lr-safe-operations",
     "lr-sharpening-clarity",
+    "lr-skin-tone",
     "lr-tone-curve",
     "lr-upgrade",
     "lr-user-guidance",

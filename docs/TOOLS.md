@@ -2,7 +2,7 @@
 
 # Tool reference
 
-51 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+52 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -32,6 +32,7 @@
 | [`get_preview`](#get_preview) | reads | Render the photo as Lightroom shows it right now and return the picture itself, so you can look at it. |
 | [`analyze_photo`](#analyze_photo) | reads | Export a small preview and measure it: tones, clipping, colour cast, faces if available. |
 | [`analyze_batch`](#analyze_batch) | reads | Measure many photos in one call and return a few numbers per photo (tones, clipping, colour cast). |
+| [`measure_region`](#measure_region) | reads | Measure the colour and brightness of up to 6 rectangles of a photo as numbers (CIELAB lightness, a*, b*, hue angle, chroma, median RGB, clipping). |
 | [`adjust_lighting`](#adjust_lighting) | writes | Change exposure and tone by the given amounts (relative to the current values). |
 | [`adjust_white_balance`](#adjust_white_balance) | writes | Change white balance by the given amounts. |
 | [`list_develop_parameters`](#list_develop_parameters) | reads | List the Lightroom develop parameters you can read and set with get_develop_parameters and set_develop_parameters (name, panel, allowed range). |
@@ -333,6 +334,17 @@ Measure many photos in one call and return a few numbers per photo (tones, clipp
 | `photo_ids` | list of string | yes |  | Catalog ids to measure (1-25); repeats are ignored. min items 1, max items 25 |
 | `long_edge` | integer | no | `512` | Longest side of the measured preview in pixels (256-1024). Smaller is faster. min 256, max 1024 |
 | `time_budget_s` | number | no | `90.0` | Stop starting new photos after this many seconds; the rest are listed in not_processed so you can call again with them. min 1.0, max 300.0 |
+
+### `measure_region`
+
+Reads only.
+
+Measure the colour and brightness of up to 6 rectangles of a photo as numbers (CIELAB lightness, a*, b*, hue angle, chroma, median RGB, clipping). Use it to check skin tone: look at the preview, put a small box on clean skin (cheek or forehead, away from hair, shadow edges and highlights), measure, change something, and measure the same boxes again. Pass two or more boxes to see how far apart they are. Reads only; changes nothing.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
+| `regions` | list of any | yes |  | min items 1, max items 6 |
 
 ### `adjust_lighting`
 

@@ -414,3 +414,67 @@ def test_blurring_lowers_edge_strength() -> None:
     sharp = analyze(pixels).detail.edge_strength
     soft = analyze(cv2.GaussianBlur(pixels, (0, 0), 4)).detail.edge_strength
     assert soft < sharp * 0.6
+
+
+# -- region colour (skin tone checks) -------------------------------------------------------------
+
+
+def _flat(rgb: tuple[float, float, float], size: int = 40) -> np.ndarray:
+    return np.full((size, size, 3), rgb, dtype=np.float32)
+
+
+def test_region_reads_lightness_chroma_and_hue_of_a_flat_patch() -> None:
+    from darkroom_ai.imaging.region import read_region
+
+    grey = read_region(_flat((0.5, 0.5, 0.5)), "grey", [0.0, 0.0, 1.0, 1.0])
+    assert grey.chroma < 1.0 and 50 < grey.lightness < 54 and grey.rgb == (128, 128, 128)
+    warm = read_region(_flat((0.85, 0.62, 0.50)), "skin", [0.1, 0.1, 0.9, 0.9])
+    assert warm.a > 5 and warm.b > 10 and 40 < warm.hue_deg < 70 and warm.chroma > 15
+    assert warm.pixels == 32 * 32
+
+
+def test_region_follows_a_warmer_and_a_more_saturated_patch() -> None:
+    from darkroom_ai.imaging.region import read_region
+
+    base = read_region(_flat((0.85, 0.62, 0.50)), "a", [0, 0, 1, 1])
+    warmer = read_region(_flat((0.88, 0.62, 0.44)), "b", [0, 0, 1, 1])
+    assert warmer.hue_deg > base.hue_deg and warmer.chroma > base.chroma
+    brighter = read_region(_flat((0.95, 0.72, 0.60)), "c", [0, 0, 1, 1])
+    assert brighter.lightness > base.lightness
+
+
+def test_region_only_looks_inside_its_box_and_counts_clipping() -> None:
+    from darkroom_ai.imaging.region import read_region
+
+    picture = _flat((0.5, 0.5, 0.5), 100)
+    picture[:, 50:] = (1.0, 1.0, 1.0)
+    left = read_region(picture, "left", [0.0, 0.0, 0.5, 1.0])
+    right = read_region(picture, "right", [0.5, 0.0, 1.0, 1.0])
+    assert left.clipped_fraction == 0.0 and right.clipped_fraction == 1.0
+    assert right.lightness > left.lightness
+
+
+def test_region_rejects_bad_boxes_and_tiny_patches() -> None:
+    from darkroom_ai.imaging.region import read_region
+
+    for box in ([0.5, 0.5, 0.4, 0.9], [0, 0, 1.2, 1], [0, 0, 1]):
+        with pytest.raises(ValueError):
+            read_region(_flat((0.5, 0.5, 0.5)), "x", box)
+    with pytest.raises(DarkroomError) as caught:
+        read_region(_flat((0.5, 0.5, 0.5)), "tiny", [0.0, 0.0, 0.1, 0.1])
+    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
+
+
+def test_region_spread_wraps_around_the_hue_circle() -> None:
+    from darkroom_ai.imaging.region import RegionReading, spread
+
+    def reading(hue: float, chroma: float, lightness: float) -> RegionReading:
+        return RegionReading(
+            name="r", pixels=100, lightness=lightness, a=0.0, b=0.0, hue_deg=hue, chroma=chroma,
+            rgb=(1, 1, 1), luma_p10=0.1, luma_p90=0.9, clipped_fraction=0.0,
+        )  # fmt: skip
+
+    gap = spread([reading(355.0, 20.0, 60.0), reading(5.0, 26.0, 55.0)])
+    assert gap is not None and gap.hue_range_deg == 10.0
+    assert gap.chroma_range == 6.0 and gap.lightness_range == 5.0
+    assert spread([reading(10.0, 20.0, 60.0)]) is None

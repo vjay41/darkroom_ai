@@ -383,3 +383,10 @@ def test_an_older_plugin_gets_a_clear_error_for_the_new_commands(
     with pytest.raises(DarkroomError) as caught:
         client.create_collection("Keepers")
     assert "older than 0.13.0" in str(caught.value) and "Nothing was changed" in str(caught.value)
+
+
+def test_catalog_wide_reads_get_a_longer_timeout_than_single_photo_calls() -> None:
+    from darkroom_ai.adapters.lightroom.client import LONG_READ_TIMEOUT_S, LONG_READS
+
+    assert {"list_photos", "scan_folder", "catalog_info", "collection_photos"} <= LONG_READS
+    assert LONG_READ_TIMEOUT_S >= 60.0

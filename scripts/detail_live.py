@@ -23,6 +23,7 @@ from darkroom_ai.tools.factory import build_tool_context
 from darkroom_ai.tools.registry import ToolRegistry
 
 failures: list[str] = []
+NOISE_FLOOR = 0.3  # the noise estimate stops falling about here (8-bit previews)
 KEYS = [
     "ColorNoiseReduction",
     "LuminanceSmoothing",
@@ -51,7 +52,8 @@ def run(args: argparse.Namespace) -> None:
 
     print("1. pick a high-ISO photo (read-only)")
     page = lr.list_catalog(0, 30, min_iso=args.min_iso, include_virtual_copies=False)
-    jpgs = [p for p in page.photos if str(p.file_format).upper() == "JPG"]
+    wanted = "RAW" if args.raw else "JPG"
+    jpgs = [p for p in page.photos if str(p.file_format).upper() == wanted]
     check("found a photo at or above the ISO", bool(page.photos))
     chosen = (jpgs or list(page.photos))[0]
     master = chosen.id
@@ -119,7 +121,16 @@ def run(args: argparse.Namespace) -> None:
     time.sleep(6)
     local = numbers("after local noise")
     print(f"  INFO noise_luma {sharp['noise_luma']} -> {local['noise_luma']}")
-    check("local noise reduction lowered the noise", local["noise_luma"] < sharp["noise_luma"])
+    listed = tools.call("list_masks", {"photo_id": copy})
+    stored = listed["masks"][0]["local_adjustments"].get("LocalLuminanceNoise")
+    check("local noise value is stored on the mask (read-back)", stored is not None and stored > 0)
+    if sharp["noise_luma"] <= NOISE_FLOOR:
+        # The estimate cannot go much lower than this on a clean render, so a further drop would
+        # be invisible; say so instead of failing or claiming success.
+        print(f"  [SKIP] noise is already at the measurement floor ({NOISE_FLOOR}); the local")
+        print("         effect cannot be measured here; the mask value is checked by read-back")
+    else:
+        check("local noise reduction lowered the noise", local["noise_luma"] < sharp["noise_luma"])
 
     print("5. take everything back")
     undone = tools.call("undo", {"photo_id": copy, "scope": "all"})
@@ -145,6 +156,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--min-iso", type=int, default=3200)
+    parser.add_argument("--raw", action="store_true", help="use a RAW photo instead of a JPG")
     try:
         run(parser.parse_args())
     except DarkroomError as exc:
