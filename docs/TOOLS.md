@@ -102,6 +102,10 @@ List photos in the open Lightroom catalog, one page at a time, with their ids an
 | `limit` | integer | no | `25` | Most photos to return (1-100). min 1, max 100 |
 | `path_contains` | string (may be null) | no | `None` | Only photos whose file path contains this text (e.g. a folder). |
 | `include_virtual_copies` | boolean | no | `False` | Also list virtual copies (normally only the originals). |
+| `min_rating` | integer (may be null) | no | `None` | Only photos rated at least this (unrated counts as 0). |
+| `max_rating` | integer (may be null) | no | `None` | Only photos rated at most this (0 finds the unrated). |
+| `flag` | `pick` \| `reject` \| `none` (may be null) | no | `None` | Only photos with this flag. |
+| `keyword` | string (may be null) | no | `None` | Only photos that have this keyword (any letter case). |
 
 ### `catalog_summary`
 

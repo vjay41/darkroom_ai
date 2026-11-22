@@ -269,12 +269,21 @@ class FakeLightroomPlugin:
 
     def _cmd_list_photos(self, params: dict[str, Any]) -> dict[str, Any]:
         wanted = str(params.get("path_contains", "")).lower()
+        status = {"pick": 1, "none": 0, "reject": -1}
         chosen = [
             photo
             for photo in self.photos.values()
             if (params.get("include_virtual_copies") or not photo.is_virtual_copy)
             and wanted in photo.summary()["path"].lower()
+            and (photo.rating or 0) >= params.get("min_rating", 0)
+            and (photo.rating or 0) <= params.get("max_rating", 5)
+            and ("flag" not in params or photo.pick_status == status[params["flag"]])
+            and (
+                "keyword" not in params
+                or params["keyword"].lower() in {k.lower() for k in photo.keywords}
+            )
         ]
+        applied = [n for n in ("min_rating", "max_rating", "flag", "keyword") if n in params]
         offset, limit = int(params.get("offset", 0)), int(params.get("limit", 50))
         window = chosen[offset : offset + limit]
         return {
@@ -282,6 +291,7 @@ class FakeLightroomPlugin:
             "offset": offset,
             "returned": len(window),
             "photos": [self._metadata(p) for p in window],
+            "filters_applied": applied,
         }
 
     def _cmd_create_mask(self, params: dict[str, Any]) -> dict[str, Any]:

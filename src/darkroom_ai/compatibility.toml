@@ -112,3 +112,10 @@ tools = ["replace_background"]
 status = "verified"
 verified_on = "Photoshop 27.8"
 note = "The picture-background path (add image layer below) was not run live."
+
+[[features]]
+name = "Catalog list filters (rating, flag, keyword)"
+tools = ["list_catalog_photos"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+note = "Needs plug-in 0.11.0; an older plug-in is refused rather than returning an unfiltered list. There is no edited filter because Lightroom flags every virtual copy as edited."

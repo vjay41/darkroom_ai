@@ -86,6 +86,10 @@ class LightroomAdapter(Protocol):
         *,
         include_virtual_copies: bool = False,
         path_contains: str | None = None,
+        min_rating: int | None = None,
+        max_rating: int | None = None,
+        flag: str | None = None,
+        keyword: str | None = None,
     ) -> CatalogPage: ...
 
     def get_develop_settings(

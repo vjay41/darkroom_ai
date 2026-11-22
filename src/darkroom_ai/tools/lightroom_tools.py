@@ -171,6 +171,36 @@ class ListCatalogPhotosInput(BaseModel):
     include_virtual_copies: bool = Field(
         default=False, description="Also list virtual copies (normally only the originals)."
     )
+    min_rating: int | None = Field(
+        default=None,
+        ge=0,
+        le=5,
+        description="Only photos rated at least this (unrated counts as 0).",
+    )
+    max_rating: int | None = Field(
+        default=None,
+        ge=0,
+        le=5,
+        description="Only photos rated at most this (0 finds the unrated).",
+    )
+    flag: Literal["pick", "reject", "none"] | None = Field(
+        default=None, description="Only photos with this flag."
+    )
+    keyword: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Only photos that have this keyword (any letter case).",
+    )
+
+    @model_validator(mode="after")
+    def _ratings_in_order(self) -> Self:
+        if (
+            self.min_rating is not None
+            and self.max_rating is not None
+            and self.min_rating > self.max_rating
+        ):
+            raise ValueError("min_rating must not be greater than max_rating")
+        return self
 
 
 class ListCatalogPhotosResult(ToolResult):
@@ -184,6 +214,10 @@ def list_catalog_photos(ctx: ToolContext, args: ListCatalogPhotosInput) -> Outco
         args.limit,
         include_virtual_copies=args.include_virtual_copies,
         path_contains=args.path_contains,
+        min_rating=args.min_rating,
+        max_rating=args.max_rating,
+        flag=args.flag,
+        keyword=args.keyword,
     )
     more = page.offset + page.returned < page.total
     note = (

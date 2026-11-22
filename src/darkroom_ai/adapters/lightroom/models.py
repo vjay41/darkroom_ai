@@ -73,7 +73,11 @@ class PhotoMetadata(_Result):
     flash: str | None = None
     capture_time: str | None = None
     rating: int | None = None
+    pick_status: int | None = None
+    """1 = picked, 0 = no flag, -1 = rejected; None if Lightroom did not report it."""
     has_develop_edits: bool | None = None
+    """Lightroom's own edit flag. It is True for EVERY virtual copy from the moment it is made, so
+    it cannot tell a touched copy from a bare one; read the develop settings to see what changed."""
     # Metadata keys Lightroom refused to give (key -> reason); empty when everything was read.
     lookup_errors: dict[str, str] | None = None
 
@@ -85,6 +89,8 @@ class CatalogPage(_Result):
     offset: int
     returned: int
     photos: tuple[PhotoMetadata, ...]
+    filters_applied: tuple[str, ...] = ()
+    """Which requested filters the plug-in confirms it applied (an older plug-in applies none)."""
 
 
 class BridgeStatus(_Result):

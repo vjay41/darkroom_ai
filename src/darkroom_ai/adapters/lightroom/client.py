@@ -414,6 +414,10 @@ class LightroomClient:
         *,
         include_virtual_copies: bool = False,
         path_contains: str | None = None,
+        min_rating: int | None = None,
+        max_rating: int | None = None,
+        flag: str | None = None,
+        keyword: str | None = None,
     ) -> CatalogPage:
         params: dict[str, Any] = {
             "offset": offset,
@@ -422,7 +426,28 @@ class LightroomClient:
         }
         if path_contains:
             params["path_contains"] = path_contains
-        return self._typed(CatalogPage, "list_photos", self.call("list_photos", params))
+        filters = {
+            "min_rating": min_rating,
+            "max_rating": max_rating,
+            "flag": flag,
+            "keyword": keyword,
+        }
+        requested = {name: value for name, value in filters.items() if value is not None}
+        params.update(requested)
+        page = self._typed(CatalogPage, "list_photos", self.call("list_photos", params))
+        ignored = sorted(set(requested) - set(page.filters_applied))
+        if ignored:
+            # An older plug-in skips filters it does not know and lists everything: never show that
+            # as if it were filtered.
+            raise DarkroomError(
+                ErrorCode.LR_COMMAND_FAILED,
+                f"The Lightroom plug-in did not apply the filter(s) {', '.join(ignored)}: it is "
+                "older than 0.11.0. Nothing was listed.",
+                next_step="Restart Lightroom so it loads the current plug-in, start the bridge "
+                "(File > Plug-in Extras), then retry.",
+                details={"ignored_filters": ignored},
+            )
+        return page
 
     def get_develop_settings(
         self, photo_id: str, keys: Sequence[str] | None = None

@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.10.0"
+local PLUGIN_VERSION = "0.11.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -320,6 +320,7 @@ local function metadata(photo)
 		flash = safeFormatted(photo, "flash", errors),
 		capture_time = safeFormatted(photo, "dateTimeOriginal", errors) or (captured and tostring(captured) or nil),
 		rating = safeRaw(photo, "rating", errors),
+		pick_status = safeRaw(photo, "pickStatus", errors),
 		has_develop_edits = edits ~= nil and edits > 0 or nil,
 	}
 	if next(errors) ~= nil then
@@ -333,6 +334,74 @@ function Commands.read.get_metadata(params, ctx)
 end
 
 -- One page of the open catalog (master photos unless include_virtual_copies is true), in a stable order.
+-- Optional list filters (all read-only): min_rating / max_rating (0-5, unrated counts as 0), flag
+-- (pick | none | reject), keyword (a name on the photo, any letter case). There is no "edited" filter:
+-- Lightroom counts every virtual copy as edited from the moment it is made, so it cannot tell touched from bare.
+local FLAG_STATUS = { pick = 1, none = 0, reject = -1 }
+
+local function listFilters(params)
+	local filters = {}
+	local names = {}
+	for _, name in ipairs({ "min_rating", "max_rating" }) do
+		local value = params[name]
+		if value ~= nil then
+			if type(value) ~= "number" or value < 0 or value > 5 or value % 1 ~= 0 then
+				fail("INVALID_PARAMS", name .. " must be a whole number from 0 to 5")
+			end
+			filters[name] = value
+			names[#names + 1] = name
+		end
+	end
+	if filters.min_rating and filters.max_rating and filters.min_rating > filters.max_rating then
+		fail("INVALID_PARAMS", "min_rating must not be greater than max_rating")
+	end
+	if params.flag ~= nil then
+		if type(params.flag) ~= "string" or FLAG_STATUS[params.flag] == nil then
+			fail("INVALID_PARAMS", "flag must be pick, none or reject")
+		end
+		filters.pick = FLAG_STATUS[params.flag]
+		names[#names + 1] = "flag"
+	end
+	if params.keyword ~= nil then
+		if type(params.keyword) ~= "string" or params.keyword == "" then
+			fail("INVALID_PARAMS", "keyword must be a non-empty name")
+		end
+		filters.keyword = string.lower(params.keyword)
+		names[#names + 1] = "keyword"
+	end
+	filters.names = names
+	filters.active = #names > 0
+	return filters
+end
+
+local function matchesFilters(photo, filters)
+	if filters.min_rating or filters.max_rating then
+		local rating = photo:getRawMetadata("rating") or 0
+		if filters.min_rating and rating < filters.min_rating then
+			return false
+		end
+		if filters.max_rating and rating > filters.max_rating then
+			return false
+		end
+	end
+	if filters.pick ~= nil and (photo:getRawMetadata("pickStatus") or 0) ~= filters.pick then
+		return false
+	end
+	if filters.keyword then
+		local found = false
+		for _, keyword in ipairs(photo:getRawMetadata("keywords") or {}) do
+			if string.lower(keyword:getName()) == filters.keyword then
+				found = true
+				break
+			end
+		end
+		if not found then
+			return false
+		end
+	end
+	return true
+end
+
 function Commands.read.list_photos(params, ctx)
 	local offset = tonumber(params.offset) or 0
 	local limit = tonumber(params.limit) or 50
@@ -343,13 +412,19 @@ function Commands.read.list_photos(params, ctx)
 	if type(params.path_contains) == "string" and params.path_contains ~= "" then
 		wanted = string.lower(params.path_contains)
 	end
+	local filters = listFilters(params)
 	local matches = {}
 	for _, photo in ipairs(ctx.catalog:getAllPhotos()) do
 		local isCopy = photo:getRawMetadata("isVirtualCopy") and true or false
 		if params.include_virtual_copies or not isCopy then
 			local path = photo:getRawMetadata("path") or ""
 			if not wanted or string.find(string.lower(path), wanted, 1, true) then
-				matches[#matches + 1] = { path = path, photo = photo }
+				if filters.active then
+					ctx.checkpoint()
+				end
+				if not filters.active or matchesFilters(photo, filters) then
+					matches[#matches + 1] = { path = path, photo = photo }
+				end
 			end
 		end
 	end
@@ -361,7 +436,13 @@ function Commands.read.list_photos(params, ctx)
 		ctx.checkpoint()
 		photos[#photos + 1] = metadata(matches[i].photo)
 	end
-	return { total = #matches, offset = offset, returned = #photos, photos = list(photos) }
+	return {
+		total = #matches,
+		offset = offset,
+		returned = #photos,
+		photos = list(photos),
+		filters_applied = list(filters.names),
+	}
 end
 
 -- Folder import. Photos are added "without moving": nothing is copied, moved or changed on disk.

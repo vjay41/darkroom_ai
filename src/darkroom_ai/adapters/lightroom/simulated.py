@@ -132,11 +132,11 @@ class SimulatedLightroom:
     # -- LightroomAdapter -----------------------------------------------------------------------
 
     def bridge_status(self) -> BridgeStatus:
-        return BridgeStatus(instance="fake", plugin_version="0.10.0", uptime_s=1.0)
+        return BridgeStatus(instance="fake", plugin_version="0.11.0", uptime_s=1.0)
 
     def ping(self) -> PingInfo:
         return PingInfo(
-            plugin_version="0.10.0",
+            plugin_version="0.11.0",
             protocol=1,
             lightroom_version="15.2.1",
             catalog_path="D:\\cat\\Test.lrcat",
@@ -181,6 +181,10 @@ class SimulatedLightroom:
         *,
         include_virtual_copies: bool = False,
         path_contains: str | None = None,
+        min_rating: int | None = None,
+        max_rating: int | None = None,
+        flag: str | None = None,
+        keyword: str | None = None,
     ) -> CatalogPage:
         self.calls.append("list_catalog")
         wanted = (path_contains or "").lower()
@@ -189,10 +193,45 @@ class SimulatedLightroom:
             for pid, photo in self.photos.items()
             if (include_virtual_copies or not photo["is_virtual_copy"])
             and wanted in str(photo["path"]).lower()
+            and self._passes_filters(pid, min_rating, max_rating, flag, keyword)
         ]
         window = ids[offset : offset + limit]
         photos = tuple(self.get_metadata(pid) for pid in window)
-        return CatalogPage(total=len(ids), offset=offset, returned=len(photos), photos=photos)
+        used = tuple(
+            name
+            for name, value in (
+                ("min_rating", min_rating),
+                ("max_rating", max_rating),
+                ("flag", flag),
+                ("keyword", keyword),
+            )
+            if value is not None
+        )
+        return CatalogPage(
+            total=len(ids),
+            offset=offset,
+            returned=len(photos),
+            photos=photos,
+            filters_applied=used,
+        )
+
+    def _passes_filters(
+        self,
+        photo_id: str,
+        min_rating: int | None,
+        max_rating: int | None,
+        flag: str | None,
+        keyword: str | None,
+    ) -> bool:
+        entry = self.library[photo_id]
+        rating = entry["rating"] or 0
+        if min_rating is not None and rating < min_rating:
+            return False
+        if max_rating is not None and rating > max_rating:
+            return False
+        if flag is not None and entry["pick_status"] != {"pick": 1, "none": 0, "reject": -1}[flag]:
+            return False
+        return keyword is None or keyword.lower() in {k.lower() for k in entry["keywords"]}
 
     def scan_folder(self, folder: str, recursive: bool = False) -> FolderScan:
         self.calls.append("scan_folder")
