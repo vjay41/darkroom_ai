@@ -1,6 +1,6 @@
 # PRD addendum: catalog management by Hermes (draft, needs the owner's sign-off)
 
-Status: DRAFT written 2026-11-22. Nothing here is built. It changes a hard rule (see section 4), so it needs a yes first.
+Status: APPROVED by the owner on 2026-11-22 (decisions in section 6). Build has not started.
 
 ## 1. Problem
 The owner wants to hand Hermes a folder of photos and have Hermes do the cataloguing: see which catalogs exist, work in the
@@ -40,12 +40,12 @@ Out: creating or switching catalogs from inside the SDK (impossible, see 4), del
 4. Catalog creation and switching: v1 is a guided step (Hermes tells the owner exactly which Lightroom menu to use and checks the result with `get_catalog_info`). Optional v2: a copied empty template catalog opened by launching Lightroom with its path, plus a plug-in that starts its bridge by itself at launch; both are unverified.
 5. Gate (`make quality`) green at each step, docs and compatibility table updated, one commit per step on `dev`.
 
-## 6. Open questions (need your answer)
-1. Ratings, flags and keywords on masters: allow them (organising is the point of cataloguing), or keep them on virtual copies and allow only collections on masters? Recommendation: allow collections and keywords on masters with a go-ahead for bulk; keep ratings and flags on copies until you say otherwise.
-2. Imports cannot be undone by our tools. Accept caps (for example 50 per call, go-ahead above 10), a dry run, and a saved list of what was added so you can remove them in Lightroom if needed?
-3. Catalog create and switch: guided steps only in v1 (recommended), or also try the experimental launch-with-path route?
-4. Allowlisting a catalog: human CLI only, or also an approval prompt Hermes can raise (you click Yes)? Recommendation: both, with the prompt showing the full path.
-5. Which folders may `list_catalogs` scan (for example `D:\`, your Pictures folder)?
+## 6. Decisions (owner, 2026-11-22)
+1. Masters: Hermes MAY write collections, keywords, ratings and flags on master photos (not only virtual copies). Bulk writes still need a plan and a go-ahead, are journaled with before-values, and are undoable through `undo`. This relaxes the earlier "virtual copies only for metadata" rule; pixels and files are never touched.
+2. Imports: dry run first, at most 50 photos per call, go-ahead above 10, and a saved list of what was added (SDK cannot remove photos; the owner removes them in Lightroom if needed).
+3. Catalog create and switch: guided steps only in v1 (Hermes names the exact Lightroom menu, then verifies with `get_catalog_info`). The experimental launch-with-path route is not built.
+4. Allowlist: a list in config. A catalog is added by a human CLI command OR by an approval prompt Hermes raises that shows the full path with Yes/No. Hermes can never edit the list itself. The production catalog stays off the list until the owner adds it this way.
+5. Folders scanned by `list_catalogs` (not answered by the owner; my default, change on request): the folders listed in `catalog_search_dirs` in `darkroom.local.toml` (git-ignored), default the drive root's first level plus the folders of allowlisted catalogs. Only `.lrcat` names, sizes and dates are read.
 
 ## 7. Risks
 - A wrong allowlist entry gives write access to a real catalog: mitigated by owner-only changes and showing the full path.

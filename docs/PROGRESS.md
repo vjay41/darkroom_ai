@@ -125,3 +125,6 @@ there and add a dated line here.
 - 2026-11-22: `analyze_batch` verified live; `lr-batch-operations` skill.
 - 2026-11-21: P7 skills installed; edit-loop check passed; P6 soak passed (20 cycles, 0 failures); people mask verified;
   displayed-photo guard; P1c handshake and probe; soak runner; `--stop-all`.
+
+## Catalog management (approved 2026-11-22)
+PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (decisions in section 6). Build order: allowlist list + CLI/approval, plug-in 0.13.0 read commands, import/organise commands, Python tools + fakes + tests, skills, live run on a new empty catalog. Nothing built yet.
