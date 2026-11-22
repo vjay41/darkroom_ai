@@ -58,3 +58,11 @@ add a "reference only, not a recipe" note rather than letting it compete with th
 - Approval prompts for gated actions appear in Hermes; only the person answers them.
 - The agent ranks a catalog cheaply with `analyze_batch` (numbers only) and looks at pictures only for a pilot or a
   flagged photo; one image analysis costs minutes of model time.
+
+## Developer skill (separate from the photo skills)
+`hermes/dev-skills/darkroom-dev-review/SKILL.md` lets Hermes review this project's code and its use of the Lightroom
+SDK and write patch *proposals* to `outputs/proposals/`. It is deliberately **not** in `hermes/skills/`, so
+`darkroom deploy` does not install it into the photo-editing profile, and it is read-and-propose only: it may not edit
+`src/`, `tests/`, `hermes/` or the plug-in, change the safety rules, commit, push, restart connectors or run write
+tools. A person (or the supervising developer assistant) applies and tests any proposal. The reason: an agent that
+could rewrite its own guardrails or tools would remove the safety model (see `DESIGN.md`).

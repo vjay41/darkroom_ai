@@ -74,3 +74,12 @@ def test_every_backticked_tool_is_listed(folder: Path) -> None:
 def test_no_slider_values_or_recipes(folder: Path) -> None:
     _, body = _split(folder / "SKILL.md")
     assert RECIPE.search(body) is None, RECIPE.search(body)
+
+
+def test_developer_skill_keeps_its_boundaries() -> None:
+    text = (SKILLS.parent / "dev-skills" / "darkroom-dev-review" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "name: darkroom-dev-review" in text
+    for rule in ("Do not commit, push", "Do not edit files under", "TEST catalog only"):
+        assert rule in text
