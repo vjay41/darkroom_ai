@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,24 @@ def test_notice_credits_the_upstream_author_and_keeps_its_licence() -> None:
         assert needle in notice
 
 
-@pytest.mark.parametrize("name", ["README.md", "AGENTS.md", "docs/INSTALL.md", "docs/UPGRADE.md"])
+DOCS = [
+    "README.md",
+    "AGENTS.md",
+    "docs/README.md",
+    "docs/INSTALL.md",
+    "docs/UPGRADE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DESIGN.md",
+    "docs/TESTING.md",
+    "docs/CONTRIBUTING.md",
+    "docs/HERMES_SKILLS.md",
+    "docs/TROUBLESHOOTING.md",
+    "docs/LIGHTROOM_PLUGIN.md",
+    "docs/PROGRESS.md",
+]
+
+
+@pytest.mark.parametrize("name", DOCS)
 def test_documents_exist_and_their_file_links_resolve(name: str) -> None:
     text = (ROOT / name).read_text(encoding="utf-8")
     assert text.strip()
@@ -42,3 +60,18 @@ def test_no_photos_catalogs_models_or_local_config_are_tracked() -> None:
         re.IGNORECASE,
     )
     assert [f for f in listed if forbidden.search(f)] == []
+
+
+def test_docs_index_links_every_document() -> None:
+    index = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    for doc in sorted((ROOT / "docs").glob("*.md")):
+        if doc.name != "README.md":
+            assert doc.name in index, f"docs/README.md does not mention {doc.name}"
+
+
+def test_generated_docs_are_not_stale() -> None:
+    script = ROOT / "scripts" / "gen_docs.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--check"], cwd=ROOT, capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -7,7 +7,7 @@ Instructions for an AI agent that works IN this repository or sets it up for a p
 A local, offline MCP server (`darkroom mcp`) plus a Lightroom Classic plug-in (`src/darkroom_ai/adapters/lightroom/plugin/darkroom.lrplugin`).
 An agent calls granular tools to read a catalog and edit photos on virtual copies. The agent is the brain;
 this project is the hands. No tool decides what an edit should be. Scope and decisions: `PRD.md`; current
-state and open points: `docs/PROGRESS.md`.
+state and open points: `docs/PROGRESS.md`. Start with the index in `docs/README.md`.
 
 ## Hard rules
 - Runtime is offline: bind only to 127.0.0.1; no non-loopback network calls. An automated test enforces this.

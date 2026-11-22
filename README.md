@@ -9,6 +9,7 @@ The agent is the brain; this project is the hands. It exposes about thirty granu
 photo, set develop parameters, create and adjust masks, apply a preset, undo) and decides nothing about what an
 edit should be. Professional knowledge lives in agent skills (`hermes/skills/`), not in code.
 
+Documentation index (architecture, design, tools, testing, contributing): `docs/README.md`.
 Design and decisions: `PRD.md`. State, test evidence and open points: `docs/PROGRESS.md`.
 Install: `docs/INSTALL.md`. After an Adobe or darkroom_ai update: `docs/UPGRADE.md`. Working in the repo
 as an agent: `AGENTS.md`.
