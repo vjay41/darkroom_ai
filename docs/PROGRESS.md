@@ -4,7 +4,7 @@ Living status. Keep it short and current: update it in every change that moves t
 build log (every spike, failure and live check up to 2026-11-22) is kept privately by the owner; the facts that matter
 are summarised here and in `DESIGN.md`.
 
-Last updated: 2026-11-22. Branch: `dev` (ahead of the v0.1.0 release). Version `0.1.0` plus unreleased library, tone-curve and filter tools; plug-in 0.11.0. Verified on Windows 11, Python 3.13, Lightroom Classic
+Last updated: 2026-11-22. Branch: `dev` (ahead of the v0.1.0 release). Version `0.1.0` plus unreleased library, tone-curve and filter tools; plug-in 0.11.1. Verified on Windows 11, Python 3.13, Lightroom Classic
 15.2.1, Photoshop 2026 (27.8), Hermes with a local model via LM Studio.
 
 ## Where it stands
@@ -37,8 +37,8 @@ All v1 build phases are done except the owner-only release steps. `make quality`
 - Supervised portrait run (2026-11-22, TEST catalog, Hermes + Qwen3.8 27B): one portrait JPG, working copy only, 2 of 3
   passes used. Subject mask created and read back with the expected exposure value; lens profile toggle applied and held.
   Journal shows no errors. **Not verified:** which lens profile actually resolved (name reads null), per-face skin
-  measurement (no face model by design; the agent sampled a region instead), visual check of the mask shape, and
-  `inspect_masks` reported no tools while `list_masks` showed the mask (disagreement, to investigate). The +0.25 EV
+  measurement (no face model by design; the agent sampled a region instead) and a visual check of the mask shape. The
+  `inspect_masks` "Tools: {}" oddity was a defect of ours (output cut off three levels deep) and is fixed in plug-in 0.11.1. The +0.25 EV
   lift raised highlight clipping from 0.32% to 1.12%; the agent reported it and left it.
 
 ## Known limits (stated in the README too)
@@ -89,6 +89,7 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: plug-in 0.11.1: `inspect_masks` no longer cuts off a mask's Tools list (depth 3 to 6); verified live.
 - 2026-11-22: RAW (Sony ARW) develop writes, Kelvin white balance, lens toggles, library fields and undo verified live; `scripts/raw_live.py`. An aborted first run left one edited virtual copy in the test catalog.
 - 2026-11-22: list filters (rating, flag, keyword) verified live on plug-in 0.11.0; `edited` filter dropped; batch-writes PRD addendum drafted (no build).
 - 2026-11-22: tone-curve tools (`get_tone_curve`, `adjust_tone_curve`) and `lr-tone-curve` skill; verified live.

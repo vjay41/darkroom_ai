@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.11.0"
+local PLUGIN_VERSION = "0.11.1"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -822,7 +822,9 @@ local function plainCopy(value, depth)
 end
 
 -- What Lightroom reports for the masks of the photo shown in Develop. The exact shape of each entry
--- is not documented, so it is passed through (scalars only, three levels deep) for the caller.
+-- is not documented, so it is passed through (scalars only, six levels deep) for the caller.
+-- Three levels was too shallow: a mask's Tools list sits two tables down, so its contents were
+-- cut off and showed as an empty table (found in the 2026-11-22 portrait run).
 local function maskDump()
 	local ok, masks = LrTasks.pcall(function()
 		return LrDevelopController.getAllMasks()
@@ -832,7 +834,7 @@ local function maskDump()
 		selected = LrDevelopController.getSelectedMask()
 	end)
 	return {
-		masks = ok and plainCopy(masks, 3) or {},
+		masks = ok and plainCopy(masks, 6) or {},
 		selected_mask = selected,
 	}
 end
