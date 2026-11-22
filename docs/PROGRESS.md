@@ -41,7 +41,7 @@ copy in a collapsed stack cannot be shown; Hermes needs a restart to see new too
 deliberate, drilled update.
 
 ## What blocks a public release (owner)
-1. Add `LICENSE` (MIT): needs the copyright holder name.
+1. `LICENSE` (MIT) is added, holder "darkroom_ai contributors"; change the name if you prefer a personal one.
 2. Decide what ships publicly: this repo's history and `PRD.md` contain the owner's name and local paths (no secrets,
    photos or catalogs were ever committed).
 3. Push `dev`, set it as the GitHub default branch, make the repository public, merge `dev` into `master`, tag the release.

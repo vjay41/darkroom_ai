@@ -75,3 +75,8 @@ def test_generated_docs_are_not_stale() -> None:
         [sys.executable, str(script), "--check"], cwd=ROOT, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_licence_is_mit() -> None:
+    text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    assert text.startswith("MIT License") and "Permission is hereby granted" in text
