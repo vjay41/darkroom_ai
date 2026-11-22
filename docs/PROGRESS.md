@@ -74,6 +74,16 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 6. **Lua syntax checks**: DONE. The repo has no CI service; the 8 tests run whenever `DARKROOM_LUAC` is set or `luac` is on PATH. Run on 2026-11-22 with the SDK's `luac.exe` (Lua 5.1): 25 passed, none skipped, plug-in 0.12.0.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
+## Production catalog: supervised rehearsal on a copy (owner chose this on 2026-11-22; waiting for the catalog path)
+Nothing below has been done yet. The only catalog found on the PC is the test one, so the owner must give the path of the real `.lrcat`.
+1. Lightroom closed. Copy the real `.lrcat` (and nothing else) to a new folder, for example `D:\darkroom_rehearsal\rehearsal.lrcat`. The real catalog is only read by the copy command.
+2. In the git-ignored `darkroom.local.toml`, point `lightroom.test_catalog` at the COPY and `lightroom.test_photos_dir` at the folder of the ONE photo to be used. Write nothing to `darkroom.toml`.
+3. Open the copy in Lightroom, then Start darkroom_ai Bridge; `darkroom doctor` must say writes are allowed for exactly that catalog.
+4. Supervised run with Hermes on that one photo: virtual copy only, one pass, the person looks at the result; then `undo_library_change` or the tool's undo.
+5. Judge it: did the edit land on the copy, did the master stay unchanged, did the journal and undo match? Virtual copies stay (deleting is never done by the tool); delete them in the copy.
+6. Only if the owner then says so: repeat the same config change for the real catalog, after a Lightroom catalog backup, and keep `test_photos_dir` limited to the folders the owner names.
+Rollback at every step: restore `darkroom.local.toml` to the test catalog path and restart the bridge.
+
 ## Open threads and housekeeping
 - `dev` is pushed. `master` was fast-forwarded to `dev` and tagged `v0.1.1` on the owner's explicit instruction (2026-11-22).
 - Library tools use guardrail defaults of at most 20 keywords per call; tone curve moves at most 32 per pass and 64 in total (`darkroom.toml`). Treat them as starting values.
