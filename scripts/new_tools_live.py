@@ -314,6 +314,25 @@ def main() -> None:
         exist = [bool(x) and Path(x).exists() for x in files if x]
         return {"ok": all(exist) and bool(exist), "files": files, "result": short(out, 500)}
 
+    def s_retouch_state() -> dict[str, Any]:
+        out = call("get_retouch_state", photo_id=m1)
+        return {"ok": "state" in out, "state": short(out["state"], 300)}
+
+    def s_cleanup() -> dict[str, Any]:
+        """Put the test copies back to an unedited state (masters are never touched)."""
+        done = {}
+        for label, photo in (("DSC_2411-1", m1), ("DSC_2412-2", m2)):
+            call("reset_develop", photo_id=photo, scope="all")
+            got = call(
+                "get_develop_parameters", photo_id=photo, names=["Exposure2012", "Contrast2012"]
+            )
+            done[label] = got["values"]
+        clean = all(
+            v.get("Exposure2012") in (0, None) and v.get("Contrast2012") in (0, None)
+            for v in done.values()
+        )
+        return {"ok": clean, "values": done}
+
     def s_scene() -> dict[str, Any]:
         c = st["c1"]
         return {
@@ -367,12 +386,15 @@ def main() -> None:
         ("crop_sign", s_crop_sign),
         ("remove_objects", s_remove_objects),
         ("red_eye", s_red_eye),
+        ("retouch_state", s_retouch_state),
         ("scene", s_scene),
         ("presets", s_presets),
         ("export", s_export),
     ]
     if args.ai:
         plan += [("enhance", s_enhance), ("reflection", s_reflection)]
+    if only and "cleanup" in only:
+        plan.append(("cleanup", s_cleanup))
     for name, fn in plan:
         step(name, fn, only)
 
