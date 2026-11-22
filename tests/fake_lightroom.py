@@ -25,6 +25,7 @@ WRITE_COMMANDS = {
     "import_folder",
     "set_mask_values",
     "mask_operation",
+    "set_library_state",
 }
 
 
@@ -45,6 +46,9 @@ class FakePhoto:
     copy_name: str | None = None
     settings: dict[str, Any] = field(default_factory=lambda: {"Exposure": 0.0, "Contrast": 0})
     snapshots: list[dict[str, Any]] = field(default_factory=list)
+    rating: int | None = None
+    pick_status: int = 0
+    keywords: list[str] = field(default_factory=list)
 
     def summary(self) -> dict[str, Any]:
         data = {
@@ -407,6 +411,32 @@ class FakeLightroomPlugin:
         before = {k: photo.settings.get(k) for k in settings}
         photo.settings.update(settings)
         return {"before": before, "after": {k: photo.settings[k] for k in settings}}
+
+    @staticmethod
+    def _library(photo: FakePhoto) -> dict[str, Any]:
+        return {
+            "rating": photo.rating,
+            "pick_status": photo.pick_status,
+            "keywords": sorted(photo.keywords),
+        }
+
+    def _cmd_get_library_state(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._photo(params)
+        return {"id": photo.id, **self._library(photo)}
+
+    def _cmd_set_library_state(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        before = self._library(photo)
+        if "rating" in params:
+            photo.rating = params["rating"] or None
+        if "pick_status" in params:
+            photo.pick_status = params["pick_status"]
+        for name in params.get("add_keywords", []):
+            if name.lower() not in {k.lower() for k in photo.keywords}:
+                photo.keywords.append(name)
+        for name in params.get("remove_keywords", []):
+            photo.keywords = [k for k in photo.keywords if k.lower() != name.lower()]
+        return {"before": before, "after": self._library(photo)}
 
     def _cmd_export_preview(self, params: dict[str, Any]) -> dict[str, Any]:
         self._writable(params)

@@ -146,6 +146,7 @@ REQUIRED_PLUGIN_COMMANDS: frozenset[str] = frozenset(
         "export_preview",
         "export_tiff",
         "find_photo",
+        "get_library_state",
         "get_metadata",
         "get_photo",
         "get_preset",
@@ -160,6 +161,7 @@ REQUIRED_PLUGIN_COMMANDS: frozenset[str] = frozenset(
         "ping",
         "probe",
         "scan_folder",
+        "set_library_state",
         "selftest",
         "set_mask_values",
     }

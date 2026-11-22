@@ -18,6 +18,7 @@ from darkroom_ai.tools import (
     background,
     capabilities,
     catalog_tools,
+    library_tools,
     lightroom_tools,
     masks,
 )
@@ -180,6 +181,24 @@ TOOLS: tuple[Tool, ...] = (
         writes=True,
     ),
     _tool("undo", lightroom_tools.UndoInput, lightroom_tools.undo, writes=True),
+    _tool(
+        "get_library_state",
+        library_tools.GetLibraryStateInput,
+        library_tools.get_library_state,
+        writes=False,
+    ),
+    _tool(
+        "set_library_state",
+        library_tools.SetLibraryStateInput,
+        library_tools.set_library_state,
+        writes=True,
+    ),
+    _tool(
+        "undo_library_change",
+        library_tools.UndoLibraryChangeInput,
+        library_tools.undo_library_change,
+        writes=True,
+    ),
     _tool(
         "list_presets",
         lightroom_tools.ListPresetsInput,

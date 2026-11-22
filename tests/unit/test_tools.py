@@ -137,6 +137,9 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "crop",
         "replace_background",
         "undo",
+        "get_library_state",
+        "set_library_state",
+        "undo_library_change",
         "list_presets",
         "apply_preset",
     )

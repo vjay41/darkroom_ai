@@ -11,7 +11,7 @@ baseline = "27.8"
 tested = ["27.8"]
 
 [plugin]
-min_version = "0.9.0"        # older plug-ins lack commands the tools rely on
+min_version = "0.10.0"       # older plug-ins lack commands the tools rely on
 
 # status: verified | known_issue | untested | unavailable
 # verified_on: the Adobe version the live check ran on.
@@ -28,6 +28,13 @@ tools = ["get_photo_info", "create_mask"]
 status = "verified"
 verified_on = "Lightroom 15.2.1"
 note = "Needs plug-in 0.9.4 or newer: older plug-ins cannot read stack state."
+
+[[features]]
+name = "Library state: star rating, pick/reject flag, keywords (virtual copies only) and undo"
+tools = ["get_library_state", "set_library_state", "undo_library_change"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+note = "Needs plug-in 0.10.0 or newer. A keyword that does not exist is created at the top level of the keyword list and stays there after undo (the SDK cannot delete keywords). JPG checked live; other formats use the same calls."
 
 [[features]]
 name = "Preview and numeric analysis"

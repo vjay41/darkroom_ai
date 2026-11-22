@@ -20,6 +20,8 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     FolderImport,
     FolderScan,
+    LibraryChange,
+    LibraryState,
     MaskCreation,
     MaskInspection,
     MaskOperation,
@@ -79,6 +81,7 @@ class SimulatedLightroom:
         self.files_dir = files_dir
         self.photos: dict[str, dict[str, Any]] = {}
         self.settings: dict[str, dict[str, Any]] = {}
+        self.library: dict[str, dict[str, Any]] = {}
         self.calls: list[str] = []
         # Mask subtypes this simulated Lightroom does not create (as the real one with "people").
         self.refused_mask_subtypes: set[str] = set()
@@ -99,6 +102,7 @@ class SimulatedLightroom:
             "height": 4000,
         }
         self.settings[photo_id] = dict(DEFAULT_SETTINGS)
+        self.library[photo_id] = {"rating": None, "pick_status": 0, "keywords": set()}
 
     def _info(self, photo_id: str) -> PhotoInfo:
         self.calls.append("get_photo")
@@ -124,11 +128,11 @@ class SimulatedLightroom:
     # -- LightroomAdapter -----------------------------------------------------------------------
 
     def bridge_status(self) -> BridgeStatus:
-        return BridgeStatus(instance="fake", plugin_version="0.9.4", uptime_s=1.0)
+        return BridgeStatus(instance="fake", plugin_version="0.10.0", uptime_s=1.0)
 
     def ping(self) -> PingInfo:
         return PingInfo(
-            plugin_version="0.9.4",
+            plugin_version="0.10.0",
             protocol=1,
             lightroom_version="15.2.1",
             catalog_path="D:\\cat\\Test.lrcat",
@@ -303,8 +307,46 @@ class SimulatedLightroom:
             "copy_name": copy_name,
         }
         self.settings[copy_id] = dict(self.settings[photo_id])
+        self.library[copy_id] = {"rating": None, "pick_status": 0, "keywords": set()}
         self.selected_id = copy_id
         return PhotoInfo.model_validate(self.photos[copy_id])
+
+    def _library_state(self, photo_id: str) -> LibraryState:
+        entry = self.library[photo_id]
+        return LibraryState(
+            rating=entry["rating"],
+            pick_status=entry["pick_status"],
+            keywords=tuple(sorted(entry["keywords"], key=str.lower)),
+        )
+
+    def get_library_state(self, photo_id: str) -> LibraryState:
+        self.calls.append("get_library_state")
+        self._info(photo_id)
+        return self._library_state(photo_id)
+
+    def set_library_state(
+        self,
+        photo_id: str,
+        *,
+        rating: int | None = None,
+        pick_status: int | None = None,
+        add_keywords: Sequence[str] = (),
+        remove_keywords: Sequence[str] = (),
+    ) -> LibraryChange:
+        self.calls.append("set_library_state")
+        self._copy_only(photo_id)
+        before = self._library_state(photo_id)
+        entry = self.library[photo_id]
+        if rating is not None:
+            entry["rating"] = rating or None
+        if pick_status is not None:
+            entry["pick_status"] = pick_status
+        for name in add_keywords:
+            if name.lower() not in {k.lower() for k in entry["keywords"]}:
+                entry["keywords"].add(name)
+        for name in remove_keywords:
+            entry["keywords"] = {k for k in entry["keywords"] if k.lower() != name.lower()}
+        return LibraryChange(before=before, after=self._library_state(photo_id))
 
     def create_snapshot(self, photo_id: str, name: str) -> SnapshotResult:
         return SnapshotResult(created=True, snapshot=Snapshot(id="s1", name=name))

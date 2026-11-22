@@ -82,6 +82,10 @@ slider ranges (`tools/develop_parameters.py`, data only).
     background masks and does not keep its own face data. No face model is shipped or required; the optional
     YuNet measurement path stays off by default. `FACE_MODEL_MISSING` is informational, not a defect.
 
+15. Library fields (rating, pick/reject flag, keywords) are catalog data, written only to virtual copies (2026-11-22).
+    A master is refused by the plug-in itself, so an original file is never touched through Lightroom's automatic XMP writing.
+    Every change is read back and journaled with what is needed to take it back (`undo_library_change`). Culling masters
+    would need an explicit decision and a bulk-confirmation design first.
 ## Non-goals (v1)
 A second LLM or an agent loop inside this project; generative edits; deleting or moving files; a GUI; AI Denoise or
 any UI automation (keystrokes, screen capture, PowerShell); cloud Lightroom; scripted or automatic editing logic.

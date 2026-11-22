@@ -24,6 +24,8 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     FolderImport,
     FolderScan,
+    LibraryChange,
+    LibraryState,
     MaskCreation,
     MaskInspection,
     MaskOperation,
@@ -438,6 +440,31 @@ class LightroomClient:
     def create_virtual_copy(self, photo_id: str, copy_name: str) -> PhotoInfo:
         data = self.call("create_virtual_copy", {"photo_id": photo_id, "copy_name": copy_name})
         return self._typed(PhotoInfo, "create_virtual_copy", data)
+
+    def get_library_state(self, photo_id: str) -> LibraryState:
+        data = self.call("get_library_state", {"photo_id": photo_id})
+        return self._typed(LibraryState, "get_library_state", data)
+
+    def set_library_state(
+        self,
+        photo_id: str,
+        *,
+        rating: int | None = None,
+        pick_status: int | None = None,
+        add_keywords: Sequence[str] = (),
+        remove_keywords: Sequence[str] = (),
+    ) -> LibraryChange:
+        params: dict[str, Any] = {"photo_id": photo_id}
+        if rating is not None:
+            params["rating"] = rating
+        if pick_status is not None:
+            params["pick_status"] = pick_status
+        if add_keywords:
+            params["add_keywords"] = list(add_keywords)
+        if remove_keywords:
+            params["remove_keywords"] = list(remove_keywords)
+        data = self.call("set_library_state", params)
+        return self._typed(LibraryChange, "set_library_state", data)
 
     def create_snapshot(self, photo_id: str, name: str) -> SnapshotResult:
         data = self.call("create_snapshot", {"photo_id": photo_id, "name": name})

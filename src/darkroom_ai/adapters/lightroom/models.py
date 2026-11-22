@@ -162,6 +162,24 @@ class Selection(_Result):
     photos: tuple[PhotoInfo, ...] = ()
 
 
+class LibraryState(_Result):
+    """A photo's library fields: star rating, pick/reject flag and keywords (catalog data only)."""
+
+    rating: int | None = None
+    """Stars 1-5; None means unrated (the same as 0 when setting)."""
+    pick_status: int = 0
+    """1 = picked, 0 = no flag, -1 = rejected."""
+    keywords: tuple[str, ...] = ()
+    """Names of the keywords on this photo, sorted."""
+
+
+class LibraryChange(_Result):
+    """Library fields before and after a change, as Lightroom reports them."""
+
+    before: LibraryState
+    after: LibraryState
+
+
 class SettingsChange(_Result):
     """Develop settings before and after an edit (only the keys that were sent)."""
 

@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, batch, knowledge]
     related_skills: [lr-safe-operations, lr-user-guidance, lr-genre-knowledge]
-    uses_tools: [list_catalog_photos, analyze_batch, get_photo_metadata, get_preview, analyze_photo, get_develop_parameters, set_develop_parameters, undo]
+    uses_tools: [get_library_state, set_library_state, undo_library_change, list_catalog_photos, analyze_batch, get_photo_metadata, get_preview, analyze_photo, get_develop_parameters, set_develop_parameters, undo]
 ---
 
 # Many photos: work in phases, not in one go
@@ -51,3 +51,13 @@ decision.
 ## Honest limits
 - Grouping by numbers can put different scenes together; check the pilot against a second photo of the group.
 - A batch that "worked" on numbers can still look wrong. Offer samples and let the user's eyes decide.
+
+## Rating, flagging and keywords
+`get_library_state` reads a photo's stars, pick/reject flag and keywords. `set_library_state` changes them,
+`undo_library_change` takes this session's changes back. They only work on a virtual copy (a master is refused),
+and each change is read back: look at `verified` and `problems` in the result.
+- Only set what the user asked for. Never reject, rate down or tag a whole set as a side effect of editing.
+- A rating or flag is the user's taste, not a measurement: do not infer one from histogram numbers.
+- Keywords are plain names; an existing keyword of that name (any letter case) is reused. A new one stays in
+  Lightroom's keyword list even after undo, so keep names few and deliberate.
+- For many photos, follow the phases above: confirm the plan and the exact words first, then do a small chunk.

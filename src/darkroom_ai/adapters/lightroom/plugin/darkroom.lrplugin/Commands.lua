@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.9.4"
+local PLUGIN_VERSION = "0.10.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -1095,6 +1095,121 @@ function Commands.write.export_tiff(params, ctx)
 		fail("EXPORT_FAILED", "Lightroom reported no rendered file")
 	end
 	return { path = path, bit_depth = 16, color_space = colorSpace }
+end
+
+--------------------------------------------------------------------------------
+-- Library state: star rating, pick/reject flag, keywords.
+-- Catalog metadata only: no pixels, no develop settings. Writes go to virtual copies only (the
+-- same rule as every other write), so a master photo and its file are never touched.
+
+local MAX_KEYWORDS_PER_CALL = 20
+local MAX_KEYWORD_LENGTH = 64
+
+local function keywordNames(photo)
+	local names = {}
+	for _, keyword in ipairs(photo:getRawMetadata("keywords") or {}) do
+		names[#names + 1] = keyword:getName()
+	end
+	table.sort(names)
+	return names
+end
+
+local function libraryState(photo)
+	return {
+		rating = photo:getRawMetadata("rating"),
+		pick_status = photo:getRawMetadata("pickStatus") or 0,
+		keywords = list(keywordNames(photo)),
+	}
+end
+
+-- A keyword anywhere in the catalog's keyword tree, found by name (case-insensitive), or nil.
+local function findKeyword(keywords, wanted)
+	for _, keyword in ipairs(keywords) do
+		if string.lower(keyword:getName()) == wanted then
+			return keyword
+		end
+		local found = findKeyword(keyword:getChildren() or {}, wanted)
+		if found then
+			return found
+		end
+	end
+	return nil
+end
+
+local function keywordNameList(value, label)
+	if value == nil then
+		return {}
+	end
+	if type(value) ~= "table" or #value > MAX_KEYWORDS_PER_CALL then
+		fail("INVALID_PARAMS", label .. " must be a list of at most " .. MAX_KEYWORDS_PER_CALL .. " names")
+	end
+	local names = {}
+	for _, name in ipairs(value) do
+		if type(name) ~= "string" then
+			fail("INVALID_PARAMS", label .. " must contain only text")
+		end
+		local trimmed = string.match(name, "^%s*(.-)%s*$")
+		if trimmed == "" or #trimmed > MAX_KEYWORD_LENGTH then
+			fail("INVALID_PARAMS", "a keyword must be 1-" .. MAX_KEYWORD_LENGTH .. " characters")
+		end
+		names[#names + 1] = trimmed
+	end
+	return names
+end
+
+function Commands.read.get_library_state(params, ctx)
+	local photo = findPhoto(ctx, params.photo_id)
+	local state = libraryState(photo)
+	state.id = photo:getRawMetadata("uuid")
+	return state
+end
+
+function Commands.write.set_library_state(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local rating = params.rating
+	if rating ~= nil and (type(rating) ~= "number" or rating < 0 or rating > 5 or rating % 1 ~= 0) then
+		fail("INVALID_PARAMS", "rating must be a whole number from 0 (no rating) to 5")
+	end
+	local pick = params.pick_status
+	if pick ~= nil and pick ~= 1 and pick ~= 0 and pick ~= -1 then
+		fail("INVALID_PARAMS", "pick_status must be 1 (pick), 0 (no flag) or -1 (reject)")
+	end
+	local add = keywordNameList(params.add_keywords, "add_keywords")
+	local remove = keywordNameList(params.remove_keywords, "remove_keywords")
+	if rating == nil and pick == nil and #add == 0 and #remove == 0 then
+		fail("INVALID_PARAMS", "nothing to change: give rating, pick_status, add_keywords or remove_keywords")
+	end
+
+	local before = libraryState(photo)
+	withWrite(ctx, "darkroom_ai: library state", function()
+		if rating ~= nil then
+			if rating == 0 then
+				photo:setRawMetadata("rating", nil)
+			else
+				photo:setRawMetadata("rating", rating)
+			end
+		end
+		if pick ~= nil then
+			photo:setRawMetadata("pickStatus", pick)
+		end
+		for _, name in ipairs(add) do
+			local wanted = string.lower(name)
+			local keyword = findKeyword(ctx.catalog:getKeywords() or {}, wanted)
+			if not keyword then
+				keyword = ctx.catalog:createKeyword(name, {}, true, nil, false)
+			end
+			photo:addKeyword(keyword)
+		end
+		for _, name in ipairs(remove) do
+			local wanted = string.lower(name)
+			for _, keyword in ipairs(photo:getRawMetadata("keywords") or {}) do
+				if string.lower(keyword:getName()) == wanted then
+					photo:removeKeyword(keyword)
+				end
+			end
+		end
+	end)
+	return { before = before, after = libraryState(photo) }
 end
 
 return Commands

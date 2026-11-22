@@ -61,8 +61,9 @@ def test_known_issue_is_reported_for_its_versions() -> None:
 
 
 def test_plugin_minimum_compares_numbers_not_text() -> None:
-    assert plugin_is_recent_enough("0.9.1") and plugin_is_recent_enough("0.10.0")
-    assert not plugin_is_recent_enough("0.8.9")
+    # The shipped minimum is 0.10.0: as text "0.9.9" sorts after it, as numbers it is older.
+    assert plugin_is_recent_enough("0.10.0") and plugin_is_recent_enough("0.11.0")
+    assert not plugin_is_recent_enough("0.9.9") and not plugin_is_recent_enough("0.8.9")
 
 
 def _registry(tmp_path: Path) -> ToolRegistry:

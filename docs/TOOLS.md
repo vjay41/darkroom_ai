@@ -2,7 +2,7 @@
 
 # Tool reference
 
-32 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+35 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -36,6 +36,9 @@
 | [`crop`](#crop) | writes | Set the crop box as fractions of the frame (0 = left/top edge, 1 = right/bottom edge). |
 | [`replace_background`](#replace_background) | writes | Cut out the subject and put it on a new background. |
 | [`undo`](#undo) | writes | Take back darkroom_ai's edits made in THIS session: the last one, or all of them. |
+| [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
+| [`set_library_state`](#set_library_state) | writes | Set a virtual copy's star rating, pick/reject flag and keywords (catalog data only). |
+| [`undo_library_change`](#undo_library_change) | writes | Take back darkroom_ai's library changes (rating, flag, keywords) made in THIS session. |
 | [`list_presets`](#list_presets) | reads | List Lightroom's develop presets (name and folder). |
 | [`apply_preset`](#apply_preset) | writes | Apply one of Lightroom's develop presets (a saved look) to the photo's virtual copy, by its exact name from list_presets. |
 
@@ -373,6 +376,41 @@ Cut out the subject and put it on a new background. Give `color` or `image`, not
 **Writes** (changes the catalog or a photo's settings).
 
 Take back darkroom_ai's edits made in THIS session: the last one, or all of them. Edits from earlier sessions cannot be taken back with this tool.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
+| `scope` | `last` \| `all` | no | `last` |  |
+
+### `get_library_state`
+
+Reads only.
+
+Read a photo's star rating, pick/reject flag and keywords. Changes nothing.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
+
+### `set_library_state`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Set a virtual copy's star rating, pick/reject flag and keywords (catalog data only). rating is 0-5 (0 clears the rating); flag is "pick", "reject" or "none"; add_keywords and remove_keywords are plain names (an existing keyword of that name is reused, a new one is created at the top level of the keyword list). Only virtual copies are changed, never a master photo. The change is read back from Lightroom and can be taken back with undo_library_change.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
+| `rating` | integer (may be null) | no | `None` |  |
+| `flag` | `pick` \| `reject` \| `none` (may be null) | no | `None` |  |
+| `add_keywords` | list of string | no |  | max items 20 |
+| `remove_keywords` | list of string | no |  | max items 20 |
+
+### `undo_library_change`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Take back darkroom_ai's library changes (rating, flag, keywords) made in THIS session. scope "last" takes back the most recent one; "all" takes back all of them on this photo. Keywords that were created are left in Lightroom's keyword list (only removed from the photo).
 
 | Parameter | Type | Required | Default | Notes |
 |---|---|---|---|---|

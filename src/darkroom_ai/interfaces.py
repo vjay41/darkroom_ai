@@ -21,6 +21,8 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     FolderImport,
     FolderScan,
+    LibraryChange,
+    LibraryState,
     MaskCreation,
     MaskInspection,
     MaskOperation,
@@ -93,6 +95,18 @@ class LightroomAdapter(Protocol):
     def list_snapshots(self, photo_id: str) -> tuple[Snapshot, ...]: ...
 
     def create_virtual_copy(self, photo_id: str, copy_name: str) -> PhotoInfo: ...
+
+    def get_library_state(self, photo_id: str) -> LibraryState: ...
+
+    def set_library_state(
+        self,
+        photo_id: str,
+        *,
+        rating: int | None = None,
+        pick_status: int | None = None,
+        add_keywords: Sequence[str] = (),
+        remove_keywords: Sequence[str] = (),
+    ) -> LibraryChange: ...
 
     def create_snapshot(self, photo_id: str, name: str) -> SnapshotResult: ...
 
