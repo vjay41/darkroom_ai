@@ -79,9 +79,10 @@ def run(args: argparse.Namespace) -> None:
     print("photos:", [(m.file_name, m.file_format) for m in masters])
 
     def values(photo_id: str) -> dict[str, Any]:
-        return tools.call("get_develop_parameters", {"photo_id": photo_id, "names": WATCH})[
-            "values"
-        ]
+        found: dict[str, Any] = tools.call(
+            "get_develop_parameters", {"photo_id": photo_id, "names": WATCH}
+        )["values"]
+        return found
 
     def master_values(photo_id: str) -> dict[str, Any]:
         """The master photo's own values, read straight from Lightroom (never its copy)."""

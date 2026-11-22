@@ -59,8 +59,9 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 ## Next steps (post-v1, in rough priority)
 1. **Batch writes**: DONE (owner approved the addendum 2026-11-22). `batch_set_library_state`, `batch_set_develop_parameters`,
    `undo_batch`; verified live on three test photos (JPG + 2 ARW) and driven by Hermes itself (2026-11-22: the model chose the
-   values, dry run, approval prompt, 2 of 2 applied, `undo_batch` read-back verified). Not run live: stopping at a mid-batch
-   failure and the time budget (unit tests only). See `PRD_ADDENDUM_BATCH_WRITES.md` and `DESIGN.md` decision 16.
+   values, dry run, approval prompt, 2 of 2 applied, `undo_batch` read-back verified). Stopping at a mid-batch failure and
+   at the time budget are verified live too (`scripts/batch_failure_live.py`; the failure and the clock are staged by the script,
+   everything else is real Lightroom; 3 photos, JPG + 2 ARW, undo read-back verified). See `PRD_ADDENDUM_BATCH_WRITES.md` and `DESIGN.md` decision 16.
 2. **Collapsed-stack detection**: DONE and verified live (plug-in 0.9.4, 2026-11-22). `get_photo`/`get_photo_info` report
    `in_stack`, `stack_collapsed` and a `stack_note` when Lightroom does not say; `create_mask` for kinds that need Develop
    refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
@@ -95,6 +96,7 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: mid-batch failure and time budget verified live (`scripts/batch_failure_live.py`).
 - 2026-11-22: connector ends itself when stale and idle (`runtime.stale_exit_*`); Hermes-driven batch run verified live (undo read-back verified).
 - 2026-11-22: list filters for file format, ISO and capture date (plug-in 0.12.0), verified live.
 - 2026-11-22: batch writes built and verified live (`scripts/batch_live.py`); `lr-batch-operations` 1.1.0 installed in the darkroom profile. Hermes needs a restart to see the three new tools.

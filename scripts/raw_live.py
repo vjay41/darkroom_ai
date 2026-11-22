@@ -83,7 +83,10 @@ def run(args: argparse.Namespace) -> None:
     show("copy starts at", start)
 
     def read() -> dict[str, Any]:
-        return tools.call("get_develop_parameters", photo | {"names": NAMES})["values"]
+        found: dict[str, Any] = tools.call("get_develop_parameters", photo | {"names": NAMES})[
+            "values"
+        ]
+        return found
 
     print("3. exposure +0.3 EV")
     show("result", tools.call("adjust_lighting", photo | {"exposure": 0.3}))
