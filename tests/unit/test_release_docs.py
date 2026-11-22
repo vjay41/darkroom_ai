@@ -56,7 +56,7 @@ def test_no_photos_catalogs_models_or_local_config_are_tracked() -> None:
     except (OSError, subprocess.CalledProcessError):
         pytest.skip("not a git checkout")
     forbidden = re.compile(
-        r"\.(jpe?g|tiff?|nef|arw|dng|lrcat\w*|lrdata|onnx|gguf|log)$|(^|/)\.env|darkroom\.local\.toml",
+        r"\.(jpe?g|tiff?|nef|arw|dng|lrcat\w*|lrdata|onnx|gguf|log|iml)$|(^|/)\.env|(^|/)\.idea/|darkroom\.local\.toml",
         re.IGNORECASE,
     )
     assert [f for f in listed if forbidden.search(f)] == []
