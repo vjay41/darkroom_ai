@@ -270,9 +270,9 @@ class DistractionsResult(_Result):
 class RetouchState(_Result):
     photo_id: str
     spot_count: int = 0
-    spots: list[Any] = Field(default_factory=list)
+    spots: list[Any] | dict[str, Any] = Field(default_factory=list)
     red_eye_count: int = 0
-    red_eye: list[Any] = Field(default_factory=list)
+    red_eye: list[Any] | dict[str, Any] = Field(default_factory=list)
 
 
 class AiPanelState(_Result):

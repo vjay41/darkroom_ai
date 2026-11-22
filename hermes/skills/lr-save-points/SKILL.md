@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, snapshots, reset, safety, knowledge]
     related_skills: [lr-edit-workflow, lr-safe-operations, lr-object-removal, lr-style-looks, lr-preset-advisor, lr-straighten-crop]
-    uses_tools: [create_snapshot, list_snapshots, restore_snapshot, reset_develop, remove_distracting_people, get_retouch_state, rotate_photo, get_preview, undo]
+    uses_tools: [remove_objects, create_snapshot, list_snapshots, restore_snapshot, reset_develop, remove_distracting_people, get_retouch_state, rotate_photo, get_preview, undo]
 ---
 
 # Save points: try boldly, come back safely
@@ -47,3 +47,8 @@ lr-straighten-crop for levelling). Turn the other way to undo.
 ## Tell the person
 Which save points exist, what a restore or reset would remove, and where a removal or reset could not be
 fully undone.
+
+## When Lightroom's people removal does not work
+On the owner's offline PC Lightroom shows an Adobe error ("can't complete your request") after detecting people.
+The tool then answers ADOBE_FEATURE_UNAVAILABLE. Tell the owner, ask them to dismiss the dialog in Lightroom and
+press Cancel in the Remove panel, and use `remove_objects` for the specific people instead. Do not retry in a loop.

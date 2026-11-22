@@ -33,4 +33,4 @@ changed, use `restore_snapshot` with the snapshot named in the result and tell t
 
 ## Do not
 Run these in bulk without asking, stack Denoise on top of heavy sharpening, or claim success from the tool
-answer alone: look at the picture. Unverified on a live Lightroom yet.
+answer alone: look at the picture. Checked on this PC: Denoise on a RAW took about half a minute; Reflection Removal at preview quality about 15 seconds; Denoise and Raw Details are not offered for JPG files (Super Resolution is). The reflection panel getter may answer nothing, so judge it from the picture and Lightroom's history.

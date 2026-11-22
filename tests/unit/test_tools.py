@@ -1872,3 +1872,13 @@ def test_enhance_and_reflection_removal_run_on_a_copy_with_a_snapshot(tmp_path: 
     assert again["run"]["callback_called"] and again["run"]["snapshot"]
     with pytest.raises(DarkroomError):
         rig.call("enhance", photo_id=MASTER, feature="denoise", amount=500)
+
+
+def test_smart_collection_can_be_undone_like_other_collections(rig: Rig) -> None:
+    rig.call(
+        "create_smart_collection",
+        path="Best",
+        conditions=[{"criteria": "rating", "operation": ">=", "value": 4}],
+    )
+    undone = rig.call("undo_collection_change")
+    assert undone["undone_steps"] == 1

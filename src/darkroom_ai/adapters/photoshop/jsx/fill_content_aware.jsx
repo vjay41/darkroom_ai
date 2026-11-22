@@ -12,27 +12,13 @@
         maskDoc.close(SaveOptions.DONOTSAVECHANGES);
         throw new Error("The mask is not the same pixel size as the document.");
     }
-    var temp = maskDoc.activeLayer.duplicate(doc, ElementPlacement.PLACEATBEGINNING);
+    // Copy the mask into the picture's document as an alpha channel and load it as the selection
+    // (white = selected). No clipboard and no layer visibility changes.
+    var maskChannel = maskDoc.channels[0].duplicate(doc);
     maskDoc.close(SaveOptions.DONOTSAVECHANGES);
     app.activeDocument = doc;
-
-    var visibility = [];
-    for (var i = 0; i < doc.layers.length; i++) {
-        visibility.push(doc.layers[i].visible);
-        doc.layers[i].visible = (doc.layers[i] == temp);
-    }
-    var selectDesc = new ActionDescriptor();
-    var selectionRef = new ActionReference();
-    selectionRef.putProperty(charIDToTypeID("Chnl"), charIDToTypeID("fsel"));
-    selectDesc.putReference(charIDToTypeID("null"), selectionRef);
-    var compositeRef = new ActionReference();
-    compositeRef.putEnumerated(charIDToTypeID("Chnl"), charIDToTypeID("Chnl"), charIDToTypeID("RGB "));
-    selectDesc.putReference(charIDToTypeID("T   "), compositeRef);
-    executeAction(charIDToTypeID("setd"), selectDesc, DialogModes.NO);
-    temp.remove();
-    for (var j = 0; j < doc.layers.length; j++) {
-        doc.layers[j].visible = visibility[j + 1];
-    }
+    doc.selection.load(maskChannel, SelectionType.REPLACE, false);
+    maskChannel.remove();
     doc.activeLayer = base;
 
     if (Number(growPx) > 0) {

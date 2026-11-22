@@ -211,6 +211,15 @@ def remove_distracting_people(ctx: ToolContext, args: RemoveDistractingPeopleInp
     )
     done = ctx.lightroom.remove_distracting_people(copy.id)
     ctx.measurements.pop(copy.id, None)
+    if not done.callback_called and done.retouch_after == done.retouch_before:
+        raise DarkroomError(
+            ErrorCode.ADOBE_FEATURE_UNAVAILABLE,
+            "Lightroom did not remove anyone: its callback never fired and the spot count did "
+            "not change.",
+            next_step="Look at Lightroom for an error dialog or an open Remove panel (press "
+            "Cancel), then try again or use remove_objects. Nothing was applied.",
+            details={"snapshot": done.snapshot.name if done.snapshot else None},
+        )
     added = (
         done.retouch_after - done.retouch_before
         if done.retouch_after is not None and done.retouch_before is not None

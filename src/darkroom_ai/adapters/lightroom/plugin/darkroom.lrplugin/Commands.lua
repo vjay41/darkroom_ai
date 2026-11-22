@@ -1247,6 +1247,11 @@ function Commands.write.remove_distracting_people(params, ctx)
 	local photo = findWritablePhoto(ctx, params.photo_id, true)
 	local snapshot = savePointBefore(ctx, photo, "remove people")
 	showInDevelop(ctx, photo)
+	-- Detection only works while the Remove tool is open in Develop.
+	LrTasks.pcall(function()
+		LrDevelopController.selectTool("dust")
+	end)
+	LrTasks.sleep(1)
 	local countBefore = retouchCount(photo)
 	local ok, err = LrTasks.pcall(function()
 		LrDevelopController.detectDistractingPeople()
@@ -1275,6 +1280,9 @@ function Commands.write.remove_distracting_people(params, ctx)
 		end
 	end
 	LrTasks.sleep(1)
+	LrTasks.pcall(function()
+		LrDevelopController.selectTool("loupe")
+	end)
 	return {
 		photo_id = photo:getRawMetadata("uuid"),
 		snapshot = snapshot,
@@ -1294,9 +1302,9 @@ function Commands.read.get_retouch_state(params, ctx)
 	return {
 		photo_id = photo:getRawMetadata("uuid"),
 		spot_count = type(areas) == "table" and #areas or 0,
-		spots = plainCopy(areas, 4) or Json.EMPTY_ARRAY,
+		spots = (type(areas) == "table" and #areas > 0) and plainCopy(areas, 4) or Json.EMPTY_ARRAY,
 		red_eye_count = type(redEye) == "table" and #redEye or 0,
-		red_eye = plainCopy(redEye, 4) or Json.EMPTY_ARRAY,
+		red_eye = (type(redEye) == "table" and #redEye > 0) and plainCopy(redEye, 4) or Json.EMPTY_ARRAY,
 	}
 end
 
@@ -1337,7 +1345,7 @@ function Commands.write.rotate_photo(params, ctx)
 	end
 	local function orientation()
 		local ok, value = LrTasks.pcall(function()
-			return photo:getFormattedMetadata("orientation")
+			return photo:getDevelopSettings().orientation
 		end)
 		return ok and value or nil
 	end
@@ -2232,17 +2240,47 @@ end
 
 
 -- Smart searches (the same engine as Smart Collections). Only a fixed list of criteria and
--- operations is accepted, so a search can only READ the catalog. Names follow Lightroom's own
--- Smart Collection settings; UNVERIFIED on this Lightroom version.
+-- operations is accepted, and values are checked against the SDK's types, so a search can only READ
+-- the catalog and cannot be handed a value Lightroom would stall on.
+local NUMBER_OPS = { ["=="] = true, ["!="] = true, [">"] = true, [">="] = true, ["<"] = true, ["<="] = true }
+local STRING_OPS = { any = true, all = true, noneOf = true, beginsWith = true, endsWith = true, ["=="] = true, ["!="] = true }
+local DATE_OPS = { ["=="] = true, ["!="] = true, [">"] = true, ["<"] = true }
+local LABEL_NUMBER = { red = 1, yellow = 2, green = 3, blue = 4, purple = 5 }
 local SEARCH_CRITERIA = {
-	rating = { ops = { ["=="] = true, [">"] = true, [">="] = true, ["<"] = true, ["<="] = true }, kind = "number" },
-	pick = { ops = { ["=="] = true }, kind = "number" },
-	labelColor = { ops = { ["=="] = true }, kind = "string" },
-	keywords = { ops = { any = true, all = true, noneOf = true }, kind = "string" },
-	fileFormat = { ops = { ["=="] = true }, kind = "string" },
-	iso = { ops = { ["=="] = true, [">"] = true, [">="] = true, ["<"] = true, ["<="] = true }, kind = "number" },
-	captureTime = { ops = { [">"] = true, [">="] = true, ["<"] = true, ["<="] = true, ["=="] = true }, kind = "string" },
+	rating = { ops = NUMBER_OPS, kind = "number" },
+	pick = { ops = { ["=="] = true, ["!="] = true }, kind = "number" },
+	labelColor = { ops = { ["=="] = true, ["!="] = true }, kind = "color" },
+	keywords = { ops = STRING_OPS, kind = "string" },
+	fileFormat = { ops = { ["=="] = true, ["!="] = true }, kind = "string" },
+	isoSpeedRating = { ops = NUMBER_OPS, kind = "number" },
+	captureTime = { ops = DATE_OPS, kind = "string" },
+	camera = { ops = { ["=="] = true, ["!="] = true }, kind = "string" },
+	lens = { ops = { ["=="] = true, ["!="] = true }, kind = "string" },
+	hasAdjustments = { ops = { isTrue = true, isFalse = true }, kind = "flag" },
 }
+
+local function searchValue(index, name, rule, value)
+	if rule.kind == "color" then
+		if value == "none" then
+			return "none"
+		end
+		local number = LABEL_NUMBER[value]
+		if not number then
+			fail("INVALID_PARAMS", "condition " .. index .. ": colour must be red, yellow, green, blue, purple or none")
+		end
+		return number
+	end
+	if rule.kind == "flag" then
+		return true
+	end
+	if type(value) ~= rule.kind or (rule.kind == "string" and (value == "" or #value > 200)) then
+		fail("INVALID_PARAMS", "condition " .. index .. ": value for " .. name .. " must be a " .. rule.kind)
+	end
+	if name == "captureTime" and not string.match(value, "^%d%d%d%d%-%d%d%-%d%d$") then
+		fail("INVALID_PARAMS", "condition " .. index .. ": captureTime must be a date like 2026-11-22")
+	end
+	return value
+end
 
 local function buildSearchDesc(params)
 	local conditions = params.conditions
@@ -2253,21 +2291,26 @@ local function buildSearchDesc(params)
 	if combine ~= "intersect" and combine ~= "union" then
 		fail("INVALID_PARAMS", "combine must be intersect or union")
 	end
-	local desc = { combine = combine }
+	local desc = {}
 	for index, condition in ipairs(conditions) do
-		local rule = type(condition) == "table" and SEARCH_CRITERIA[condition.criteria] or nil
+		local name = type(condition) == "table" and condition.criteria or nil
+		local rule = name and SEARCH_CRITERIA[name] or nil
 		if not rule then
 			fail("INVALID_PARAMS", "condition " .. index .. ": criteria is not one that can be searched")
 		end
 		if not rule.ops[condition.operation] then
-			fail("INVALID_PARAMS", "condition " .. index .. ": operation is not valid for " .. condition.criteria)
+			fail("INVALID_PARAMS", "condition " .. index .. ": operation is not valid for " .. name)
 		end
-		local value = condition.value
-		if type(value) ~= rule.kind or (rule.kind == "string" and (value == "" or #value > 200)) then
-			fail("INVALID_PARAMS", "condition " .. index .. ": value must be a " .. rule.kind)
-		end
-		desc[#desc + 1] = { criteria = condition.criteria, operation = condition.operation, value = value }
+		desc[#desc + 1] = {
+			criteria = name,
+			operation = condition.operation,
+			value = searchValue(index, name, rule, condition.value),
+		}
 	end
+	if #desc == 1 then
+		return desc[1]
+	end
+	desc.combine = combine
 	return desc
 end
 
@@ -2276,15 +2319,22 @@ local MAX_FOUND = 200
 function Commands.read.find_photos(params, ctx)
 	local desc = buildSearchDesc(params)
 	local found = ctx.catalog:findPhotos({ searchDesc = desc }) or {}
-	local out = {}
+	local slice = {}
 	for index, photo in ipairs(found) do
 		if index > MAX_FOUND then
 			break
 		end
+		slice[#slice + 1] = photo
+	end
+	local rows = ctx.catalog:batchGetRawMetadata(slice, { "uuid", "isVirtualCopy", "path" }) or {}
+	local out = {}
+	for _, photo in ipairs(slice) do
+		local row = rows[photo] or {}
+		local path = row.path or photo:getRawMetadata("path") or ""
 		out[#out + 1] = {
-			id = photo:getRawMetadata("uuid"),
-			file_name = photo:getFormattedMetadata("fileName"),
-			is_virtual_copy = photo:getRawMetadata("isVirtualCopy") and true or false,
+			id = row.uuid or photo:getRawMetadata("uuid"),
+			file_name = string.match(path, "([^/\\]+)$"),
+			is_virtual_copy = (row.isVirtualCopy or photo:getRawMetadata("isVirtualCopy")) and true or false,
 		}
 	end
 	return { photos = list(out), count = #found, truncated = #found > MAX_FOUND }

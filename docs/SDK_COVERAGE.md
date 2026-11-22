@@ -12,19 +12,19 @@ the Hermes skills.
 | SDK capability | Tool | State |
 |---|---|---|
 | Sliders by `applyDevelopSettings` (tone, WB, HSL, detail, effects, calibration, curves) | `adjust_lighting`, `adjust_white_balance`, `adjust_hsl`, `adjust_tone_curve`, `set_develop_parameters`, `get_develop_parameters`, `list_develop_parameters` | verified |
-| Crop and angle | `crop`, `plan_crop` | crop verified; angle sign and fraction convention unverified |
-| **Auto Tone** (`setAutoTone`) and **Auto White Balance** (`setAutoWhiteBalance`) | `auto_correct` (one photo at a time, never copied) | unverified |
+| Crop and angle | `crop`, `plan_crop` | **verified live**: CropAngle = measured tilt (measure_tilt, clockwise positive) levels the picture (4.16 deg -> 0.0); fractions correct |
+| **Auto Tone** (`setAutoTone`) and **Auto White Balance** (`setAutoWhiteBalance`) | `auto_correct` (one photo at a time, never copied) | **verified live 2026-11-22** (values differ per photo; undo_batch restores) |
 | Develop presets (read, apply) | `list_presets`, `get_preset`, `apply_preset`, `try_presets` | verified except `try_presets` |
-| Snapshots (create, list, apply) | `create_snapshot`, `list_snapshots`, `restore_snapshot` | create/list verified earlier; restore unverified |
-| Reset (`resetAllDevelopAdjustments`, `resetMasking`, `resetSpotRemoval`, `resetCrop`, `resetTransforms`, `resetRedeye`) | `reset_develop` (snapshot first, go-ahead needed) | unverified |
+| Snapshots (create, list, apply) | `create_snapshot`, `list_snapshots`, `restore_snapshot` | **verified live** (restore puts the value back) |
+| Reset (`resetAllDevelopAdjustments`, `resetMasking`, `resetSpotRemoval`, `resetCrop`, `resetTransforms`, `resetRedeye`) | `reset_develop` (snapshot first, go-ahead needed) | **verified live** (scope all; other scopes share the code) |
 | Masks: AI selections (subject, sky, background, people, objects, landscape), range, gradient, radial; edit values; invert; delete | `create_mask`, `list_masks`, `inspect_masks`, `set_mask_adjustments`, `invert_mask`, `delete_mask` | verified |
-| Distracting people detect and remove (`detectDistractingPeople`, `applyRemovalOnDetectedDistractingPeople`) | `remove_distracting_people` (snapshot first, go-ahead needed) | unverified |
-| Spot / red-eye state (`RetouchAreas`, `RedEyeInfo`) | `get_retouch_state` | unverified |
-| AI panel getters (Enhance, Reflection Removal, Remove panel) | `get_ai_panel_state` (raw answers, to learn what this version offers) | unverified |
-| AI Enhance (`toggleEnhance`: denoise, raw details, super resolution) | `enhance` (virtual copy, snapshot first, go-ahead needed) | unverified |
-| Reflection Removal (`toggleReflectionRemoval`) | `reflection_removal` (same safeguards) | unverified |
-| Rotate left/right | `rotate_photo` | unverified |
-| Background replacement, object removal, red-eye as new files | `replace_background`, `remove_objects`, `fix_red_eye` (Photoshop / OpenCV) | background verified; others unverified |
+| Distracting people detect and remove (`detectDistractingPeople`, `applyRemovalOnDetectedDistractingPeople`) | `remove_distracting_people` (snapshot first, go-ahead needed) | **blocked on this PC**: Lightroom opens the Remove panel and detects, then shows an Adobe error dialog ("can't complete your request"), most likely a model or service this offline PC cannot reach. The tool now selects the Remove tool itself and reports ADOBE_FEATURE_UNAVAILABLE with the next step. Use `remove_objects` instead |
+| Spot / red-eye state (`RetouchAreas`, `RedEyeInfo`) | `get_retouch_state` | fixed after a live failure (empty list was sent as an object); recheck |
+| AI panel getters (Enhance, Reflection Removal, Remove panel) | `get_ai_panel_state` (raw answers, to learn what this version offers) | **verified live**: Enhance panel answers; the Reflection Removal getter returns nothing on a JPG |
+| AI Enhance (`toggleEnhance`: denoise, raw details, super resolution) | `enhance` (virtual copy, snapshot first, go-ahead needed) | **verified live**: Denoise on an ARW took 33 s, history shows Denoise; Denoise and Raw Details are not offered for JPG, Super Resolution is |
+| Reflection Removal (`toggleReflectionRemoval`) | `reflection_removal` (same safeguards) | **verified live**: preview quality took 15 s, history shows Reflection Removal On |
+| Rotate left/right | `rotate_photo` | **verified live** (orientation AB <-> BC) |
+| Background replacement, object removal, red-eye as new files | `replace_background`, `remove_objects`, `fix_red_eye` (Photoshop / OpenCV) | **verified live**: remove_objects (Photoshop Content-Aware PSD and OpenCV inpaint JPG); fix_red_eye runs (no red eyes in the test frame) |
 
 ## Library and catalog (LrCatalog, LrPhoto, LrCollection, LrKeyword, LrFolder)
 
@@ -34,17 +34,17 @@ the Hermes skills.
 | Find photos (filters: path, rating, flag, keyword, format, ISO, date) | `list_catalog_photos`, `find_photo`, `get_selected_photos` | verified |
 | Metadata (read) | `get_photo_info`, `get_photo_metadata` | verified |
 | Rating, flag, keywords | `get_library_state`, `set_library_state`, `batch_set_library_state`, `undo_library_change` | verified |
-| Title, caption, headline, copyright, creator, colour label | `set_photo_metadata` | unverified |
-| Keywords list | `list_keywords` | unverified |
-| Search the catalog incl. colour label (`findPhotos`) | `find_photos` | unverified |
-| Smart collections (`createSmartCollection`) | `create_smart_collection` | unverified |
-| Smart previews (`buildSmartPreviews`) | `build_smart_previews` | unverified |
-| Metadata and file-naming presets | `list_catalog_presets`, `apply_metadata_preset` | unverified |
+| Title, caption, headline, copyright, creator, colour label | `set_photo_metadata` | **verified live** |
+| Keywords list | `list_keywords` | **verified live** |
+| Search the catalog incl. colour label (`findPhotos`) | `find_photos` | **verified live** after a fix: labelColor takes a number 1-5 and an invalid value stalls Lightroom, so values are now checked against the SDK's types |
+| Smart collections (`createSmartCollection`) | `create_smart_collection` | **verified live** (created and removed through undo_collection_change) |
+| Smart previews (`buildSmartPreviews`) | `build_smart_previews` | runs without error; the preview file itself was not inspected |
+| Metadata and file-naming presets | `list_catalog_presets`, `apply_metadata_preset` | list verified live; this catalog has no metadata presets, so apply is unverified |
 | Collections and sets, add/remove photos | `create_collection_set`, `create_collection`, `add_to_collection`, `remove_from_collection`, `get_collection_photos`, `undo_collection_change` | verified |
 | Import from folder (no move/copy) | `scan_folder`, `import_folder` | verified |
 | Virtual copies (working copies) | automatic in every edit tool | verified |
-| Copy settings to other photos | `copy_develop_settings` (same values, chosen groups) | unverified |
-| Preview and TIFF export | `get_preview`, `export_for_delivery` | preview verified; delivery export unverified |
+| Copy settings to other photos | `copy_develop_settings` (same values, chosen groups) | **verified live** |
+| Preview and TIFF export | `get_preview`, `export_for_delivery` | **verified live** (2048 px JPEG) |
 
 ## Deliberately not exposed
 

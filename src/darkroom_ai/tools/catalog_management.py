@@ -46,7 +46,7 @@ SKIP_DIRS = frozenset(
     }
 )
 
-CREATE_TOOLS = ("create_collection_set", "create_collection")
+CREATE_TOOLS = ("create_collection_set", "create_collection", "create_smart_collection")
 ADD_TOOL = "add_to_collection"
 REMOVE_TOOL = "remove_from_collection"
 UNDO_TOOL = "undo_collection_change"

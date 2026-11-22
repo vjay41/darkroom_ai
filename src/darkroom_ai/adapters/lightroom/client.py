@@ -697,11 +697,31 @@ class LightroomClient:
         data = self.call("reset_develop", params, timeout_s=self._export_timeout_s)
         return self._typed(ResetResult, "reset_develop", data)
 
+    def _ai_call(self, command: str, params: dict[str, Any], timeout_s: float) -> dict[str, Any]:
+        """Run one of Lightroom's AI features. When Lightroom does not answer, an Adobe error
+        dialog is the likely cause (these features can need Adobe's models, which this offline
+        setup cannot download), so say that instead of a generic 'not reachable'."""
+        try:
+            return self.call(command, params, timeout_s=timeout_s)
+        except DarkroomError as exc:
+            if exc.code is not ErrorCode.LR_NOT_REACHABLE:
+                raise
+            raise DarkroomError(
+                ErrorCode.ADOBE_FEATURE_UNAVAILABLE,
+                f"Lightroom did not finish '{command}'. It is probably showing an error dialog "
+                "(for example 'We've encountered an issue and can't complete your request'): "
+                "this AI feature may need a model that Lightroom could not download offline.",
+                next_step="Look at Lightroom, dismiss the dialog, and press Cancel in the open "
+                "Develop panel. Nothing was applied; a snapshot of the earlier state was saved "
+                "first. Whether to let Lightroom download the model is the owner's decision.",
+                details={"command": command, "cause": exc.code.value},
+            ) from exc
+
     def remove_distracting_people(self, photo_id: str) -> DistractionsResult:
-        data = self.call(
+        data = self._ai_call(
             "remove_distracting_people",
             {"photo_id": photo_id},
-            timeout_s=max(self._export_timeout_s, 120.0),
+            max(self._export_timeout_s, 120.0),
         )
         return self._typed(DistractionsResult, "remove_distracting_people", data)
 
@@ -765,7 +785,7 @@ class LightroomClient:
         params: dict[str, Any] = {"photo_id": photo_id, "feature": feature, "max_wait_s": 600}
         if amount is not None:
             params["amount"] = amount
-        data = self.call("enhance", params, timeout_s=660.0)
+        data = self._ai_call("enhance", params, 660.0)
         return self._typed(AiRunResult, "enhance", data)
 
     def reflection_removal(
@@ -774,7 +794,7 @@ class LightroomClient:
         params: dict[str, Any] = {"photo_id": photo_id, "quality": quality, "max_wait_s": 300}
         if amount is not None:
             params["amount"] = amount
-        data = self.call("reflection_removal", params, timeout_s=360.0)
+        data = self._ai_call("reflection_removal", params, 360.0)
         return self._typed(AiRunResult, "reflection_removal", data)
 
     def auto_adjust(

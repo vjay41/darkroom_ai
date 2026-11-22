@@ -18,21 +18,47 @@ from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult, working_
 MAX_PREVIEW_PHOTOS = 25
 MAX_PRESET_PHOTOS = 50
 
-Criteria = Literal["rating", "pick", "labelColor", "keywords", "fileFormat", "iso", "captureTime"]
+Criteria = Literal[
+    "rating",
+    "pick",
+    "labelColor",
+    "keywords",
+    "fileFormat",
+    "isoSpeedRating",
+    "captureTime",
+    "camera",
+    "lens",
+    "hasAdjustments",
+]
 Combine = Literal["intersect", "union"]
 
 
 class SearchCondition(BaseModel):
-    """One test. rating/iso use == > >= < <= with a number; pick is == with 1 (picked), 0 or -1
-    (rejected); labelColor is == with a colour name such as red; keywords use any/all/noneOf with a
-    keyword name; fileFormat is == with DNG, RAW, JPG, TIFF...; captureTime compares with a
-    'YYYY-MM-DD' date."""
+    """One test. rating/isoSpeedRating use == != > >= < <= with a number; pick is == with 1
+    (picked), 0 or -1 (rejected); labelColor is == or != with red, yellow, green, blue, purple or
+    none; keywords use any/all/noneOf/beginsWith/endsWith with text; fileFormat is == with DNG,
+    RAW, JPG, TIFF, PNG...; captureTime uses == != > < with a 'YYYY-MM-DD' date; camera and lens
+    are == with exact text; hasAdjustments uses isTrue or isFalse (value is ignored)."""
 
     model_config = ConfigDict(extra="forbid")
 
     criteria: Criteria
-    operation: Literal["==", ">", ">=", "<", "<=", "any", "all", "noneOf"] = "=="
-    value: str | int | float
+    operation: Literal[
+        "==",
+        "!=",
+        ">",
+        ">=",
+        "<",
+        "<=",
+        "any",
+        "all",
+        "noneOf",
+        "beginsWith",
+        "endsWith",
+        "isTrue",
+        "isFalse",
+    ] = "=="
+    value: str | int | float | bool = True
 
 
 class FindPhotosInput(BaseModel):
