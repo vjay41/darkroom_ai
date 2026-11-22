@@ -124,6 +124,13 @@ class FakePhotoshop:
         assert mask_png.is_file()
         self._note("apply_mask_from_png", mask_png, layer_name)
 
+    def fill_selection_from_mask(
+        self, path: Path, mask_png: Path, grow_px: int = 4, layer_name: str = "removed"
+    ) -> None:
+        assert path in self.open, "the document must be open"
+        assert mask_png.is_file()
+        self._note("fill_selection_from_mask", mask_png, grow_px)
+
     def add_fill_layer_below(
         self, path: Path, rgb: tuple[int, int, int], name: str = "background"
     ) -> None:

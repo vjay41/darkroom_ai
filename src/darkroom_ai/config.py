@@ -213,6 +213,7 @@ class PathSettings(_Section):
     outputs_dir: Path = Path("outputs")
     previews_dir: Path = Path("previews")
     models_dir: Path = Path("models")
+    exports_dir: Path = Path("exports")  # finished files made by export_for_delivery
     notes_dir: Path = Path("notes")  # the agent's local notes (for example about presets)
 
 

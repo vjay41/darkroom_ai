@@ -555,10 +555,12 @@ class LightroomClient:
         )
         return self._typed(SettingsChange, "apply_settings", data)
 
-    def export_preview(self, photo_id: str, name: str, long_edge: int = 1024) -> PreviewFile:
+    def export_preview(
+        self, photo_id: str, name: str, long_edge: int = 1024, quality: float = 0.85
+    ) -> PreviewFile:
         data = self.call(
             "export_preview",
-            {"photo_id": photo_id, "name": name, "long_edge": long_edge},
+            {"photo_id": photo_id, "name": name, "long_edge": long_edge, "quality": quality},
             timeout_s=self._export_timeout_s,
         )
         return self._typed(PreviewFile, "export_preview", data)

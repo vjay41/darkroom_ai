@@ -244,6 +244,8 @@ def test_mask_outside_the_work_folder_and_bad_values_are_refused(
     for action in (
         lambda: client.apply_mask_from_png(copy, source),
         lambda: client.add_fill_layer_below(copy, (300, 0, 0)),
+        lambda: client.fill_selection_from_mask(copy, source),
+        lambda: client.fill_selection_from_mask(copy, copy, grow_px=99),
         lambda: client.save_jpg(copy, quality=99),
         lambda: client.save_jpg(copy, source.with_suffix(".jpg")),
     ):
@@ -369,8 +371,10 @@ def test_jsx_files_exist() -> None:
         "am_document_info.jsx",
         "apply_mask.jsx",
         "add_fill_layer_below.jsx",
+        "fill_content_aware.jsx",
         "layers_info.jsx",
     } <= names
+    assert "contentAware" in (jsx_dir() / "fill_content_aware.jsx").read_text()
 
 
 def test_worker_deadline_kills_a_stuck_operation() -> None:

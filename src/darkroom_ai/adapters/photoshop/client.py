@@ -58,6 +58,7 @@ class PhotoshopClient:
         self._start_timeout_s = start_timeout_s
         self._ready_grace_s = ready_grace_s
         self._select_subject_timeout_s = select_subject_timeout_s
+        self._fill_timeout_s = max(select_subject_timeout_s, 120.0)
         self._list_windows = list_windows
         self._run = runner
 
@@ -223,6 +224,24 @@ class PhotoshopClient:
         """
         mask = self._inside_work_dir(mask_png)
         self.run_script(read_jsx("apply_mask.jsx"), document=path, args=[str(mask), layer_name])
+
+    def fill_selection_from_mask(
+        self, path: Path, mask_png: Path, grow_px: int = 4, layer_name: str = "removed"
+    ) -> None:
+        """Content-Aware Fill the white area of a same-size grayscale PNG, on a new layer."""
+        if not 0 <= grow_px <= 50:
+            raise DarkroomError(
+                ErrorCode.GUARDRAIL_REJECTED,
+                "The selection can grow by 0 to 50 pixels.",
+                next_step="Use a smaller grow value.",
+            )
+        mask = self._inside_work_dir(mask_png)
+        self.run_script(
+            read_jsx("fill_content_aware.jsx"),
+            document=path,
+            args=[str(mask), str(grow_px), layer_name],
+            timeout_s=self._fill_timeout_s,
+        )
 
     def add_fill_layer_below(
         self, path: Path, rgb: tuple[int, int, int], name: str = "background"

@@ -34,6 +34,10 @@ EXPECTED = {
     "lr-travel-blog",
     "lr-wedding-indian",
     "lr-wedding-western",
+    "lr-delivery-export",
+    "lr-flash-shadows",
+    "lr-object-removal",
+    "lr-straighten-crop",
     "lr-upgrade",
     "lr-user-guidance",
 }

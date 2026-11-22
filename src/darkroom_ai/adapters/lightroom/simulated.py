@@ -609,7 +609,9 @@ class SimulatedLightroom:
         current.update(settings)
         return SettingsChange(before=before, after=dict(settings))
 
-    def export_preview(self, photo_id: str, name: str, long_edge: int = 1024) -> PreviewFile:
+    def export_preview(
+        self, photo_id: str, name: str, long_edge: int = 1024, quality: float = 0.85
+    ) -> PreviewFile:
         self.calls.append("export_preview")
         self._info(photo_id)
         path = self.files_dir / "previews" / f"{name}.png"

@@ -85,3 +85,28 @@ def load_mask(path: Path) -> Mask:
     if image is None:
         raise _failed(path, "unsupported or damaged file")
     return (image.astype(np.float32) / 255.0).astype(np.float32)
+
+
+def write_image(path: Path, pixels: Pixels, *, bits: int = 8, jpeg_quality: int = 92) -> Path:
+    """Write float RGB to a new JPG, PNG or TIFF file. Refuses to overwrite an existing file."""
+    if path.exists():
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED,
+            f"Refusing to overwrite an existing file: {path}",
+            next_step="Choose another name; files are never overwritten.",
+            details={"path": str(path)},
+        )
+    suffix = path.suffix.lower()
+    if bits not in (8, 16) or (bits == 16 and suffix not in (".tif", ".tiff", ".png")):
+        raise DarkroomError(
+            ErrorCode.GUARDRAIL_REJECTED, "16-bit output is only possible as TIFF or PNG."
+        )
+    scale, dtype = (65535.0, np.uint16) if bits == 16 else (255.0, np.uint8)
+    data = np.clip(np.rint(pixels * scale), 0, scale).astype(dtype)
+    params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality] if suffix in (".jpg", ".jpeg") else []
+    ok, encoded = cv2.imencode(suffix, cv2.cvtColor(np.asarray(data), cv2.COLOR_RGB2BGR), params)
+    if not ok:
+        raise DarkroomError(ErrorCode.IMAGE_UNREADABLE, f"Could not encode the image for {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded.tofile(str(path))
+    return path

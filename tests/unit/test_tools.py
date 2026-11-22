@@ -31,7 +31,12 @@ def make_settings(tmp_path: Path, **sections: Any) -> Settings:
         },
         "backgrounds": {"dir": str(tmp_path / "backgrounds")},
         "masks": {"backend": "synthetic"},
-        "paths": {"notes_dir": str(tmp_path / "notes")},
+        "paths": {
+            "notes_dir": str(tmp_path / "notes"),
+            "outputs_dir": str(tmp_path / "outputs"),
+            "previews_dir": str(tmp_path / "previews"),
+            "exports_dir": str(tmp_path / "exports"),
+        },
     }
     data.update(sections)
     return parse_settings(data)
@@ -153,6 +158,10 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "analyze_photo",
         "analyze_batch",
         "measure_region",
+        "plan_crop",
+        "view_region",
+        "zone_map",
+        "find_candidates",
         "measure_tilt",
         "adjust_lighting",
         "adjust_white_balance",
@@ -170,6 +179,9 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "get_tone_curve",
         "adjust_tone_curve",
         "replace_background",
+        "remove_objects",
+        "fix_red_eye",
+        "export_for_delivery",
         "undo",
         "get_library_state",
         "set_library_state",
@@ -1500,3 +1512,107 @@ def test_preset_notes_are_saved_found_and_listed_against_lightroom(tmp_path: Pat
         rig.call("save_preset_note", preset_name="Twin")  # two folders: needs the folder
     with pytest.raises(DarkroomError):
         rig.call("save_preset_note", preset_name="Not A Preset")
+
+
+# -- crop planning, looking closer, scene numbers ---------------------------------------------
+
+
+def test_plan_crop_returns_arguments_for_the_crop_tool(rig: Rig) -> None:
+    result = rig.call("plan_crop", photo_id=MASTER, aspect="4:5", angle=3.0)
+    assert result["plan"]["fits_inside"] is True
+    assert result["plan"]["aspect"] == 0.8
+    applied = rig.call("crop", photo_id=MASTER, **result["crop_arguments"])
+    assert applied["kept_fraction"] == pytest.approx(result["plan"]["kept_fraction"], abs=1e-3)
+    with pytest.raises(DarkroomError):
+        rig.call("plan_crop", photo_id=MASTER, aspect="wide")
+
+
+def test_plan_crop_changes_nothing(rig: Rig) -> None:
+    rig.call("plan_crop", photo_id=MASTER, angle=2.0, anchor=[0.8, 0.5])
+    assert rig.lightroom.calls.count("create_virtual_copy") == 0
+    assert "apply_develop_settings" not in rig.lightroom.calls
+
+
+def test_view_region_writes_a_closer_picture(rig: Rig) -> None:
+    result = rig.call("view_region", photo_id=MASTER, box=[0.2, 0.2, 0.6, 0.7], long_edge=400)
+    assert Path(result["path"]).is_file()
+    assert max(result["size"]) == 400
+    assert rig.lightroom.calls.count("create_virtual_copy") == 0
+
+
+def test_zone_map_and_candidates_read_only(rig: Rig) -> None:
+    zones = rig.call("zone_map", photo_id=MASTER, rows=3, cols=4)
+    assert len(zones["map"]["cells"]) == 12
+    cands = rig.call("find_candidates", photo_id=MASTER)
+    assert cands["candidates"] == []  # the flat test picture has nothing that stands out
+    assert rig.lightroom.calls.count("create_virtual_copy") == 0
+
+
+# -- remove_objects / fix_red_eye / export_for_delivery ------------------------------------------
+
+SPOT = {"name": "dust", "box": [0.45, 0.45, 0.5, 0.5], "shape": "ellipse"}
+
+
+def test_remove_objects_inpaint_makes_new_files_only(rig: Rig) -> None:
+    result = rig.call("remove_objects", photo_id=MASTER, regions=[SPOT], method="inpaint")
+    assert result["method"] == "inpaint"
+    assert Path(result["jpg_path"]).is_file() and Path(result["tiff_path"]).is_file()
+    assert result["psd_path"] is None
+    assert Path(result["before_after_path"]).is_file()
+    assert rig.photoshop.calls == []
+    assert "apply_develop_settings" not in rig.lightroom.calls
+
+
+def test_remove_objects_content_aware_uses_photoshop_on_a_copy(rig: Rig) -> None:
+    result = rig.call("remove_objects", photo_id=MASTER, regions=[SPOT])  # auto -> Photoshop
+    assert result["method"] == "content_aware"
+    assert Path(result["psd_path"]).is_file() and Path(result["jpg_path"]).is_file()
+    names = [name for name, _ in rig.photoshop.calls]
+    assert names.index("open_document") < names.index("fill_selection_from_mask")
+    assert names[-1] == "close_document" and rig.photoshop.open == set()
+
+
+def test_remove_objects_refuses_big_areas_and_bad_input(rig: Rig) -> None:
+    big = {"name": "wall", "box": [0.0, 0.0, 0.5, 0.5]}
+    with pytest.raises(DarkroomError, match="limit"):
+        rig.call("remove_objects", photo_id=MASTER, regions=[big], method="inpaint")
+    assert rig.photoshop.calls == []
+    with pytest.raises(DarkroomError, match="different"):
+        rig.call("remove_objects", photo_id=MASTER, regions=[SPOT, SPOT])
+    with pytest.raises(DarkroomError):
+        rig.call(
+            "remove_objects", photo_id=MASTER, regions=[{"name": "x", "box": [0.5, 0, 0.4, 1]}]
+        )
+
+
+def test_remove_objects_without_photoshop_falls_back_or_explains(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.context.photoshop = None
+    assert rig.call("remove_objects", photo_id=MASTER, regions=[SPOT])["method"] == "inpaint"
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("remove_objects", photo_id=MASTER, regions=[SPOT], method="content_aware")
+    assert caught.value.code.value == "PS_NOT_REACHABLE"
+
+
+def test_fix_red_eye_writes_new_files(rig: Rig) -> None:
+    result = rig.call("fix_red_eye", photo_id=MASTER, eyes=[{"box": [0.3, 0.3, 0.4, 0.4]}])
+    assert Path(result["jpg_path"]).is_file() and Path(result["tiff_path"]).is_file()
+    assert result["fixed_share_per_eye"] == [0.0]  # the flat picture has nothing red
+    with pytest.raises(DarkroomError):
+        rig.call("fix_red_eye", photo_id=MASTER, eyes=[])
+
+
+def test_export_for_delivery_names_and_never_overwrites(rig: Rig) -> None:
+    def deliver(**arguments: Any) -> dict[str, Any]:
+        return rig.tools.call("export_for_delivery", {"photo_id": MASTER, **arguments})
+
+    first = deliver(name="wedding-001", long_edge=1024)
+    second = deliver(name="wedding-001.jpg")
+    assert first["path"] != second["path"]
+    assert Path(first["path"]).parent == rig.tmp_path / "exports"
+    assert Path(first["path"]).is_file() and Path(second["path"]).is_file()
+    for bad in ("../x", "a/b", "", ".hidden", "c:\\x"):
+        with pytest.raises(DarkroomError):
+            deliver(name=bad)
+    with pytest.raises(DarkroomError):
+        deliver(name="ok", long_edge=9000)

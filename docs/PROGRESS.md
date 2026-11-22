@@ -173,3 +173,9 @@ PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (owner decisions in section 6). Bui
 - Architecture rule confirmed: darkroom_ai = granular tools only; judgement lives in Hermes skills.
 - Unverified live (computer use stopped by the user): `try_presets` against real Lightroom, `measure_tilt` on real photos.
 - Still to build: crop with aspect ratio/rotation (`plan_crop`), zone map for shadows, region view, object finder, object removal (Photoshop), spot/red-eye, export for delivery.
+
+## 2026-11-22 - remaining granular tools (offline, unit-tested, NOT verified live)
+- Tools: `plan_crop` (largest crop for an aspect ratio inside a rotated frame), `view_region`, `zone_map` (grid + dark regions with edge hardness), `find_candidates` (what stands out; measurements only), `remove_objects` (Photoshop Content-Aware Fill on a new layer, or OpenCV inpaint for small spots; new TIFF/JPG/PSD only), `fix_red_eye` (numeric, new files), `export_for_delivery` (JPEG via the plug-in export into `exports/`, never overwrites). `export_preview` now passes `quality` to the plug-in (the Lua side already supported it).
+- Skills: lr-straighten-crop, lr-object-removal, lr-flash-shadows, lr-delivery-export.
+- Decisions: Lightroom-native spot healing (`RetouchAreas`) and Upright are NOT used: their develop-setting formats are unprobed, so spot removal goes through Photoshop/inpaint instead. Auto tone/WB left to `analyze_photo` + `adjust_*` plus skills.
+- Live checks needed (desktop): CropAngle sign and crop-fraction semantics with a rotated crop (`plan_crop` -> `crop` -> `measure_tilt`); `fill_content_aware.jsx` in Photoshop 27.8 (stringIDToTypeID contentAware); `export_preview` at 4096 px with quality; `try_presets`; `measure_tilt` on real photos; `zone_map`/`find_candidates` thresholds on real photos.

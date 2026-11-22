@@ -2,7 +2,7 @@
 
 # Tool reference
 
-57 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+64 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -33,6 +33,10 @@
 | [`analyze_photo`](#analyze_photo) | reads | Export a small preview and measure it: tones, clipping, colour cast, faces if available. |
 | [`analyze_batch`](#analyze_batch) | reads | Measure many photos in one call and return a few numbers per photo (tones, clipping, colour cast). |
 | [`measure_region`](#measure_region) | reads | Measure the colour and brightness of up to 6 rectangles of a photo as numbers (CIELAB lightness, a*, b*, hue angle, chroma, median RGB, clipping). |
+| [`plan_crop`](#plan_crop) | reads | Work out the largest crop with a given shape (aspect ratio) that stays inside the picture after rotating it by `angle` degrees, as numbers for the `crop` tool. |
+| [`view_region`](#view_region) | reads | Make a close-up picture of part of the photo as it is now, so you can look at it with your image viewer (for example a face, a shadow edge or a spot). |
+| [`zone_map`](#zone_map) | reads | Map brightness over the photo: a grid of cells (mean luma, tonal zone 0-10, clipping) and the connected dark regions with their box, area, how much darker than their surroundings they are, and how hard their edge is (a hard edge behind a subject is typical of flash shadows). |
+| [`find_candidates`](#find_candidates) | reads | List small areas that stand out from their surroundings in colour or brightness, with box, size, colour difference to the surroundings, edge density and whether they touch the border. |
 | [`measure_tilt`](#measure_tilt) | reads | Measure how far the long straight lines in a photo (horizon, walls, door frames) are from level and upright, as degrees with a confidence for the near-horizontal and the near-vertical group. |
 | [`adjust_lighting`](#adjust_lighting) | writes | Change exposure and tone by the given amounts (relative to the current values). |
 | [`adjust_white_balance`](#adjust_white_balance) | writes | Change white balance by the given amounts. |
@@ -50,6 +54,9 @@
 | [`get_tone_curve`](#get_tone_curve) | reads | Read a photo's tone curve as points on a 0-255 scale. |
 | [`adjust_tone_curve`](#adjust_tone_curve) | writes | Set a tone curve on the photo's working copy (a virtual copy; never the original). |
 | [`replace_background`](#replace_background) | writes | Cut out the subject and put it on a new background. |
+| [`remove_objects`](#remove_objects) | writes | Remove objects, blemishes, dust or sensor spots by filling the given regions from their surroundings. |
+| [`fix_red_eye`](#fix_red_eye) | writes | Remove red-eye (flash glow in pupils) inside the given eye boxes. |
+| [`export_for_delivery`](#export_for_delivery) | writes | Export a photo, with its current edits and crop, as an sRGB JPEG into the exports folder (darkroom.toml [paths] exports_dir) under a name you choose. |
 | [`undo`](#undo) | writes | Take back darkroom_ai's edits made in THIS session: the last one, or all of them. |
 | [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
 | [`set_library_state`](#set_library_state) | writes | Set a photo's star rating, pick/reject flag and keywords (catalog data only). |
@@ -351,6 +358,55 @@ Measure the colour and brightness of up to 6 rectangles of a photo as numbers (C
 | `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
 | `regions` | list of any | yes |  | min items 1, max items 6 |
 
+### `plan_crop`
+
+Reads only.
+
+Work out the largest crop with a given shape (aspect ratio) that stays inside the picture after rotating it by `angle` degrees, as numbers for the `crop` tool. It changes nothing. To level a horizon: measure with measure_tilt, rotate by the opposite amount, plan the crop, apply it with `crop`, then measure again; if the tilt grew, use the other sign.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `aspect` | string | no | `original` | 'original', or width:height such as 3:2, 4:5, 16:9, 1:1 (landscape or portrait is set by the order of the numbers). |
+| `angle` | number | no | `0.0` | Rotation in degrees. min -45.0, max 45.0 |
+| `anchor` | list of any (may be null) | no | `None` | [x, y] picture fractions to keep the crop near (for example a face), as far as the rotated picture allows. Omit to centre the crop. |
+
+### `view_region`
+
+Reads only.
+
+Make a close-up picture of part of the photo as it is now, so you can look at it with your image viewer (for example a face, a shadow edge or a spot). Reads only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `box` | list of any | no | `[0.0, 0.0, 1.0, 1.0]` | [x0, y0, x1, y1] as picture fractions. min items 4, max items 4 |
+| `long_edge` | integer | no | `1024` | min 256, max 1600 |
+
+### `zone_map`
+
+Reads only.
+
+Map brightness over the photo: a grid of cells (mean luma, tonal zone 0-10, clipping) and the connected dark regions with their box, area, how much darker than their surroundings they are, and how hard their edge is (a hard edge behind a subject is typical of flash shadows). Numbers only; look at the picture to decide what a region is. Reads only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `rows` | integer | no | `6` | min 2, max 12 |
+| `cols` | integer | no | `8` | min 2, max 16 |
+| `shadow_luma` | number | no | `0.25` | Dark below this luma. |
+
+### `find_candidates`
+
+Reads only.
+
+List small areas that stand out from their surroundings in colour or brightness, with box, size, colour difference to the surroundings, edge density and whether they touch the border. These are only measurements of what is different; they are not a list of things to remove. Look at the areas (view_region) before suggesting anything. Reads only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `max_items` | integer | no | `8` | min 1, max 20 |
+
 ### `measure_tilt`
 
 Reads only.
@@ -557,6 +613,42 @@ Cut out the subject and put it on a new background. Give `color` or `image`, not
 | `photo_id` | string | yes |  | min length 1 |
 | `color` | list of any (may be null) | no | `None` | Background colour as red, green, blue (0-255). |
 | `image` | string (may be null) | no | `None` | File NAME of a picture in the configured backgrounds folder (no path). |
+
+### `remove_objects`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Remove objects, blemishes, dust or sensor spots by filling the given regions from their surroundings. The result is a NEW 16-bit TIFF and JPG (and a PSD with Content-Aware Fill on its own layer when Photoshop is used) made from the working copy as it is now; the original photo and the catalog are unchanged. 'content_aware' uses Photoshop and suits larger or textured objects; 'inpaint' works without Photoshop and suits small spots on smooth areas. Show the person what you intend to remove and get their agreement before calling this.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `regions` | list of any | yes |  | min items 1, max items 8 |
+| `method` | `auto` \| `content_aware` \| `inpaint` | no | `auto` |  |
+
+### `fix_red_eye`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Remove red-eye (flash glow in pupils) inside the given eye boxes. The result is a NEW 16-bit TIFF and JPG made from the working copy as it is now; the original is unchanged. Only strongly red pixels inside the boxes change. Measure the eyes' share fixed in the result.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `eyes` | list of any | yes |  | min items 1, max items 6 |
+
+### `export_for_delivery`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Export a photo, with its current edits and crop, as an sRGB JPEG into the exports folder (darkroom.toml [paths] exports_dir) under a name you choose. It makes a new file and never overwrites; the catalog and the original are unchanged. Longest side up to 4096 px.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `name` | string | yes |  | File name without folder, e.g. 'rahul-priya-001'. |
+| `long_edge` | integer | no | `2048` | min 256, max 4096 |
+| `quality` | number | no | `0.9` | min 0.5, max 1.0 |
 
 ### `undo`
 
