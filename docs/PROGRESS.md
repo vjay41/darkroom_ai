@@ -40,13 +40,14 @@ detection is left to Lightroom's own people/subject masks (no model by design); 
 copy in a collapsed stack cannot be shown; Hermes needs a restart to see new tools; Adobe versions frozen until a
 deliberate, drilled update.
 
-## What blocks a public release (owner)
-1. `LICENSE` (MIT) is added, holder "darkroom_ai contributors"; change the name if you prefer a personal one.
-2. Decide what ships publicly: this repo's history and `PRD.md` contain the owner's name and local paths (no secrets,
-   photos or catalogs were ever committed).
-3. Push `dev`, set it as the GitHub default branch, make the repository public, merge `dev` into `master`, tag the release.
-   Tools and agents never commit to `master`.
-4. Allowlisting the production catalog stays a local decision of the owner; do one supervised run on a real photo first.
+## Release status
+Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested, test-catalog writes only).
+
+- Repository is public: https://github.com/vjay41/darkroom_ai (MIT, `LICENSE`).
+- `dev` (default branch), `master` and tag `v0.1.0` all pointed at `3e236d9` when released; `master` was
+  fast-forwarded from `dev` on the owner's explicit instruction. Never force-push or rewrite history.
+- The production catalog stays off the allowlist until the owner decides; do one supervised run on a real photo first.
+- Git history and `PRD.md` contain the owner's name and local paths (no secrets, photos or catalogs).
 
 ## Next steps (post-v1, in rough priority)
 1. **Batch writes**: a batch id in the journal, one undo for a whole batch, chunk and error-budget limits, one
@@ -62,7 +63,7 @@ deliberate, drilled update.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
 ## Open threads and housekeeping
-- Several local commits on `dev` are not pushed; the owner pushes.
+- `dev` is pushed up to v0.1.0; later commits are local until the owner says to push.
 - A stray Photoshop instance may be open from an earlier test; it is not needed for v1.
 - Two empty people masks may remain on one test-catalog working copy; harmless.
 - The test catalog has working copies from supervised runs (one carries Highlights -10); keep or undo as you like.
