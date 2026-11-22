@@ -24,6 +24,8 @@ wb_kelvin_total = 2000      # RAW: total against the original; beyond needs a co
 wb_tint_raw_per_pass = 30   # RAW
 wb_tint_raw_total = 40      # RAW: total against the original; beyond needs a confirmation
 hsl_per_pass = 30
+curve_per_pass = 32           # tone curve points (0..255 scale): most one pass may move a point
+curve_total = 64              # most a point may be from a straight line
 min_crop_fraction = 0.25
 
 [backgrounds]

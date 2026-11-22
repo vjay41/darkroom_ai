@@ -58,6 +58,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "CropRight": 1,
     "CropBottom": 1,
     "CropAngle": 0,
+    "ToneCurvePV2012": [0, 0, 255, 255],
+    "ToneCurvePV2012Red": [0, 0, 255, 255],
+    "ToneCurvePV2012Green": [0, 0, 255, 255],
+    "ToneCurvePV2012Blue": [0, 0, 255, 255],
 }
 
 

@@ -44,6 +44,8 @@ not at all.
 | `wb_kelvin_per_pass` / `_total` | 1000 / 2000 | RAW Kelvin (RAW is unverified) |
 | `wb_tint_raw_per_pass` / `_total` | 30 / 40 | RAW tint |
 | `hsl_per_pass` | 30 | HSL sliders (-100..100) |
+| `curve_per_pass` | 32 | Tone curve: most one pass may move a point from the current curve (0..255 scale) |
+| `curve_total` | 64 | Tone curve: most a point may be from a straight line (no curve) |
 | `min_crop_fraction` | 0.25 | A crop must keep at least this share of the frame |
 These are *bounds*, not recommendations. Generic parameters in `set_develop_parameters` are limited to Lightroom's own
 slider ranges (`tools/develop_parameters.py`, data only).

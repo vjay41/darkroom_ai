@@ -2,7 +2,7 @@
 
 # Tool reference
 
-35 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+37 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -34,6 +34,8 @@
 | [`delete_mask`](#delete_mask) | writes | Delete one mask from the working copy (the original photo is never touched). |
 | [`adjust_hsl`](#adjust_hsl) | writes | Change hue, saturation or luminance of single colours by the given amounts. |
 | [`crop`](#crop) | writes | Set the crop box as fractions of the frame (0 = left/top edge, 1 = right/bottom edge). |
+| [`get_tone_curve`](#get_tone_curve) | reads | Read a photo's tone curve as points on a 0-255 scale. |
+| [`adjust_tone_curve`](#adjust_tone_curve) | writes | Set a tone curve on the photo's working copy (a virtual copy; never the original). |
 | [`replace_background`](#replace_background) | writes | Cut out the subject and put it on a new background. |
 | [`undo`](#undo) | writes | Take back darkroom_ai's edits made in THIS session: the last one, or all of them. |
 | [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
@@ -358,6 +360,29 @@ Set the crop box as fractions of the frame (0 = left/top edge, 1 = right/bottom 
 | `right` | number | yes |  | min 0.0, max 1.0 |
 | `bottom` | number | yes |  | min 0.0, max 1.0 |
 | `angle` | number | no | `0.0` | Rotation in degrees. min -45.0, max 45.0 |
+
+### `get_tone_curve`
+
+Reads only.
+
+Read a photo's tone curve as points on a 0-255 scale. Changes nothing. channel "rgb" is the combined curve; "red", "green" and "blue" are the colour curves. A straight line from (0,0) to (255,255) means no curve.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
+| `channel` | `rgb` \| `red` \| `green` \| `blue` | no | `rgb` |  |
+
+### `adjust_tone_curve`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Set a tone curve on the photo's working copy (a virtual copy; never the original). Give the whole curve as points on a 0-255 scale, from x=0 to x=255 with x increasing (2 to 16 points). Read the current curve first with get_tone_curve and change it a little: each output is limited to a small step from the current curve and to a bounded distance from a straight line, and outputs never fall below the point before. Anything limited is reported in `note`. channel "rgb" is the combined curve; "red", "green", "blue" are the colour curves. Undo with the ordinary undo tool.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
+| `channel` | `rgb` \| `red` \| `green` \| `blue` | no | `rgb` |  |
+| `points` | list of any | yes |  | min items 2, max items 16 |
 
 ### `replace_background`
 

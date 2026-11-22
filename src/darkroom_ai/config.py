@@ -136,6 +136,10 @@ class GuardrailSettings(_Section):
     wb_tint_raw_total: float = Field(default=40.0, gt=0.0, le=300.0)
     # HSL sliders (Lightroom scale -100..100).
     hsl_per_pass: float = Field(default=30.0, gt=0.0, le=100.0)
+    # Tone curve points, on the curve's 0..255 scale: the most one pass may move a point from the
+    # current curve, and the most a point may be from a straight line (no curve) in total.
+    curve_per_pass: float = Field(default=32.0, gt=0.0, le=255.0)
+    curve_total: float = Field(default=64.0, gt=0.0, le=255.0)
     # A crop must keep at least this share of the frame.
     min_crop_fraction: float = Field(default=0.25, gt=0.0, le=1.0)
 

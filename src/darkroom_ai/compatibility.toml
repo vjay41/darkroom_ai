@@ -37,6 +37,13 @@ verified_on = "Lightroom 15.2.1"
 note = "Needs plug-in 0.10.0 or newer. A keyword that does not exist is created at the top level of the keyword list and stays there after undo (the SDK cannot delete keywords). JPG checked live; other formats use the same calls."
 
 [[features]]
+name = "Tone curve (combined and red/green/blue), limited, measured, undoable"
+tools = ["get_tone_curve", "adjust_tone_curve", "undo"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+note = "Curves are flat x,y lists on a 0-255 scale in ToneCurvePV2012 and its Red/Green/Blue variants. JPG checked live."
+
+[[features]]
 name = "Preview and numeric analysis"
 tools = ["get_preview", "analyze_photo", "analyze_batch"]
 status = "verified"

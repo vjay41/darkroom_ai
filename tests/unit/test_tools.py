@@ -135,6 +135,8 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "delete_mask",
         "adjust_hsl",
         "crop",
+        "get_tone_curve",
+        "adjust_tone_curve",
         "replace_background",
         "undo",
         "get_library_state",

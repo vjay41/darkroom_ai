@@ -9,6 +9,7 @@ backs up anything it replaces.
 |---|---|
 | `lr-masking` | When a mask beats a global edit, how each mask kind behaves, how to judge a mask, known failure modes (Develop takeover, collapsed stacks, wrong photo shown). |
 | `lr-lens-corrections` | What lens profile, chromatic aberration, defringe and vignette fix; JPG versus RAW; how to judge honestly at preview size. |
+| `lr-tone-curve` | What the combined and colour curves do; read, change and judge a curve with the guardrails. |
 | `lr-presets` | What a preset can silently change (masks, colour, frame), how to read the changed-settings list, when to undo or refuse. |
 | `lr-genre-knowledge` | What matters and what goes wrong in portraits, ceremonies and events, landscapes, low light, food and product. Principles only. |
 | `lr-safe-operations` | What the tools protect, which actions need a person's go-ahead, checks before and after a write, recognising a stale connector or wrong photo, when to stop and ask. |

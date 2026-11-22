@@ -21,6 +21,7 @@ from darkroom_ai.tools import (
     library_tools,
     lightroom_tools,
     masks,
+    tone_curve,
 )
 from darkroom_ai.tools.context import Outcome, ToolContext
 
@@ -174,6 +175,18 @@ TOOLS: tuple[Tool, ...] = (
     _tool("delete_mask", masks.DeleteMaskInput, masks.delete_mask, writes=True),
     _tool("adjust_hsl", lightroom_tools.AdjustHslInput, lightroom_tools.adjust_hsl, writes=True),
     _tool("crop", lightroom_tools.CropInput, lightroom_tools.crop, writes=True),
+    _tool(
+        "get_tone_curve",
+        tone_curve.GetToneCurveInput,
+        tone_curve.get_tone_curve,
+        writes=False,
+    ),
+    _tool(
+        "adjust_tone_curve",
+        tone_curve.AdjustToneCurveInput,
+        tone_curve.adjust_tone_curve,
+        writes=True,
+    ),
     _tool(
         "replace_background",
         background.ReplaceBackgroundInput,

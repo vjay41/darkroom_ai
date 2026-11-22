@@ -18,6 +18,7 @@ EXPECTED = {
     "lr-masking",
     "lr-presets",
     "lr-safe-operations",
+    "lr-tone-curve",
     "lr-upgrade",
     "lr-user-guidance",
 }
