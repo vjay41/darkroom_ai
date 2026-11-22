@@ -28,6 +28,7 @@ from darkroom_ai.mcp_confirm import ElicitationConfirmer
 from darkroom_ai.runtime import (
     CodeGuard,
     InstanceRecord,
+    StaleWatchdog,
     WindowsInstanceControl,
     register,
     stop_stale,
@@ -98,7 +99,9 @@ def call_tool(registry: ToolRegistry, name: str, arguments: dict[str, Any]) -> t
 
 
 def build_server(
-    registry: ToolRegistry, confirmer: ElicitationConfirmer | None = None
+    registry: ToolRegistry,
+    confirmer: ElicitationConfirmer | None = None,
+    watchdog: StaleWatchdog | None = None,
 ) -> Server[Any]:
     async def on_list_tools(_context: Any, _params: Any) -> types.ListToolsResult:
         return types.ListToolsResult(tools=list_tools(registry))
@@ -108,10 +111,14 @@ def build_server(
     ) -> types.CallToolResult:
         arguments = dict(params.arguments or {})
         token = confirmer.bind(context.session, context.request_id) if confirmer else None
+        if watchdog is not None:
+            watchdog.call_started()
         try:
             # Tools block on Lightroom/Photoshop, so run them off the event loop.
             return await anyio.to_thread.run_sync(call_tool, registry, params.name, arguments)
         finally:
+            if watchdog is not None:
+                watchdog.call_finished()
             if confirmer is not None and token is not None:
                 confirmer.unbind(token)
 
@@ -124,10 +131,36 @@ def build_server(
     )
 
 
-async def _serve(registry: ToolRegistry, confirmer: ElicitationConfirmer | None = None) -> None:
-    server = build_server(registry, confirmer)
-    async with stdio_server() as (read_stream, write_stream):
+WATCHDOG_POLL_S = 5.0
+
+
+async def _watch_for_stale(watchdog: StaleWatchdog, guard: CodeGuard) -> None:
+    """End this process once it is stale and idle long enough; the client then starts a new one."""
+    while True:
+        await anyio.sleep(WATCHDOG_POLL_S)
+        if watchdog.should_exit():
+            print(
+                f"darkroom_ai: connector pid {guard.pid} runs older code than the files on disk "
+                "and is idle: exiting so a fresh one can start",
+                file=sys.stderr,
+                flush=True,
+            )
+            atexit._run_exitfuncs()  # unregister this connector before leaving
+            os._exit(0)
+
+
+async def _serve(
+    registry: ToolRegistry,
+    confirmer: ElicitationConfirmer | None = None,
+    watchdog: StaleWatchdog | None = None,
+    guard: CodeGuard | None = None,
+) -> None:
+    server = build_server(registry, confirmer, watchdog)
+    async with stdio_server() as (read_stream, write_stream), anyio.create_task_group() as group:
+        if watchdog is not None and guard is not None:
+            group.start_soon(_watch_for_stale, watchdog, guard)
         await server.run(read_stream, write_stream, server.create_initialization_options())
+        group.cancel_scope.cancel()
 
 
 def run(settings: Settings) -> None:
@@ -142,7 +175,11 @@ def run(settings: Settings) -> None:
         file=sys.stderr,
         flush=True,
     )
-    anyio.run(_serve, ToolRegistry(context), confirmer)
+    runtime = settings.runtime
+    watchdog = StaleWatchdog(
+        guard, grace_s=runtime.stale_exit_after_s, idle_s=runtime.stale_exit_idle_s
+    )
+    anyio.run(_serve, ToolRegistry(context), confirmer, watchdog, guard)
 
 
 def _claim_instance(settings: Settings, guard: CodeGuard) -> None:

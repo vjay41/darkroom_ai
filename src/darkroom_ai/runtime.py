@@ -106,6 +106,54 @@ class CodeGuard:
         )
 
 
+class StaleWatchdog:
+    """Decides when a stale connector should end itself (it never acts by itself).
+
+    It says "exit" only when the code has been older than the files on disk for `grace_s` without
+    a break, no tool call is running, and the last call finished at least `idle_s` ago. A fresh
+    start or an edit that is reverted resets it. `grace_s` 0 means never.
+    """
+
+    def __init__(
+        self,
+        guard: CodeGuard,
+        *,
+        grace_s: float,
+        idle_s: float,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._guard = guard
+        self._grace_s = grace_s
+        self._idle_s = idle_s
+        self._clock = clock
+        self._stale_since: float | None = None
+        self._last_activity = clock()
+        self._running = 0
+
+    def call_started(self) -> None:
+        self._running += 1
+        self._last_activity = self._clock()
+
+    def call_finished(self) -> None:
+        self._running = max(0, self._running - 1)
+        self._last_activity = self._clock()
+
+    def should_exit(self) -> bool:
+        if self._grace_s <= 0:
+            return False
+        now = self._clock()
+        if not self._guard.stale:
+            self._stale_since = None
+            return False
+        if self._stale_since is None:
+            self._stale_since = now
+        return (
+            now - self._stale_since >= self._grace_s
+            and self._running == 0
+            and now - self._last_activity >= self._idle_s
+        )
+
+
 # -- other connectors -----------------------------------------------------------------------------
 
 

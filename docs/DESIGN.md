@@ -30,7 +30,7 @@ not at all.
 | Everything is undoable and recorded | One append-only journal line per call (also failures) with what is needed to undo. `undo` reaches this session's edits; the human-only `darkroom revert` reaches earlier ones. |
 | The agent cannot approve its own actions | Gated actions (people mask, import, going past a limit, the write self-test, bulk) go through MCP elicitation to the person in Hermes. Decline, cancel, timeout, or no client means refusal (`CONFIRMATION_REQUIRED`). |
 | No silent success | Writes are verified by read-back; masks by reading the stored table; results flag differences from what was applied. |
-| Old code cannot do harm | A connector whose source changed on disk is *stale*: writes are refused (`CONNECTOR_STALE`) until it restarts. |
+| Old code cannot do harm | A connector whose source changed on disk is *stale*: writes are refused (`CONNECTOR_STALE`) until it restarts. A stale connector that is idle also ends itself after `runtime.stale_exit_after_s` (default 120 s; 0 = off) so the client starts a fresh one. |
 | Every Adobe call has a timeout | And fails with a stable code and a plain next step; no licence logic anywhere. |
 | No secrets or media in git | `.gitignore` plus a test over `git ls-files`. |
 

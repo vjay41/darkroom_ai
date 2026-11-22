@@ -12,6 +12,7 @@ from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.runtime import (
     CodeGuard,
     InstanceRecord,
+    StaleWatchdog,
     code_hash,
     list_instances,
     register,
@@ -152,3 +153,75 @@ def test_current_connector_adds_nothing_to_results(tmp_path: Path) -> None:
     status: dict[str, Any] = registry.call("get_app_status", {})
     assert status["connector"]["state"] == "current"
     assert "connector_warning" not in status
+
+
+# -- the stale watchdog ---------------------------------------------------------------------------
+
+
+def watchdog_rig(
+    tmp_path: Path, grace: float = 120, idle: float = 30
+) -> tuple[Path, Clock, StaleWatchdog]:
+    package = make_package(tmp_path)
+    clock = Clock()
+    guard = CodeGuard(package, clock=clock, recheck_s=0)
+    return package, clock, StaleWatchdog(guard, grace_s=grace, idle_s=idle, clock=clock)
+
+
+def test_a_current_connector_never_exits(tmp_path: Path) -> None:
+    _, clock, dog = watchdog_rig(tmp_path)
+    clock.now = 100000
+    assert dog.should_exit() is False
+
+
+def test_a_stale_idle_connector_exits_only_after_the_grace_period(tmp_path: Path) -> None:
+    package, clock, dog = watchdog_rig(tmp_path)
+    (package / "a.py").write_text("x = 2\n", encoding="utf-8")
+    clock.now = 10
+    assert dog.should_exit() is False  # just noticed
+    clock.now = 129
+    assert dog.should_exit() is False
+    clock.now = 131
+    assert dog.should_exit() is True
+
+
+def test_a_running_or_recent_call_postpones_the_exit(tmp_path: Path) -> None:
+    package, clock, dog = watchdog_rig(tmp_path)
+    (package / "a.py").write_text("x = 2\n", encoding="utf-8")
+    clock.now = 0
+    dog.should_exit()
+    clock.now = 500
+    dog.call_started()
+    assert dog.should_exit() is False  # a call is running
+    clock.now = 510
+    dog.call_finished()
+    clock.now = 530
+    assert dog.should_exit() is False  # finished only 20 s ago
+    clock.now = 541
+    assert dog.should_exit() is True
+
+
+def test_reverting_the_edit_resets_the_grace_period(tmp_path: Path) -> None:
+    package, clock, dog = watchdog_rig(tmp_path)
+    (package / "a.py").write_text("x = 2\n", encoding="utf-8")
+    clock.now = 0
+    dog.should_exit()
+    (package / "a.py").write_text("x = 1\n", encoding="utf-8")
+    clock.now = 100
+    assert dog.should_exit() is False  # current again
+    (package / "a.py").write_text("x = 3\n", encoding="utf-8")
+    clock.now = 101
+    dog.should_exit()
+    clock.now = 200
+    assert dog.should_exit() is False  # only 99 s stale since the new edit
+
+
+def test_zero_grace_turns_the_exit_off(tmp_path: Path) -> None:
+    package, clock, dog = watchdog_rig(tmp_path, grace=0)
+    (package / "a.py").write_text("x = 2\n", encoding="utf-8")
+    clock.now = 100000
+    assert dog.should_exit() is False
+
+
+def test_the_watchdog_defaults_are_on() -> None:
+    runtime = Settings().runtime
+    assert (runtime.stale_exit_after_s, runtime.stale_exit_idle_s) == (120, 30)

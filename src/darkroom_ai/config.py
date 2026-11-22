@@ -193,6 +193,11 @@ class RuntimeSettings(_Section):
 
     # True: write tools are refused until the connector is restarted (reads keep working).
     refuse_writes_when_stale: bool = True
+    # A connector that has run older code than the files on disk for this many seconds, with no tool
+    # call running and none for `stale_exit_idle_s`, ends itself so the client starts a fresh one.
+    # 0 turns this off (the connector then only refuses writes and says it is stale).
+    stale_exit_after_s: int = Field(default=120, ge=0, le=86400)
+    stale_exit_idle_s: int = Field(default=30, ge=0, le=86400)
 
 
 class PathSettings(_Section):
