@@ -34,11 +34,8 @@ everything removes every edit on the copy; a reset of masks removes all local ad
 plain slider values; masks and spots return only through the snapshot.
 
 ## Distracting people
-`remove_distracting_people` lets Lightroom detect and remove people in the background. It changes what the photo
-shows, so: ask first, name who you expect to be removed, and never use it to remove someone the person wants.
-A snapshot is saved before it runs; look at the result, and restore if it removed the wrong people or left
-artefacts. `get_retouch_state` shows how many spot corrections the photo has before and after. This tool is
-unverified on this Lightroom version: report what you see, not what you expect.
+`remove_distracting_people` is deprecated and unavailable on this setup (see the section at the end); do not call it,
+use `remove_objects`. `get_retouch_state` shows how many spot corrections the photo has.
 
 ## Rotation
 `rotate_photo` turns the copy a quarter turn left or right (the orientation, not the fine crop angle; use

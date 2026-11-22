@@ -50,9 +50,9 @@ Put one tight box around each eye (pupil plus a little white) and call `fix_red_
 fixed per eye: zero means no red was found there, so the box is off or the eye is not red.
 
 ## Lightroom's own people removal
-For distracting people in the background, `remove_distracting_people` uses Lightroom's detection and removal on the
-working copy (see lr-save-points: ask first, it saves a snapshot, check the result). It is unverified here;
-Photoshop removal (above) is the route that makes new files and a before and after sheet.
+Do not use `remove_distracting_people`: it is deprecated and unavailable here (Lightroom's people removal needs an Adobe
+sign-in). For people or objects in the background use `remove_objects` (Photoshop route above), which makes new files
+and a before and after sheet.
 
 ## Honesty
 Say what was removed and what was not. Removing people, text or objects from journalistic or evidence photos

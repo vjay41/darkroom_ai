@@ -182,9 +182,11 @@ def reset_develop(ctx: ToolContext, args: ResetDevelopInput) -> Outcome:
 
 
 class RemoveDistractingPeopleInput(BaseModel):
-    """Use Lightroom's own detection to find distracting people in the background and remove
-    them (the Remove tool's 'distracting people'). It changes what the photo shows, so it needs
-    the person's go-ahead, and a snapshot is saved first. Look at the result afterwards."""
+    """DEPRECATED - DO NOT USE. Currently unavailable: Lightroom's people removal needs the owner
+    to be signed in to Adobe (it uses Adobe Firefly), and on this setup it fails without changing
+    anything. Use remove_objects for specific people or objects instead. (When enabled, it
+    detects and removes distracting people in the background; it needs the person's go-ahead and
+    saves a snapshot first.)"""
 
     model_config = ConfigDict(extra="forbid")
 

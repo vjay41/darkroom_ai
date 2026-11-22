@@ -65,7 +65,7 @@
 | [`create_snapshot`](#create_snapshot) | writes | Save the working copy's current develop settings as a named snapshot (a save point you can come back to with restore_snapshot). |
 | [`restore_snapshot`](#restore_snapshot) | writes | Put the working copy back to a snapshot's develop settings. |
 | [`reset_develop`](#reset_develop) | writes | Reset the working copy's develop edits: everything ('all'), or one group (local masks, spot removal, crop, geometry transforms, red-eye). |
-| [`remove_distracting_people`](#remove_distracting_people) | writes | Use Lightroom's own detection to find distracting people in the background and remove them (the Remove tool's 'distracting people'). |
+| [`remove_distracting_people`](#remove_distracting_people) | writes | DEPRECATED - DO NOT USE. |
 | [`rotate_photo`](#rotate_photo) | writes | Rotate the working copy a quarter turn left or right (orientation, not the crop angle). |
 | [`set_photo_metadata`](#set_photo_metadata) | writes | Set a photo's title, caption, headline, copyright or creator, and/or its colour label (red, yellow, green, blue, purple or none). |
 | [`copy_develop_settings`](#copy_develop_settings) | writes | Copy chosen groups of develop settings from one photo to up to 10 others, giving them all the SAME values (use auto_correct instead when each photo should get values of its own). |
@@ -758,7 +758,7 @@ Reset the working copy's develop edits: everything ('all'), or one group (local 
 
 **Writes** (changes the catalog or a photo's settings).
 
-Use Lightroom's own detection to find distracting people in the background and remove them (the Remove tool's 'distracting people'). It changes what the photo shows, so it needs the person's go-ahead, and a snapshot is saved first. Look at the result afterwards.
+DEPRECATED - DO NOT USE. Currently unavailable: Lightroom's people removal needs the owner to be signed in to Adobe (it uses Adobe Firefly), and on this setup it fails without changing anything. Use remove_objects for specific people or objects instead. (When enabled, it detects and removes distracting people in the background; it needs the person's go-ahead and saves a snapshot first.)
 
 | Parameter | Type | Required | Default | Notes |
 |---|---|---|---|---|
