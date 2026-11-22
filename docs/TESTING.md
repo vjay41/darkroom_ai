@@ -5,7 +5,7 @@ only ever the TEST catalog.
 
 ## 1. Unit tests (`make quality`)
 `make quality` = ruff lint + ruff format check + mypy (strict) + pytest. It must pass at the end of every change.
-Current baseline: about 430 tests, 8 skipped (the Lua syntax checks need `DARKROOM_LUAC`, see below).
+Current baseline: 449 tests pass with `DARKROOM_LUAC` set (none skipped). Without it the 8 Lua syntax checks skip (see below).
 
 - **Everything is injected against Protocols** (`interfaces.py`), so tests use fakes:
   - `adapters/lightroom/simulated.py` — an in-memory Lightroom (photos, copies, settings, masks, selection).
@@ -21,7 +21,9 @@ Current baseline: about 430 tests, 8 skipped (the Lua syntax checks need `DARKRO
 - **Skills are validated**: `tests/unit/test_hermes_skills.py` (frontmatter, real tool names, no slider values).
 - **Compatibility data** is checked against the plug-in: `test_compat.py` compares `REQUIRED_PLUGIN_COMMANDS` with
   `Commands.lua`.
-- Lua syntax: set `DARKROOM_LUAC` to the Lightroom SDK's `luac.exe` to enable 8 extra tests.
+- Lua syntax: set `DARKROOM_LUAC` to the Lightroom SDK's `luac.exe` to enable 8 extra tests. In the SDK download it is at
+  `Lua Compiler\win\luac.exe` (Lua 5.1.5); the path may contain spaces, so set the variable without extra quotes
+  (PowerShell: `$env:DARKROOM_LUAC = 'C:\path	o\Lua Compiler\win\luac.exe'`). Never put the path in the repo.
 - Integration markers (`lightroom`, `photoshop`, `gpu`, `llm`, `integration`) exist for tests that need the real thing;
   they skip unless the matching `DARKROOM_IT_*` variable is set.
 
