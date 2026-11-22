@@ -124,11 +124,11 @@ class SimulatedLightroom:
     # -- LightroomAdapter -----------------------------------------------------------------------
 
     def bridge_status(self) -> BridgeStatus:
-        return BridgeStatus(instance="fake", plugin_version="0.9.2", uptime_s=1.0)
+        return BridgeStatus(instance="fake", plugin_version="0.9.4", uptime_s=1.0)
 
     def ping(self) -> PingInfo:
         return PingInfo(
-            plugin_version="0.9.2",
+            plugin_version="0.9.4",
             protocol=1,
             lightroom_version="15.2.1",
             catalog_path="D:\\cat\\Test.lrcat",
@@ -139,7 +139,7 @@ class SimulatedLightroom:
     def list_commands(self) -> CommandList:
         self.calls.append("list_commands")
         return CommandList(
-            plugin_version="0.9.2", read=tuple(sorted(REQUIRED_PLUGIN_COMMANDS)), write=()
+            plugin_version="0.9.4", read=tuple(sorted(REQUIRED_PLUGIN_COMMANDS)), write=()
         )
 
     def get_selection(self) -> Selection:

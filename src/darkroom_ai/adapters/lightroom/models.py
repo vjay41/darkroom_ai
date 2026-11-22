@@ -47,6 +47,8 @@ class PhotoInfo(_Result):
     """True if the photo is in a stack in its folder; None if Lightroom did not report it."""
     stack_collapsed: bool | None = None
     """True if that stack is collapsed (the photo cannot be shown in Develop); None if unknown."""
+    stack_note: str | None = None
+    """Why the stack fields are None, when Lightroom did not report them."""
     snapshots: tuple[Snapshot, ...] = ()
 
 

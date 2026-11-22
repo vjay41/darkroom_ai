@@ -51,9 +51,11 @@ deliberate, drilled update.
 ## Next steps (post-v1, in rough priority)
 1. **Batch writes**: a batch id in the journal, one undo for a whole batch, chunk and error-budget limits, one
    confirmation per chunk plan. Needs a short PRD addendum and sign-off first. Design is in `lr-batch-operations`.
-2. **Collapsed-stack detection**: DONE in code (plug-in 0.9.2, 2026-11-22): `get_photo`/`get_photo_info` report
-   `in_stack` and `stack_collapsed`; `create_mask` (non-written kinds) refuses at once with the Expand All Stacks fix.
-   Live check on a real collapsed stack still to do. A `doctor` warning is not done.
+2. **Collapsed-stack detection**: DONE and verified live (plug-in 0.9.4, 2026-11-22). `get_photo`/`get_photo_info` report
+   `in_stack`, `stack_collapsed` and a `stack_note` when Lightroom does not say; `create_mask` for kinds that need Develop
+   refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
+   collapsed -> true and the mask call was refused in under 3 s with nothing created. The SDK's metadata calls yield, so
+   they must run inside `LrTasks.pcall` (plain `pcall` fails). Not done: a `darkroom doctor` warning.
 3. **List filters** (file format, capture date, ISO) on `list_catalog_photos`: needs a plug-in change.
 4. **RAW/DNG**: verify writes and lens corrections on a RAW test catalog; then update `compatibility.toml`.
 5. **Faces**: document how to supply a YuNet ONNX file; verify the face tools.
@@ -73,7 +75,7 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
-- 2026-11-22: collapsed-stack detection (plug-in 0.9.2); mask tools refuse early; live check pending.
+- 2026-11-22: collapsed-stack detection verified live (plug-in 0.9.4); mask tools refuse early.
 - 2026-11-22: documentation set written; deploy kit, `NOTICE`, install guide; release-hygiene pass (skills no longer name the user).
 - 2026-11-22: `analyze_batch` verified live; `lr-batch-operations` skill.
 - 2026-11-21: P7 skills installed; edit-loop check passed; P6 soak passed (20 cycles, 0 failures); people mask verified;

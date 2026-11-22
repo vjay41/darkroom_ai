@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.9.2"
+local PLUGIN_VERSION = "0.9.4"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -86,29 +86,34 @@ local function findWritablePhoto(ctx, id, needsVirtualCopy)
 	return photo
 end
 
--- Stack state (read-only). A photo inside a COLLAPSED stack cannot be shown in Develop, which
--- the mask tools need. Returns nil when Lightroom does not report it.
+-- Stack state (read-only). getRawMetadata yields, so it must run inside LrTasks.pcall (a plain pcall
+-- fails with "Yielding is not allowed within a C or metamethod call"). A photo inside a COLLAPSED stack cannot be shown in Develop, which
+-- the mask tools need. Returns inStack, collapsed, note; the first two are nil when Lightroom does
+-- not report them, and note then says why (the SDK error or the type it returned).
 local function stackState(photo)
-	local okIn, inStack = pcall(function()
+	local okIn, inStack = LrTasks.pcall(function()
 		return photo:getRawMetadata("isInStackInFolder")
 	end)
-	if not okIn or type(inStack) ~= "boolean" then
-		return nil, nil
+	if not okIn then
+		return nil, nil, "isInStackInFolder raised: " .. tostring(inStack)
+	end
+	if type(inStack) ~= "boolean" then
+		return nil, nil, "isInStackInFolder returned " .. type(inStack)
 	end
 	if not inStack then
-		return false, false
+		return false, false, nil
 	end
-	local okCollapsed, collapsed = pcall(function()
+	local okCollapsed, collapsed = LrTasks.pcall(function()
 		return photo:getRawMetadata("stackInFolderIsCollapsed")
 	end)
 	if okCollapsed and type(collapsed) == "boolean" then
-		return true, collapsed
+		return true, collapsed, nil
 	end
-	return true, nil
+	return true, nil, "stackInFolderIsCollapsed " .. (okCollapsed and ("returned " .. type(collapsed)) or ("raised: " .. tostring(collapsed)))
 end
 
 local function summary(photo)
-	local inStack, stackCollapsed = stackState(photo)
+	local inStack, stackCollapsed, stackNote = stackState(photo)
 	local isCopy = photo:getRawMetadata("isVirtualCopy") and true or false
 	local master = isCopy and photo:getRawMetadata("masterPhoto") or nil
 	local dims = photo:getRawMetadata("dimensions")
@@ -125,6 +130,7 @@ local function summary(photo)
 		height = dims and dims.height or nil,
 		in_stack = inStack,
 		stack_collapsed = stackCollapsed,
+		stack_note = stackNote,
 	}
 end
 
