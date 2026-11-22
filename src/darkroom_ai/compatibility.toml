@@ -64,6 +64,13 @@ verified_on = "Lightroom 15.2.1 (Sony ARW)"
 note = "Exposure, tone and Kelvin white balance (5600 to 5800 K) were written to the virtual copy of two ARW files, read back and undone exactly; the master and file were unchanged. DNG was not tested."
 
 [[features]]
+name = "Whole-folder rehearsal (240 real photos in a separate catalog)"
+tools = ["list_catalog_photos", "analyze_batch", "batch_set_develop_parameters", "batch_set_library_state", "undo_batch"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (236 JPG, 4 ARW)"
+note = "A separate catalog holding D:\\Dhiva_23072023 by reference: every photo measured, filters matched the metadata, 10 develop and 10 library edits verified and undone, all files and masters unchanged. The owner's real catalog was not used."
+
+[[features]]
 name = "RAW develop writes on DNG files"
 tools = ["adjust_lighting", "adjust_white_balance"]
 status = "verified"

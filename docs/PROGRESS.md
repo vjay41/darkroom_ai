@@ -74,8 +74,9 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 6. **Lua syntax checks**: DONE. The repo has no CI service; the 8 tests run whenever `DARKROOM_LUAC` is set or `luac` is on PATH. Run on 2026-11-22 with the SDK's `luac.exe` (Lua 5.1): 25 passed, none skipped, plug-in 0.12.0.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
-## Production catalog: supervised rehearsal on a copy (owner chose this on 2026-11-22; waiting for the catalog path)
-Nothing below has been done yet. The only catalog found on the PC is the test one, so the owner must give the path of the real `.lrcat`.
+## Production catalog: supervised rehearsal
+**Done 2026-11-22 on a separate rehearsal catalog, not on the owner's real catalog.** The owner pointed at the photo folder `D:\Dhiva_23072023` (240 photos: 236 JPG, 4 ARW; about 120 filenames also exist in the test catalog) instead of a catalog, so a NEW catalog `D:\darkroom_rehearsal\darkroom_rehearsal.lrcat` was made in Lightroom and the folder was imported into it by reference (Add; nothing copied or moved). `darkroom.local.toml` (git-ignored) now points at that catalog and folder; the previous values are saved in `outputs/darkroom.local.toml.test-catalog.bak`. Results: `scripts/rehearsal_live.py` passed on all 240 photos (every photo measured, filters match the metadata, 10 develop + 10 library edits verified and undone, all 240 files and the masters unchanged), and a Hermes-driven supervised run on one photo with 21% clipped highlights (Highlights -30 on a working copy, clipping 21.3% to 0.04%, undone and read back, no journal errors). The owner's real catalog (`Lightroom Catalog.lrcat`, seen in Lightroom's recent list) has NOT been touched and is still off the allowlist.
+The original plan, if the real catalog is ever wanted:
 1. Lightroom closed. Copy the real `.lrcat` (and nothing else) to a new folder, for example `D:\darkroom_rehearsal\rehearsal.lrcat`. The real catalog is only read by the copy command.
 2. In the git-ignored `darkroom.local.toml`, point `lightroom.test_catalog` at the COPY and `lightroom.test_photos_dir` at the folder of the ONE photo to be used. Write nothing to `darkroom.toml`.
 3. Open the copy in Lightroom, then Start darkroom_ai Bridge; `darkroom doctor` must say writes are allowed for exactly that catalog.
@@ -108,6 +109,7 @@ there and add a dated line here.
 
 ## Change log (newest first, one line each)
 - 2026-11-22: Lua syntax tests run with the SDK's `luac.exe`: all pass (plug-in 0.12.0); the test also finds `luac` on PATH.
+- 2026-11-22: rehearsal on a new catalog of `D:\Dhiva_23072023` (240 photos): scripted run and a Hermes-driven supervised run passed (`scripts/rehearsal_live.py`).
 - 2026-11-22: DNG develop writes verified live and the RAW lens profile confirmed to resolve (ARW and DNG).
 - 2026-11-22: mid-batch failure and time budget verified live (`scripts/batch_failure_live.py`).
 - 2026-11-22: connector ends itself when stale and idle (`runtime.stale_exit_*`); Hermes-driven batch run verified live (undo read-back verified).
