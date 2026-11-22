@@ -65,7 +65,7 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
    refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
    collapsed -> true and the mask call was refused in under 3 s with nothing created. The SDK's metadata calls yield, so
    they must run inside `LrTasks.pcall` (plain `pcall` fails). `darkroom doctor` also warns when the selected photo is in a collapsed stack.
-3. **List filters**: rating, flag, keyword, file format, ISO and capture date are DONE (plug-in 0.12.0). There is deliberately no
+3. **List filters**: rating, flag, keyword, file format, ISO and capture date are DONE and verified live (plug-in 0.12.0; 34 checks on 143 photos, JPG + RAW). There is deliberately no
    "edited" filter (Lightroom flags every virtual copy as edited).
 4. **RAW**: Sony ARW verified 2026-11-22 (`scripts/raw_live.py`, 2 files, all checks). Still open: DNG, and whether a lens profile really resolves for RAW.
 6. **Lua checks** in CI: provide `luac` so the 8 skipped tests run.
