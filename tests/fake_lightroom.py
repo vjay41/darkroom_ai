@@ -21,6 +21,11 @@ WRITE_COMMANDS = {
     "export_preview",
     "export_tiff",
     "apply_preset",
+    "auto_adjust",
+    "reset_develop",
+    "remove_distracting_people",
+    "rotate_photo",
+    "set_photo_metadata",
     "create_mask",
     "import_folder",
     "set_mask_values",
@@ -579,6 +584,81 @@ class FakeLightroomPlugin:
         if preset is None:
             raise PluginError("PRESET_NOT_FOUND", "No develop preset with that id")
         return {**preset, "settings": dict(self.PRESET_SETTINGS[preset["uuid"]])}
+
+    def _cmd_reset_develop(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        if params.get("scope") not in ("all", "masks", "spots", "crop", "transforms", "red_eye"):
+            raise PluginError("INVALID_PARAMS", "scope must be all, masks, spots, crop, ...")
+        before = dict(photo.settings) if params["scope"] == "all" else {}
+        if params["scope"] == "all":
+            photo.settings.clear()
+        return {
+            "photo_id": photo.id,
+            "scope": params["scope"],
+            "snapshot": {"id": "s1", "name": "darkroom_ai before reset"},
+            "before": before,
+            "after": {},
+        }
+
+    def _cmd_remove_distracting_people(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        return {
+            "photo_id": photo.id,
+            "snapshot": {"id": "s1", "name": "darkroom_ai before remove people"},
+            "callback_called": True,
+            "retouch_before": 0,
+            "retouch_after": 1,
+            "waited_s": 1.0,
+        }
+
+    def _cmd_get_retouch_state(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._photo(params)
+        return {"photo_id": photo.id, "spot_count": 0, "spots": [], "red_eye_count": 0}
+
+    def _cmd_get_ai_panel_state(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._photo(params)
+        return {"photo_id": photo.id, "panels": {"enhance": {"ok": True, "value": {}}}}
+
+    def _cmd_rotate_photo(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        if params.get("direction") not in ("left", "right"):
+            raise PluginError("INVALID_PARAMS", "direction must be left or right")
+        return {
+            "photo_id": photo.id,
+            "direction": params["direction"],
+            "before": "AB",
+            "after": "BC",
+        }
+
+    def _cmd_set_photo_metadata(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params)
+        fields = {k: v for k, v in params.items() if k not in ("photo_id",)}
+        if not fields:
+            raise PluginError("INVALID_PARAMS", "nothing to change")
+        return {"photo_id": photo.id, "before": {k: "" for k in fields}, "after": fields}
+
+    def _cmd_list_keywords(self, _: dict[str, Any]) -> dict[str, Any]:
+        return {"keywords": [{"path": "Family", "synonyms": []}], "truncated": False}
+
+    def _cmd_auto_adjust(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        tone, balance = params.get("tone", True), params.get("white_balance", False)
+        if not tone and not balance:
+            raise PluginError("INVALID_PARAMS", "ask for tone, white_balance or both")
+        seed = sum(ord(c) for c in photo.id) % 7
+        wanted: dict[str, Any] = {}
+        if tone:
+            wanted.update({"Exposure2012": round(seed * 0.4 - 1.0, 2), "Contrast2012": 5 + seed})
+        if balance:
+            wanted["Temperature"] = 5000 + seed * 100
+        before = {k: photo.settings.get(k) for k, v in wanted.items() if photo.settings.get(k) != v}
+        photo.settings.update(wanted)
+        return {
+            "photo_id": photo.id,
+            "ran": (["setAutoTone"] if tone else []) + (["setAutoWhiteBalance"] if balance else []),
+            "before": before,
+            "after": {k: wanted[k] for k in before},
+        }
 
     def _cmd_apply_preset(self, params: dict[str, Any]) -> dict[str, Any]:
         photo = self._writable(params, needs_copy=True)

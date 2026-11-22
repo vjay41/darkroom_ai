@@ -14,7 +14,9 @@ from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.tools import (
+    action_tools,
     app_status,
+    auto_tools,
     background,
     batch,
     capabilities,
@@ -29,6 +31,7 @@ from darkroom_ai.tools import (
     region_tools,
     retouch_tools,
     scene_tools,
+    sync_tools,
     tilt_tools,
     tone_curve,
 )
@@ -244,6 +247,12 @@ TOOLS: tuple[Tool, ...] = (
         writes=False,
     ),
     _tool(
+        "auto_correct",
+        auto_tools.AutoCorrectInput,
+        auto_tools.auto_correct,
+        writes=True,
+    ),
+    _tool(
         "adjust_lighting",
         lightroom_tools.AdjustLightingInput,
         lightroom_tools.adjust_lighting,
@@ -320,6 +329,72 @@ TOOLS: tuple[Tool, ...] = (
         "export_for_delivery",
         delivery_tools.ExportForDeliveryInput,
         delivery_tools.export_for_delivery,
+        writes=True,
+    ),
+    _tool(
+        "list_snapshots",
+        action_tools.ListSnapshotsInput,
+        action_tools.list_snapshots,
+        writes=False,
+    ),
+    _tool(
+        "get_retouch_state",
+        action_tools.GetRetouchStateInput,
+        action_tools.get_retouch_state,
+        writes=False,
+    ),
+    _tool(
+        "get_ai_panel_state",
+        action_tools.GetAiPanelStateInput,
+        action_tools.get_ai_panel_state,
+        writes=False,
+    ),
+    _tool(
+        "list_keywords",
+        action_tools.ListKeywordsInput,
+        action_tools.list_keywords,
+        writes=False,
+    ),
+    _tool(
+        "create_snapshot",
+        action_tools.CreateSnapshotInput,
+        action_tools.create_snapshot,
+        writes=True,
+    ),
+    _tool(
+        "restore_snapshot",
+        action_tools.RestoreSnapshotInput,
+        action_tools.restore_snapshot,
+        writes=True,
+    ),
+    _tool(
+        "reset_develop",
+        action_tools.ResetDevelopInput,
+        action_tools.reset_develop,
+        writes=True,
+    ),
+    _tool(
+        "remove_distracting_people",
+        action_tools.RemoveDistractingPeopleInput,
+        action_tools.remove_distracting_people,
+        writes=True,
+    ),
+    _tool(
+        "rotate_photo",
+        action_tools.RotatePhotoInput,
+        action_tools.rotate_photo,
+        writes=True,
+    ),
+    _tool(
+        "set_photo_metadata",
+        action_tools.SetPhotoMetadataInput,
+        action_tools.set_photo_metadata,
+        writes=True,
+    ),
+    _tool(
+        "copy_develop_settings",
+        sync_tools.CopyDevelopSettingsInput,
+        sync_tools.copy_develop_settings,
         writes=True,
     ),
     _tool("undo", lightroom_tools.UndoInput, lightroom_tools.undo, writes=True),

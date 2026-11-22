@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, workflow, professional, knowledge]
     related_skills: [lr-genre-knowledge, lr-style-looks, lr-skin-tone, lr-noise-reduction, lr-sharpening-clarity, lr-batch-operations, lr-safe-operations, lr-user-guidance]
-    uses_tools: [get_preview, analyze_photo, analyze_batch, measure_region, crop, get_photo_metadata, adjust_white_balance, adjust_lighting, adjust_hsl, adjust_tone_curve, create_mask, set_mask_adjustments, set_develop_parameters, apply_preset, undo]
+    uses_tools: [auto_correct, plan_crop, get_preview, analyze_photo, analyze_batch, measure_region, crop, get_photo_metadata, adjust_white_balance, adjust_lighting, adjust_hsl, adjust_tone_curve, create_mask, set_mask_adjustments, set_develop_parameters, apply_preset, undo]
 ---
 
 # A professional edit, in order
@@ -28,8 +28,10 @@ problems in words (flat, dark face, blue cast, busy background) before choosing 
 file has headroom, a JPEG does not.
 
 ## 2. Technical base
-- Framing first: straighten and crop (`crop`) because every later judgement depends on the frame. Level the
-  horizon or a strong vertical by eye from the preview; say it is an estimate.
+- Framing first: straighten and crop because every later judgement depends on the frame (measure the tilt
+  and plan the crop: see lr-straighten-crop; `crop` applies it).
+- A quick per-photo baseline: Lightroom's own Auto (`auto_correct`, see lr-auto-correct) gives each photo
+  values of its own; judge it, do not trust it.
 - Lens corrections (see lr-lens-corrections), then white balance (`adjust_white_balance`) judged on something
   neutral or on skin, then overall exposure (`adjust_lighting`).
 

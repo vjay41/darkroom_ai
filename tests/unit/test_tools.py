@@ -116,6 +116,9 @@ NOT_ABOUT_ONE_PHOTO = {
     "analyze_batch",
     "measure_region",
     "measure_tilt",
+    "auto_correct",
+    "copy_develop_settings",
+    "list_keywords",
     "batch_set_library_state",
     "batch_set_develop_parameters",
     "undo_batch",
@@ -163,6 +166,7 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "zone_map",
         "find_candidates",
         "measure_tilt",
+        "auto_correct",
         "adjust_lighting",
         "adjust_white_balance",
         "list_develop_parameters",
@@ -182,6 +186,17 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "remove_objects",
         "fix_red_eye",
         "export_for_delivery",
+        "list_snapshots",
+        "get_retouch_state",
+        "get_ai_panel_state",
+        "list_keywords",
+        "create_snapshot",
+        "restore_snapshot",
+        "reset_develop",
+        "remove_distracting_people",
+        "rotate_photo",
+        "set_photo_metadata",
+        "copy_develop_settings",
         "undo",
         "get_library_state",
         "set_library_state",
@@ -1616,3 +1631,182 @@ def test_export_for_delivery_names_and_never_overwrites(rig: Rig) -> None:
             deliver(name=bad)
     with pytest.raises(DarkroomError):
         deliver(name="ok", long_edge=9000)
+
+
+# -- auto_correct (Lightroom's own Auto, per photo) -------------------------------------------
+
+
+def _second_photo(rig: Rig) -> str:
+    rig.lightroom.add_photo("master-2", "TEST_0002.jpg")
+    return "master-2"
+
+
+def test_auto_correct_runs_on_one_photo_and_undo_restores(rig: Rig) -> None:
+    result = rig.call("auto_correct", photo_ids=[MASTER], white_balance=True)
+    item = result["items"][0]
+    copy_id = item["working_copy"]
+    assert result["ok"] == 1 and item["status"] == "ok" and item["verified"] is True
+    assert set(item["kept"]) >= {"Exposure2012", "Contrast2012", "IncrementalTemperature"}
+    assert rig.value(copy_id, "Exposure2012") == item["kept"]["Exposure2012"]
+    assert item["measured"]["before"] and item["measured"]["after"]
+    assert rig.lightroom.calls.count("auto_adjust") == 1
+    rig.call("undo", photo_id=copy_id)
+    assert rig.value(copy_id, "Exposure2012") == 0
+
+
+def test_auto_correct_treats_every_photo_on_its_own(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    other = _second_photo(rig)
+    result = rig.call("auto_correct", photo_ids=[MASTER, other])
+    assert result["ok"] == 2
+    assert rig.lightroom.calls.count("auto_adjust") == 2  # one Lightroom Auto per photo
+    first, second = (item["kept"] for item in result["items"])
+    assert first != second and result["identical_across_photos"] is False
+    assert rig.context.confirmer.asked and "Auto" in rig.context.confirmer.asked[0]
+    undone = rig.call("undo_batch", batch_id=result["batch_id"])
+    assert undone["undone_steps"] == 2
+
+
+def test_auto_correct_bulk_needs_a_go_ahead_and_checks_input(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)  # the default confirmer refuses
+    other = _second_photo(rig)
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("auto_correct", photo_ids=[MASTER, other])
+    assert caught.value.code.value == "CONFIRMATION_REQUIRED"
+    assert "auto_adjust" not in rig.lightroom.calls
+    with pytest.raises(DarkroomError):
+        rig.call("auto_correct", photo_ids=[MASTER, MASTER])
+    with pytest.raises(DarkroomError):
+        rig.call("auto_correct", photo_ids=[f"p{i}" for i in range(11)])
+    plan = rig.call("auto_correct", photo_ids=[MASTER], dry_run=True)
+    assert plan["dry_run"] is True and "auto_adjust" not in rig.lightroom.calls
+
+
+def test_auto_correct_keeps_lightroom_choices_within_the_per_pass_limit(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.context.settings = make_settings(
+        tmp_path, guardrails={"exposure_ev_per_pass": 0.1, "tone_per_pass": 4}
+    )
+    result = rig.call("auto_correct", photo_ids=[MASTER])
+    item = result["items"][0]
+    assert item["limited"]["Exposure2012"]["kept"] == pytest.approx(0.1) or item["limited"][
+        "Exposure2012"
+    ]["kept"] == pytest.approx(-0.1)
+    assert abs(rig.value(item["working_copy"], "Exposure2012")) <= 0.1 + 1e-9
+    assert abs(rig.value(item["working_copy"], "Contrast2012")) <= 4 + 1e-9
+    assert item["chosen_by_lightroom"]["Contrast2012"] != item["kept"]["Contrast2012"]
+
+
+# -- snapshots, reset, people removal, rotate, metadata, keywords, copy settings ------------------
+
+
+def test_snapshot_tools_and_restore_need_a_go_ahead(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    made = rig.tools.call("create_snapshot", {"photo_id": MASTER, "name": "before look"})
+    copy_id = made["photo_id"]
+    rig.call("set_develop_parameters", photo_id=copy_id, changes={"Texture": 30})
+    listing = rig.call("list_snapshots", photo_id=copy_id)
+    assert [s["name"] for s in listing["snapshots"]] == ["before look"]
+    rig.tools.call("restore_snapshot", {"photo_id": copy_id, "name": "before look"})
+    assert rig.lightroom.settings[copy_id].get("Texture", 0) == 0
+    with pytest.raises(DarkroomError):
+        rig.tools.call(
+            "restore_snapshot", {"photo_id": _second_photo(rig), "name": "before look"}
+        )  # an original with no working copy
+    with pytest.raises(DarkroomError):
+        rig.call("restore_snapshot", photo_id=copy_id)
+    with pytest.raises(DarkroomError):
+        rig.tools.call("restore_snapshot", {"photo_id": copy_id, "name": "missing"})
+
+
+def test_restore_snapshot_refused_without_go_ahead(rig: Rig) -> None:
+    copy_id = rig.tools.call("create_snapshot", {"photo_id": MASTER, "name": "a"})["photo_id"]
+    with pytest.raises(DarkroomError) as caught:
+        rig.tools.call("restore_snapshot", {"photo_id": copy_id, "name": "a"})
+    assert caught.value.code.value == "CONFIRMATION_REQUIRED"
+
+
+def test_reset_develop_saves_a_snapshot_and_undo_restores(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    copy_id = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.5)["photo_id"]
+    result = rig.call("reset_develop", photo_id=copy_id, scope="all")
+    assert result["result"]["snapshot"]["name"].startswith("darkroom_ai before reset")
+    assert "Exposure2012" in result["result"]["before"]
+    rig.call("undo", photo_id=copy_id)
+    assert rig.value(copy_id, "Exposure2012") == pytest.approx(0.5)
+    with pytest.raises(DarkroomError):
+        rig.call("reset_develop", photo_id=copy_id, scope="everything")
+
+
+def test_reset_develop_and_people_removal_refused_without_go_ahead(rig: Rig) -> None:
+    for name, extra in (("reset_develop", {"scope": "masks"}), ("remove_distracting_people", {})):
+        with pytest.raises(DarkroomError) as caught:
+            rig.call(name, photo_id=MASTER, **extra)
+        assert caught.value.code.value == "CONFIRMATION_REQUIRED"
+    assert "reset_develop" not in rig.lightroom.calls
+    assert "remove_distracting_people" not in rig.lightroom.calls
+
+
+def test_remove_distracting_people_reports_spots_added(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    result = rig.call("remove_distracting_people", photo_id=MASTER)
+    assert result["spots_added"] == 1 and result["result"]["snapshot"]
+    state = rig.call("get_retouch_state", photo_id=result["photo_id"])
+    assert state["state"]["spot_count"] == 1
+
+
+def test_rotate_photo_turns_the_working_copy(rig: Rig) -> None:
+    right = rig.call("rotate_photo", photo_id=MASTER, direction="right")
+    left = rig.call("rotate_photo", photo_id=right["photo_id"], direction="left")
+    assert right["rotation"]["after"] != right["rotation"]["before"]
+    assert left["rotation"]["after"] == right["rotation"]["before"]
+    with pytest.raises(DarkroomError):
+        rig.call("rotate_photo", photo_id=MASTER, direction="up")
+
+
+def test_set_photo_metadata_and_keywords(rig: Rig) -> None:
+    result = rig.call("set_photo_metadata", photo_id=MASTER, title="Bride", color_label="red")
+    assert result["change"]["after"] == {"title": "Bride", "color_label": "red"}
+    with pytest.raises(DarkroomError):
+        rig.call("set_photo_metadata", photo_id=MASTER)
+    with pytest.raises(DarkroomError):
+        rig.call("set_photo_metadata", photo_id=MASTER, color_label="pink")
+    assert rig.call("list_keywords")["keywords"]["keywords"][0]["path"]
+    assert rig.call("get_ai_panel_state", photo_id=MASTER)["state"]["panels"]
+
+
+def test_copy_develop_settings_gives_every_target_the_same_values(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    other = _second_photo(rig)
+    source = rig.call("adjust_lighting", photo_id=MASTER, contrast=20)["photo_id"]
+    result = rig.call(
+        "copy_develop_settings",
+        source_photo_id=source,
+        target_photo_ids=[other],
+        groups=["tone"],
+    )
+    item = result["items"][0]
+    assert item["status"] == "ok" and item["verified"] is True
+    assert rig.value(item["working_copy"], "Contrast2012") == 20
+    assert "CropLeft" not in result["copied_keys"]
+    rig.call("undo_batch", batch_id=result["batch_id"])
+    assert rig.value(item["working_copy"], "Contrast2012") == 0
+    with pytest.raises(DarkroomError):
+        rig.call(
+            "copy_develop_settings",
+            source_photo_id=source,
+            target_photo_ids=[source],
+            groups=["tone"],
+        )
+
+
+def test_copy_develop_settings_refused_without_go_ahead(rig: Rig) -> None:
+    other = _second_photo(rig)
+    with pytest.raises(DarkroomError) as caught:
+        rig.call(
+            "copy_develop_settings",
+            source_photo_id=MASTER,
+            target_photo_ids=[other],
+            groups=["tone"],
+        )
+    assert caught.value.code.value == "CONFIRMATION_REQUIRED"

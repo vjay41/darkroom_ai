@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.13.1"
+local PLUGIN_VERSION = "0.14.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -1035,6 +1035,389 @@ local function showInMasking(ctx, photo)
 			.. SHOW_ATTEMPTS
 			.. " tries. Do not click in Lightroom while a mask tool runs."
 	)
+end
+
+-- Makes Lightroom's Develop module show `photo` (no tool opened). Same re-select-and-check loop as
+-- showInMasking: Lightroom can be slow to follow, and the person may have clicked another photo.
+local function showInDevelop(ctx, photo)
+	local wanted = photo:getRawMetadata("uuid")
+	local shownName = nil
+	for attempt = 1, SHOW_ATTEMPTS do
+		ctx.checkpoint()
+		ctx.catalog:setSelectedPhotos(photo, {})
+		LrApplicationView.switchToModule("develop")
+		LrTasks.sleep(0.5 * attempt + 0.5)
+		local target = ctx.catalog:getTargetPhoto()
+		if target and target:getRawMetadata("uuid") == wanted then
+			return
+		end
+		shownName = target and target:getFormattedMetadata("fileName") or "no photo"
+	end
+	fail(
+		"DEVELOP_PHOTO_NOT_SHOWN",
+		"Lightroom's Develop module is showing "
+			.. tostring(shownName)
+			.. " instead of the requested photo after "
+			.. SHOW_ATTEMPTS
+			.. " tries. Do not click in Lightroom while Auto runs."
+	)
+end
+
+local AUTO_POLLS = 14
+
+-- Plain (number, string, boolean) settings as a table, so two reads can be compared.
+local function plainSettings(photo)
+	local out = {}
+	for key, value in pairs(photo:getDevelopSettings()) do
+		local kind = type(value)
+		if kind == "number" or kind == "string" or kind == "boolean" then
+			out[key] = value
+		end
+	end
+	return out
+end
+
+local function sameSettings(a, b)
+	for key, value in pairs(a) do
+		if b[key] ~= value then
+			return false
+		end
+	end
+	for key, value in pairs(b) do
+		if a[key] ~= value then
+			return false
+		end
+	end
+	return true
+end
+
+-- Lightroom applies Develop-controller actions a moment later. Waits until the plain settings have
+-- changed and then stopped changing (two equal reads in a row), or until `idlePolls` reads show no
+-- change at all (nothing to do), and returns the settings as they are then.
+local function settle(ctx, photo, beforeAll, idlePolls, maxPolls)
+	local last = beforeAll
+	local changed, stable = false, 0
+	for poll = 1, maxPolls do
+		ctx.checkpoint()
+		LrTasks.sleep(0.5)
+		local now = plainSettings(photo)
+		if not sameSettings(now, beforeAll) then
+			changed = true
+		end
+		if changed and sameSettings(now, last) then
+			stable = stable + 1
+			if stable >= 2 then
+				return now
+			end
+		else
+			stable = 0
+		end
+		last = now
+		if not changed and poll >= idlePolls then
+			return now
+		end
+	end
+	return plainSettings(photo)
+end
+
+local function changedKeys(beforeAll, afterAll)
+	local before, after = {}, {}
+	for key, value in pairs(afterAll) do
+		if beforeAll[key] ~= value then
+			before[key] = beforeAll[key]
+			after[key] = value
+		end
+	end
+	return before, after
+end
+
+-- Lightroom's own Auto buttons of the Basic panel (Auto Tone, Auto White Balance), run on ONE photo:
+-- Lightroom measures that photo and sets its sliders, so every photo gets values of its own.
+-- Develop edits go to virtual copies only. Lightroom applies the result a moment later, so this
+-- waits until the settings have stopped changing, then reports every plain setting that changed.
+function Commands.write.auto_adjust(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local wantTone = params.tone ~= false
+	local wantWhiteBalance = params.white_balance == true
+	if not wantTone and not wantWhiteBalance then
+		fail("INVALID_PARAMS", "ask for tone, white_balance or both")
+	end
+	showInDevelop(ctx, photo)
+
+	local beforeAll = plainSettings(photo)
+	local ran = {}
+	local function run(name, call)
+		local ok, err = LrTasks.pcall(call)
+		if not ok then
+			fail("AUTO_FAILED", name .. " failed: " .. tostring(err))
+		end
+		ran[#ran + 1] = name
+	end
+	if wantTone then
+		run("setAutoTone", function()
+			LrDevelopController.setAutoTone()
+		end)
+	end
+	if wantWhiteBalance then
+		run("setAutoWhiteBalance", function()
+			LrDevelopController.setAutoWhiteBalance()
+		end)
+	end
+
+	local afterAll = settle(ctx, photo, beforeAll, 6, AUTO_POLLS)
+	local before, after = changedKeys(beforeAll, afterAll)
+	return { photo_id = photo:getRawMetadata("uuid"), ran = ran, before = before, after = after }
+end
+
+-- Takes a snapshot (a named save point) of the photo before a bigger change; returns it or nil.
+local function savePointBefore(ctx, photo, label)
+	local name = "darkroom_ai before " .. label .. " " .. os.date("%H:%M:%S")
+	local ok, made = LrTasks.pcall(function()
+		return Commands.write.create_snapshot({ photo_id = photo:getRawMetadata("uuid"), name = name }, ctx)
+	end)
+	if ok and type(made) == "table" then
+		return made.snapshot
+	end
+	return nil
+end
+
+local RESET_SCOPES = {
+	all = function()
+		LrDevelopController.resetAllDevelopAdjustments()
+	end,
+	masks = function()
+		LrDevelopController.resetMasking()
+	end,
+	spots = function()
+		LrDevelopController.resetSpotRemoval()
+	end,
+	crop = function()
+		LrDevelopController.resetCrop()
+	end,
+	transforms = function()
+		LrDevelopController.resetTransforms()
+	end,
+	red_eye = function()
+		LrDevelopController.resetRedeye()
+	end,
+}
+
+-- Resets develop adjustments of a virtual copy, all of them or one group. A snapshot of the photo is
+-- taken first, and every plain setting that changed is returned with its earlier value.
+function Commands.write.reset_develop(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local scope = params.scope
+	local action = RESET_SCOPES[scope]
+	if not action then
+		fail("INVALID_PARAMS", "scope must be all, masks, spots, crop, transforms or red_eye")
+	end
+	local snapshot = savePointBefore(ctx, photo, "reset " .. scope)
+	showInDevelop(ctx, photo)
+	local beforeAll = plainSettings(photo)
+	local ok, err = LrTasks.pcall(action)
+	if not ok then
+		fail("RESET_FAILED", "Lightroom refused the reset: " .. tostring(err))
+	end
+	local afterAll = settle(ctx, photo, beforeAll, 6, AUTO_POLLS)
+	local before, after = changedKeys(beforeAll, afterAll)
+	return { photo_id = photo:getRawMetadata("uuid"), scope = scope, snapshot = snapshot, before = before, after = after }
+end
+
+local function retouchCount(photo)
+	local ok, settings = LrTasks.pcall(function()
+		return photo:getDevelopSettings()
+	end)
+	if not ok or type(settings) ~= "table" then
+		return nil
+	end
+	local areas = settings.RetouchAreas
+	return type(areas) == "table" and #areas or 0
+end
+
+-- Lightroom's own "distracting people" detection and removal (Remove tool). UNPROBED: the SDK says
+-- little about timing, so this waits for the callback or for the spot list to change and reports
+-- what it saw. A snapshot is taken first.
+function Commands.write.remove_distracting_people(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local snapshot = savePointBefore(ctx, photo, "remove people")
+	showInDevelop(ctx, photo)
+	local countBefore = retouchCount(photo)
+	local ok, err = LrTasks.pcall(function()
+		LrDevelopController.detectDistractingPeople()
+	end)
+	if not ok then
+		fail("DETECT_FAILED", "Lightroom could not detect distracting people: " .. tostring(err))
+	end
+	LrTasks.sleep(3)
+	local finished = false
+	local applied, applyErr = LrTasks.pcall(function()
+		LrDevelopController.applyRemovalOnDetectedDistractingPeople(function()
+			finished = true
+		end, {})
+	end)
+	if not applied then
+		fail("REMOVE_FAILED", "Lightroom could not remove the detected people: " .. tostring(applyErr))
+	end
+	local waited = 0
+	while waited < 60 do
+		ctx.checkpoint()
+		LrTasks.sleep(0.5)
+		waited = waited + 0.5
+		local now = retouchCount(photo)
+		if finished or (countBefore ~= nil and now ~= nil and now ~= countBefore) then
+			break
+		end
+	end
+	LrTasks.sleep(1)
+	return {
+		photo_id = photo:getRawMetadata("uuid"),
+		snapshot = snapshot,
+		callback_called = finished,
+		retouch_before = countBefore,
+		retouch_after = retouchCount(photo),
+		waited_s = waited,
+	}
+end
+
+-- Reads the spot-removal / red-eye state from the photo's develop settings (no Develop view needed).
+function Commands.read.get_retouch_state(params, ctx)
+	local photo = findPhoto(ctx, params.photo_id)
+	local settings = photo:getDevelopSettings()
+	local areas = settings.RetouchAreas
+	local redEye = settings.RedEyeInfo
+	return {
+		photo_id = photo:getRawMetadata("uuid"),
+		spot_count = type(areas) == "table" and #areas or 0,
+		spots = plainCopy(areas, 4) or Json.EMPTY_ARRAY,
+		red_eye_count = type(redEye) == "table" and #redEye or 0,
+		red_eye = plainCopy(redEye, 4) or Json.EMPTY_ARRAY,
+	}
+end
+
+-- Raw answers of Lightroom's AI-panel getters for the photo shown in Develop, to learn what this
+-- Lightroom version offers (Enhance, Reflection Removal, Remove panel, spots, current tool).
+function Commands.read.get_ai_panel_state(params, ctx)
+	local photo = findPhoto(ctx, params.photo_id)
+	showInDevelop(ctx, photo)
+	local probes = {
+		enhance = function()
+			return LrDevelopController.getEnhancePanelState()
+		end,
+		reflection_removal = function()
+			return LrDevelopController.getReflectionRemovalPanelState()
+		end,
+		remove_panel = function()
+			return LrDevelopController.getRemovePanelPreferences()
+		end,
+		selected_tool = function()
+			return LrDevelopController.getSelectedTool()
+		end,
+		process_version = function()
+			return LrDevelopController.getProcessVersion()
+		end,
+	}
+	local out = {}
+	for name, probe in pairs(probes) do
+		local ok, value = LrTasks.pcall(probe)
+		out[name] = { ok = ok and true or false, value = ok and plainCopy(value, 4) or tostring(value) }
+	end
+	return { photo_id = photo:getRawMetadata("uuid"), panels = out }
+end
+
+function Commands.write.rotate_photo(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	if params.direction ~= "left" and params.direction ~= "right" then
+		fail("INVALID_PARAMS", "direction must be left or right")
+	end
+	local function orientation()
+		local ok, value = LrTasks.pcall(function()
+			return photo:getFormattedMetadata("orientation")
+		end)
+		return ok and value or nil
+	end
+	local before = orientation()
+	withWrite(ctx, "darkroom_ai: rotate", function()
+		if params.direction == "left" then
+			photo:rotateLeft()
+		else
+			photo:rotateRight()
+		end
+	end)
+	return { photo_id = photo:getRawMetadata("uuid"), direction = params.direction, before = before, after = orientation() }
+end
+
+local METADATA_FIELDS = { title = true, caption = true, headline = true, copyright = true, creator = true }
+
+-- Descriptive metadata of a photo (catalog data only): title, caption, headline, copyright, creator,
+-- and the colour label by colour name. Returns the earlier values.
+function Commands.write.set_photo_metadata(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, false)
+	local changes, color = {}, params.color_label
+	for key, value in pairs(params) do
+		if METADATA_FIELDS[key] then
+			if type(value) ~= "string" or #value > 2000 then
+				fail("INVALID_PARAMS", key .. " must be text of at most 2000 characters")
+			end
+			changes[key] = value
+		end
+	end
+	if color ~= nil and color ~= "none" and not (color == "red" or color == "yellow" or color == "green" or color == "blue" or color == "purple") then
+		fail("INVALID_PARAMS", "color_label must be red, yellow, green, blue, purple or none")
+	end
+	if next(changes) == nil and color == nil then
+		fail("INVALID_PARAMS", "nothing to change: give title, caption, headline, copyright, creator or color_label")
+	end
+	local function snapshotValues()
+		local out = {}
+		for key in pairs(METADATA_FIELDS) do
+			out[key] = photo:getFormattedMetadata(key) or ""
+		end
+		out.color_label = photo:getRawMetadata("colorNameForLabel") or "none"
+		return out
+	end
+	local before = snapshotValues()
+	withWrite(ctx, "darkroom_ai: metadata", function()
+		for key, value in pairs(changes) do
+			photo:setRawMetadata(key, value)
+		end
+		if color ~= nil then
+			local labelName = nil
+			if color ~= "none" then
+				for label, name in pairs(ctx.catalog:getLabelMapToColorName() or {}) do
+					if name == color then
+						labelName = label
+					end
+				end
+				if not labelName then
+					fail("LABEL_NOT_DEFINED", "This catalog's label set has no " .. color .. " label")
+				end
+			end
+			photo:setRawMetadata("label", labelName or "")
+		end
+	end)
+	return { photo_id = photo:getRawMetadata("uuid"), before = before, after = snapshotValues() }
+end
+
+local MAX_KEYWORDS = 500
+
+local function walkKeywords(keywords, prefix, out)
+	for _, keyword in ipairs(keywords or {}) do
+		if #out >= MAX_KEYWORDS then
+			return true
+		end
+		local path = prefix == "" and keyword:getName() or (prefix .. "/" .. keyword:getName())
+		out[#out + 1] = { path = path, synonyms = list(keyword:getSynonyms() or {}) }
+		if walkKeywords(keyword:getChildren(), path, out) then
+			return true
+		end
+	end
+	return false
+end
+
+function Commands.read.list_keywords(_, ctx)
+	local out = {}
+	local truncated = walkKeywords(ctx.catalog:getKeywords(), "", out)
+	return { keywords = list(out), truncated = truncated }
 end
 
 function Commands.write.create_mask(params, ctx)

@@ -18,6 +18,8 @@ from pydantic import BaseModel, ValidationError
 
 from darkroom_ai.adapters.lightroom.bridge_file import BridgeFile
 from darkroom_ai.adapters.lightroom.models import (
+    AiPanelState,
+    AutoAdjustment,
     BridgeStatus,
     CatalogInfo,
     CatalogPage,
@@ -26,22 +28,28 @@ from darkroom_ai.adapters.lightroom.models import (
     CollectionDeleted,
     CollectionMembers,
     CommandList,
+    DistractionsResult,
     ExportedTiff,
     FolderImport,
     FolderScan,
     KeywordCreated,
+    KeywordList,
     LibraryChange,
     LibraryState,
     MaskCreation,
     MaskInspection,
     MaskOperation,
     MaskValues,
+    MetadataChange,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
     PreviewFile,
+    ResetResult,
+    RetouchState,
+    RotateResult,
     Selection,
     SettingsChange,
     Snapshot,
@@ -678,6 +686,48 @@ class LightroomClient:
         data = self.call("get_preset", {"preset_uuid": preset_uuid})
         settings = data.get("settings")
         return dict(settings) if isinstance(settings, dict) else {}
+
+    def reset_develop(self, photo_id: str, scope: str) -> ResetResult:
+        params = {"photo_id": photo_id, "scope": scope}
+        data = self.call("reset_develop", params, timeout_s=self._export_timeout_s)
+        return self._typed(ResetResult, "reset_develop", data)
+
+    def remove_distracting_people(self, photo_id: str) -> DistractionsResult:
+        data = self.call(
+            "remove_distracting_people",
+            {"photo_id": photo_id},
+            timeout_s=max(self._export_timeout_s, 120.0),
+        )
+        return self._typed(DistractionsResult, "remove_distracting_people", data)
+
+    def get_retouch_state(self, photo_id: str) -> RetouchState:
+        data = self.call("get_retouch_state", {"photo_id": photo_id})
+        return self._typed(RetouchState, "get_retouch_state", data)
+
+    def get_ai_panel_state(self, photo_id: str) -> AiPanelState:
+        data = self.call(
+            "get_ai_panel_state", {"photo_id": photo_id}, timeout_s=self._export_timeout_s
+        )
+        return self._typed(AiPanelState, "get_ai_panel_state", data)
+
+    def rotate_photo(self, photo_id: str, direction: str) -> RotateResult:
+        data = self.call("rotate_photo", {"photo_id": photo_id, "direction": direction})
+        return self._typed(RotateResult, "rotate_photo", data)
+
+    def set_photo_metadata(self, photo_id: str, fields: Mapping[str, str]) -> MetadataChange:
+        data = self.call("set_photo_metadata", {"photo_id": photo_id, **dict(fields)})
+        return self._typed(MetadataChange, "set_photo_metadata", data)
+
+    def list_keywords(self) -> KeywordList:
+        return self._typed(KeywordList, "list_keywords", self.call("list_keywords", {}))
+
+    def auto_adjust(
+        self, photo_id: str, tone: bool = True, white_balance: bool = False
+    ) -> AutoAdjustment:
+        """Run Lightroom's own Auto Tone / Auto White Balance on one virtual copy."""
+        params = {"photo_id": photo_id, "tone": tone, "white_balance": white_balance}
+        data = self.call("auto_adjust", params, timeout_s=self._export_timeout_s)
+        return self._typed(AutoAdjustment, "auto_adjust", data)
 
     def apply_preset(self, photo_id: str, preset_uuid: str) -> PresetChange:
         data = self.call("apply_preset", {"photo_id": photo_id, "preset_uuid": preset_uuid})

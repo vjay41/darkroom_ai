@@ -239,6 +239,70 @@ class PresetChange(_Result):
     after: dict[str, Any] = Field(default_factory=dict)
 
 
+class AutoAdjustment(_Result):
+    """What Lightroom's own Auto (tone and/or white balance) changed on ONE photo."""
+
+    photo_id: str
+    ran: list[str] = Field(default_factory=list)
+    before: dict[str, Any] = Field(default_factory=dict)
+    after: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResetResult(_Result):
+    """A develop reset: which group, the save point taken first, and every plain setting changed."""
+
+    photo_id: str
+    scope: str
+    snapshot: Snapshot | None = None
+    before: dict[str, Any] = Field(default_factory=dict)
+    after: dict[str, Any] = Field(default_factory=dict)
+
+
+class DistractionsResult(_Result):
+    photo_id: str
+    snapshot: Snapshot | None = None
+    callback_called: bool = False
+    retouch_before: int | None = None
+    retouch_after: int | None = None
+    waited_s: float = 0.0
+
+
+class RetouchState(_Result):
+    photo_id: str
+    spot_count: int = 0
+    spots: list[Any] = Field(default_factory=list)
+    red_eye_count: int = 0
+    red_eye: list[Any] = Field(default_factory=list)
+
+
+class AiPanelState(_Result):
+    photo_id: str
+    panels: dict[str, Any] = Field(default_factory=dict)
+
+
+class RotateResult(_Result):
+    photo_id: str
+    direction: str
+    before: str | None = None
+    after: str | None = None
+
+
+class MetadataChange(_Result):
+    photo_id: str
+    before: dict[str, Any] = Field(default_factory=dict)
+    after: dict[str, Any] = Field(default_factory=dict)
+
+
+class KeywordEntry(_Result):
+    path: str
+    synonyms: list[str] = Field(default_factory=list)
+
+
+class KeywordList(_Result):
+    keywords: list[KeywordEntry] = Field(default_factory=list)
+    truncated: bool = False
+
+
 class CollectionNode(_Result):
     name: str
     kind: str  # "set" or "collection"

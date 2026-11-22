@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from darkroom_ai.adapters.lightroom.models import (
+    AiPanelState,
+    AutoAdjustment,
     BridgeStatus,
     CatalogInfo,
     CatalogPage,
@@ -23,22 +25,28 @@ from darkroom_ai.adapters.lightroom.models import (
     CollectionDeleted,
     CollectionMembers,
     CommandList,
+    DistractionsResult,
     ExportedTiff,
     FolderImport,
     FolderScan,
     KeywordCreated,
+    KeywordList,
     LibraryChange,
     LibraryState,
     MaskCreation,
     MaskInspection,
     MaskOperation,
     MaskValues,
+    MetadataChange,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
     PreviewFile,
+    ResetResult,
+    RetouchState,
+    RotateResult,
     Selection,
     SettingsChange,
     Snapshot,
@@ -178,6 +186,24 @@ class LightroomAdapter(Protocol):
     def get_preset_settings(self, preset_uuid: str) -> dict[str, Any]: ...
 
     def apply_preset(self, photo_id: str, preset_uuid: str) -> PresetChange: ...
+
+    def reset_develop(self, photo_id: str, scope: str) -> ResetResult: ...
+
+    def remove_distracting_people(self, photo_id: str) -> DistractionsResult: ...
+
+    def get_retouch_state(self, photo_id: str) -> RetouchState: ...
+
+    def get_ai_panel_state(self, photo_id: str) -> AiPanelState: ...
+
+    def rotate_photo(self, photo_id: str, direction: str) -> RotateResult: ...
+
+    def set_photo_metadata(self, photo_id: str, fields: Mapping[str, str]) -> MetadataChange: ...
+
+    def list_keywords(self) -> KeywordList: ...
+
+    def auto_adjust(
+        self, photo_id: str, tone: bool = ..., white_balance: bool = ...
+    ) -> AutoAdjustment: ...
 
 
 class PhotoshopAdapter(Protocol):

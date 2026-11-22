@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, crop, straighten, composition, knowledge]
     related_skills: [lr-edit-workflow, lr-landscape, lr-travel-blog, lr-delivery-export, lr-safe-operations]
-    uses_tools: [get_preview, view_region, measure_tilt, plan_crop, crop, find_candidates, undo]
+    uses_tools: [get_preview, view_region, measure_tilt, plan_crop, crop, find_candidates, rotate_photo, undo]
 ---
 
 # Straighten and crop: measure, plan, apply, measure again
@@ -44,6 +44,8 @@ Apply the planned values with `crop`. Then measure again with `measure_tilt` on 
 near level. If it got worse, the angle had the wrong sign: apply the same crop with the opposite sign of angle and
 measure once more. Look at the result with `get_preview`, check that no empty corner shows and that edges are
 clean. `undo` takes the crop back.
+
+A photo that was shot sideways needs a quarter turn (`rotate_photo`, see lr-save-points), not a crop angle.
 
 ## Limits
 Keystone and perspective correction, lens distortion and stitching are not available here. A crop is always

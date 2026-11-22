@@ -2,7 +2,7 @@
 
 # Tool reference
 
-64 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+76 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -38,6 +38,7 @@
 | [`zone_map`](#zone_map) | reads | Map brightness over the photo: a grid of cells (mean luma, tonal zone 0-10, clipping) and the connected dark regions with their box, area, how much darker than their surroundings they are, and how hard their edge is (a hard edge behind a subject is typical of flash shadows). |
 | [`find_candidates`](#find_candidates) | reads | List small areas that stand out from their surroundings in colour or brightness, with box, size, colour difference to the surroundings, edge density and whether they touch the border. |
 | [`measure_tilt`](#measure_tilt) | reads | Measure how far the long straight lines in a photo (horizon, walls, door frames) are from level and upright, as degrees with a confidence for the near-horizontal and the near-vertical group. |
+| [`auto_correct`](#auto_correct) | writes | Run Lightroom's own Auto (the Auto button in the Basic panel) on each listed photo SEPARATELY: Lightroom looks at that photo alone and sets its exposure, contrast, highlights, shadows, whites and blacks. |
 | [`adjust_lighting`](#adjust_lighting) | writes | Change exposure and tone by the given amounts (relative to the current values). |
 | [`adjust_white_balance`](#adjust_white_balance) | writes | Change white balance by the given amounts. |
 | [`list_develop_parameters`](#list_develop_parameters) | reads | List the Lightroom develop parameters you can read and set with get_develop_parameters and set_develop_parameters (name, panel, allowed range). |
@@ -57,6 +58,17 @@
 | [`remove_objects`](#remove_objects) | writes | Remove objects, blemishes, dust or sensor spots by filling the given regions from their surroundings. |
 | [`fix_red_eye`](#fix_red_eye) | writes | Remove red-eye (flash glow in pupils) inside the given eye boxes. |
 | [`export_for_delivery`](#export_for_delivery) | writes | Export a photo, with its current edits and crop, as an sRGB JPEG into the exports folder (darkroom.toml [paths] exports_dir) under a name you choose. |
+| [`list_snapshots`](#list_snapshots) | reads | List a photo's snapshots (named save points of its develop settings). |
+| [`get_retouch_state`](#get_retouch_state) | reads | Read the spot-removal and red-eye corrections already on a photo (count and details). |
+| [`get_ai_panel_state`](#get_ai_panel_state) | reads | Ask Lightroom what its AI panels report for a photo (Enhance, Reflection Removal, Remove panel, current tool). |
+| [`list_keywords`](#list_keywords) | reads | List the keywords in the catalog as paths ('Places/Japan/Kyoto'), at most 500. |
+| [`create_snapshot`](#create_snapshot) | writes | Save the working copy's current develop settings as a named snapshot (a save point you can come back to with restore_snapshot). |
+| [`restore_snapshot`](#restore_snapshot) | writes | Put the working copy back to a snapshot's develop settings. |
+| [`reset_develop`](#reset_develop) | writes | Reset the working copy's develop edits: everything ('all'), or one group (local masks, spot removal, crop, geometry transforms, red-eye). |
+| [`remove_distracting_people`](#remove_distracting_people) | writes | Use Lightroom's own detection to find distracting people in the background and remove them (the Remove tool's 'distracting people'). |
+| [`rotate_photo`](#rotate_photo) | writes | Rotate the working copy a quarter turn left or right (orientation, not the crop angle). |
+| [`set_photo_metadata`](#set_photo_metadata) | writes | Set a photo's title, caption, headline, copyright or creator, and/or its colour label (red, yellow, green, blue, purple or none). |
+| [`copy_develop_settings`](#copy_develop_settings) | writes | Copy chosen groups of develop settings from one photo to up to 10 others, giving them all the SAME values (use auto_correct instead when each photo should get values of its own). |
 | [`undo`](#undo) | writes | Take back darkroom_ai's edits made in THIS session: the last one, or all of them. |
 | [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
 | [`set_library_state`](#set_library_state) | writes | Set a photo's star rating, pick/reject flag and keywords (catalog data only). |
@@ -417,6 +429,19 @@ Measure how far the long straight lines in a photo (horizon, walls, door frames)
 |---|---|---|---|---|
 | `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
 
+### `auto_correct`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Run Lightroom's own Auto (the Auto button in the Basic panel) on each listed photo SEPARATELY: Lightroom looks at that photo alone and sets its exposure, contrast, highlights, shadows, whites and blacks. Set white_balance to also run Auto White Balance. Values are never copied between photos. It edits each photo's working copy (a virtual copy; originals are never changed), limits every setting to the normal per-pass change, and reports what Lightroom chose and what was kept, with measurements before and after. More than one photo needs the person's go-ahead. `undo` takes back one photo; `undo_batch` takes back the batch. Lightroom must stay still while this runs (it switches to the Develop module for each photo).
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_ids` | list of string | yes |  | min items 1, max items 25 |
+| `tone` | boolean | no | `True` | Run Auto (exposure, contrast, tones). |
+| `white_balance` | boolean | no | `False` | Also run Auto White Balance. |
+| `dry_run` | boolean | no | `False` | Only show the plan; change nothing. |
+
 ### `adjust_lighting`
 
 **Writes** (changes the catalog or a photo's settings).
@@ -649,6 +674,127 @@ Export a photo, with its current edits and crop, as an sRGB JPEG into the export
 | `name` | string | yes |  | File name without folder, e.g. 'rahul-priya-001'. |
 | `long_edge` | integer | no | `2048` | min 256, max 4096 |
 | `quality` | number | no | `0.9` | min 0.5, max 1.0 |
+
+### `list_snapshots`
+
+Reads only.
+
+List a photo's snapshots (named save points of its develop settings). Reads only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+
+### `get_retouch_state`
+
+Reads only.
+
+Read the spot-removal and red-eye corrections already on a photo (count and details).
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+
+### `get_ai_panel_state`
+
+Reads only.
+
+Ask Lightroom what its AI panels report for a photo (Enhance, Reflection Removal, Remove panel, current tool). Raw answers, for finding out what this Lightroom version offers. It shows the photo in Develop, so leave Lightroom alone while it runs.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+
+### `list_keywords`
+
+Reads only.
+
+List the keywords in the catalog as paths ('Places/Japan/Kyoto'), at most 500.
+
+No parameters.
+
+### `create_snapshot`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Save the working copy's current develop settings as a named snapshot (a save point you can come back to with restore_snapshot). Use it before trying a bold look or a big change.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `name` | string | yes |  | min length 1, max length 80 |
+
+### `restore_snapshot`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Put the working copy back to a snapshot's develop settings. This replaces its current settings, so it needs the person's go-ahead. Give the snapshot id or its exact name.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `snapshot_id` | string (may be null) | no | `None` |  |
+| `name` | string (may be null) | no | `None` |  |
+
+### `reset_develop`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Reset the working copy's develop edits: everything ('all'), or one group (local masks, spot removal, crop, geometry transforms, red-eye). A snapshot is saved first and the changed plain settings are returned, and `undo` restores those. It needs the person's go-ahead because it removes edits.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `scope` | `all` \| `masks` \| `spots` \| `crop` \| `transforms` \| `red_eye` | no | `all` |  |
+
+### `remove_distracting_people`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Use Lightroom's own detection to find distracting people in the background and remove them (the Remove tool's 'distracting people'). It changes what the photo shows, so it needs the person's go-ahead, and a snapshot is saved first. Look at the result afterwards.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+
+### `rotate_photo`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Rotate the working copy a quarter turn left or right (orientation, not the crop angle). Turn the other way to undo it.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `direction` | `left` \| `right` | yes |  |  |
+
+### `set_photo_metadata`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Set a photo's title, caption, headline, copyright or creator, and/or its colour label (red, yellow, green, blue, purple or none). Catalog data only; pixels and develop settings are not touched. The earlier values are returned so they can be put back.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `title` | string (may be null) | no | `None` |  |
+| `caption` | string (may be null) | no | `None` |  |
+| `headline` | string (may be null) | no | `None` |  |
+| `copyright` | string (may be null) | no | `None` |  |
+| `creator` | string (may be null) | no | `None` |  |
+| `color_label` | `red` \| `yellow` \| `green` \| `blue` \| `purple` \| `none` (may be null) | no | `None` |  |
+
+### `copy_develop_settings`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Copy chosen groups of develop settings from one photo to up to 10 others, giving them all the SAME values (use auto_correct instead when each photo should get values of its own). Groups: white_balance, tone (exposure and tone sliders), presence, hsl, color_grading, detail, lens, effects, calibration. Crop, geometry and local masks are never copied. Targets are edited on their working copies; the person's go-ahead is required; `undo` and `undo_batch` take it back.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `source_photo_id` | string | yes |  | min length 1 |
+| `target_photo_ids` | list of string | yes |  | min items 1, max items 10 |
+| `groups` | list of `white_balance` \| `tone` \| `presence` \| `hsl` \| `color_grading` \| `detail` \| `lens` \| `effects` \| `calibration` | yes |  | min items 1 |
 
 ### `undo`
 

@@ -38,6 +38,9 @@ EXPECTED = {
     "lr-flash-shadows",
     "lr-object-removal",
     "lr-straighten-crop",
+    "lr-auto-correct",
+    "lr-save-points",
+    "lr-sync-look",
     "lr-upgrade",
     "lr-user-guidance",
 }

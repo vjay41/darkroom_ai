@@ -16,6 +16,7 @@ The agent is the brain; this project is the hands. Start here.
 | `ERRORS.md` *(generated)* | You need to know what an error code means and what to do. |
 | `PRD_ADDENDUM_BATCH_WRITES.md` | You are asked to build batch writes: it is a draft that needs the owner's sign-off first. |
 | `PRD_ADDENDUM_CATALOG_MANAGEMENT.md` | You are asked to build catalog management (list catalogs, import, organise): it is approved, follow its section 6 decisions. |
+| `SDK_COVERAGE.md` | You wonder whether a Lightroom SDK capability has a tool, or why one was left out. |
 | `LIGHTROOM_PLUGIN.md` | You touch the Lua plug-in, the socket protocol, or wonder why something is SDK-limited. |
 | `HERMES_SKILLS.md` | You write or change agent knowledge skills. |
 | `TESTING.md` | You need to run, add or trust tests, selftest, or the soak. |

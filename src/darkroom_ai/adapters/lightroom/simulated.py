@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar, cast
 
 import cv2
 import numpy as np
 
 from darkroom_ai.adapters.lightroom.models import (
+    AiPanelState,
+    AutoAdjustment,
     BridgeStatus,
     CatalogInfo,
     CatalogPage,
@@ -24,22 +26,29 @@ from darkroom_ai.adapters.lightroom.models import (
     CollectionNode,
     CollectionPhoto,
     CommandList,
+    DistractionsResult,
     ExportedTiff,
     FolderImport,
     FolderScan,
     KeywordCreated,
+    KeywordEntry,
+    KeywordList,
     LibraryChange,
     LibraryState,
     MaskCreation,
     MaskInspection,
     MaskOperation,
     MaskValues,
+    MetadataChange,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
     PreviewFile,
+    ResetResult,
+    RetouchState,
+    RotateResult,
     Selection,
     SettingsChange,
     Snapshot,
@@ -385,8 +394,12 @@ class SimulatedLightroom:
             return dict(settings)
         return {key: settings.get(key, 0) for key in keys}
 
+    def _snapshots(self, photo_id: str) -> list[tuple[Snapshot, dict[str, Any]]]:
+        store = self.__dict__.setdefault("_snapshot_store", {})
+        return cast(list[tuple[Snapshot, dict[str, Any]]], store.setdefault(photo_id, []))
+
     def list_snapshots(self, photo_id: str) -> tuple[Snapshot, ...]:
-        return ()
+        return tuple(snap for snap, _ in self._snapshots(photo_id))
 
     def create_virtual_copy(self, photo_id: str, copy_name: str) -> PhotoInfo:
         self.calls.append("create_virtual_copy")
@@ -594,10 +607,99 @@ class SimulatedLightroom:
         return KeywordCreated(path=key, created_levels=tuple(created))
 
     def create_snapshot(self, photo_id: str, name: str) -> SnapshotResult:
-        return SnapshotResult(created=True, snapshot=Snapshot(id="s1", name=name))
+        self.calls.append("create_snapshot")
+        store = self._snapshots(photo_id)
+        snap = Snapshot(id=f"s{len(store) + 1}", name=name)
+        store.append((snap, dict(self.settings[photo_id])))
+        return SnapshotResult(created=True, snapshot=snap)
 
     def apply_snapshot(self, photo_id: str, snapshot_id: str) -> Snapshot:
-        return Snapshot(id=snapshot_id, name="snapshot")
+        self.calls.append("apply_snapshot")
+        self._copy_only(photo_id)
+        for snap, saved in self._snapshots(photo_id):
+            if snap.id == snapshot_id:
+                self.settings[photo_id] = dict(saved)
+                return snap
+        raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, "No matching snapshot on this photo")
+
+    RESET_KEYS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "crop": ("CropLeft", "CropTop", "CropRight", "CropBottom", "CropAngle"),
+        "transforms": ("PerspectiveVertical", "PerspectiveHorizontal", "PerspectiveRotate"),
+        "masks": ("MaskGroupBasedCorrections",),
+        "spots": ("RetouchAreas",),
+        "red_eye": ("RedEyeInfo",),
+    }
+
+    def reset_develop(self, photo_id: str, scope: str) -> ResetResult:
+        self.calls.append("reset_develop")
+        self._copy_only(photo_id)
+        snapshot = self.create_snapshot(photo_id, f"darkroom_ai before reset {scope}").snapshot
+        current = self.settings[photo_id]
+        keep = {"ProcessVersion"}  # a reset never changes the process version
+        keys = (
+            [k for k in current if k not in keep]
+            if scope == "all"
+            else list(self.RESET_KEYS[scope])
+        )
+        before = {k: current[k] for k in keys if k in current}
+        for key in before:
+            del current[key]
+        return ResetResult(
+            photo_id=photo_id, scope=scope, snapshot=snapshot, before=before, after={}
+        )
+
+    def remove_distracting_people(self, photo_id: str) -> DistractionsResult:
+        self.calls.append("remove_distracting_people")
+        self._copy_only(photo_id)
+        snapshot = self.create_snapshot(photo_id, "darkroom_ai before remove people").snapshot
+        areas = list(self.settings[photo_id].get("RetouchAreas", []))
+        self.settings[photo_id]["RetouchAreas"] = [*areas, {"SpotType": "removal"}]
+        return DistractionsResult(
+            photo_id=photo_id,
+            snapshot=snapshot,
+            callback_called=True,
+            retouch_before=len(areas),
+            retouch_after=len(areas) + 1,
+        )
+
+    def get_retouch_state(self, photo_id: str) -> RetouchState:
+        self._info(photo_id)
+        areas = list(self.settings[photo_id].get("RetouchAreas", []))
+        eyes = list(self.settings[photo_id].get("RedEyeInfo", []))
+        return RetouchState(
+            photo_id=photo_id,
+            spot_count=len(areas),
+            spots=areas,
+            red_eye_count=len(eyes),
+            red_eye=eyes,
+        )
+
+    def get_ai_panel_state(self, photo_id: str) -> AiPanelState:
+        self._info(photo_id)
+        return AiPanelState(photo_id=photo_id, panels={"enhance": {"ok": True, "value": {}}})
+
+    def rotate_photo(self, photo_id: str, direction: str) -> RotateResult:
+        self.calls.append("rotate_photo")
+        self._copy_only(photo_id)
+        order = ["AB", "BC", "CD", "DA"]
+        now = self.settings[photo_id].get("Orientation", "AB")
+        step = 1 if direction == "right" else -1
+        new = order[(order.index(now) + step) % 4]
+        self.settings[photo_id]["Orientation"] = new
+        return RotateResult(photo_id=photo_id, direction=direction, before=now, after=new)
+
+    def set_photo_metadata(self, photo_id: str, fields: Mapping[str, str]) -> MetadataChange:
+        self.calls.append("set_photo_metadata")
+        self._info(photo_id)
+        store = self.__dict__.setdefault("_metadata_store", {}).setdefault(photo_id, {})
+        before = {k: store.get(k, "") for k in fields}
+        store.update(fields)
+        return MetadataChange(photo_id=photo_id, before=before, after={k: store[k] for k in fields})
+
+    def list_keywords(self) -> KeywordList:
+        return KeywordList(
+            keywords=[KeywordEntry(path="Places/Japan"), KeywordEntry(path="Family")]
+        )
 
     def apply_develop_settings(
         self, photo_id: str, settings: Mapping[str, Any], history_name: str = "edit"
@@ -636,6 +738,34 @@ class SimulatedLightroom:
             if uuid == preset_uuid:
                 return dict(settings)
         raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, "No develop preset with that id")
+
+    def auto_adjust(
+        self, photo_id: str, tone: bool = True, white_balance: bool = False
+    ) -> AutoAdjustment:
+        """Like Lightroom's Auto: values depend on the individual photo (here: its id and level)."""
+        self.calls.append("auto_adjust")
+        self._copy_only(photo_id)
+        current = self.settings[photo_id]
+        seed = sum(ord(c) for c in photo_id) % 7
+        wanted: dict[str, Any] = {}
+        ran: list[str] = []
+        if tone:
+            ran.append("setAutoTone")
+            exposure = float(current.get("Exposure2012", 0.0))
+            wanted = {
+                "Exposure2012": round(seed * 0.4 - 1.0 - exposure * 0.5, 2),
+                "Contrast2012": 5 + seed * 3,
+                "Highlights2012": -20 - seed,
+                "Shadows2012": 10 + seed * 2,
+            }
+        if white_balance:
+            ran.append("setAutoWhiteBalance")
+            wanted["IncrementalTemperature"] = seed * 4 - 10
+        before = {k: current.get(k) for k, v in wanted.items() if current.get(k) != v}
+        current.update(wanted)
+        return AutoAdjustment(
+            photo_id=photo_id, ran=ran, before=before, after={k: wanted[k] for k in before}
+        )
 
     def apply_preset(self, photo_id: str, preset_uuid: str) -> PresetChange:
         self.calls.append("apply_preset")

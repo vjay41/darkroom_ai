@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, retouch, remove, spot, red-eye, knowledge]
     related_skills: [lr-edit-workflow, lr-skin-tone, lr-travel-blog, lr-safe-operations, lr-user-guidance, lr-wedding-western, lr-wedding-indian]
-    uses_tools: [get_preview, view_region, find_candidates, measure_region, remove_objects, fix_red_eye, analyze_photo]
+    uses_tools: [get_preview, view_region, find_candidates, measure_region, remove_objects, fix_red_eye, remove_distracting_people, get_retouch_state, analyze_photo]
 ---
 
 # Removing things: suggest, agree, remove, check
@@ -48,6 +48,11 @@ other method; if it cannot be made clean, say so rather than hand it over.
 ## Red-eye
 Put one tight box around each eye (pupil plus a little white) and call `fix_red_eye`. The result lists the share
 fixed per eye: zero means no red was found there, so the box is off or the eye is not red.
+
+## Lightroom's own people removal
+For distracting people in the background, `remove_distracting_people` uses Lightroom's detection and removal on the
+working copy (see lr-save-points: ask first, it saves a snapshot, check the result). It is unverified here;
+Photoshop removal (above) is the route that makes new files and a before and after sheet.
 
 ## Honesty
 Say what was removed and what was not. Removing people, text or objects from journalistic or evidence photos

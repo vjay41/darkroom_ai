@@ -179,3 +179,9 @@ PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (owner decisions in section 6). Bui
 - Skills: lr-straighten-crop, lr-object-removal, lr-flash-shadows, lr-delivery-export.
 - Decisions: Lightroom-native spot healing (`RetouchAreas`) and Upright are NOT used: their develop-setting formats are unprobed, so spot removal goes through Photoshop/inpaint instead. Auto tone/WB left to `analyze_photo` + `adjust_*` plus skills.
 - Live checks needed (desktop): CropAngle sign and crop-fraction semantics with a rotated crop (`plan_crop` -> `crop` -> `measure_tilt`); `fill_content_aware.jsx` in Photoshop 27.8 (stringIDToTypeID contentAware); `export_preview` at 4096 px with quality; `try_presets`; `measure_tilt` on real photos; `zone_map`/`find_candidates` thresholds on real photos.
+
+## 2026-11-22 - Lightroom-native automation and SDK coverage (offline, unit-tested, NOT verified live)
+- `auto_correct`: Lightroom's own Auto Tone / Auto White Balance (`setAutoTone`, `setAutoWhiteBalance`) run on each photo separately (plug-in 0.14.0 `auto_adjust`), with per-pass guardrails, read-back, before/after measurements, journaling (`undo`, `undo_batch`) and a warning if all photos ended identical.
+- New tools: `list_snapshots`, `create_snapshot`, `restore_snapshot`, `reset_develop`, `remove_distracting_people`, `get_retouch_state`, `get_ai_panel_state`, `rotate_photo`, `set_photo_metadata`, `list_keywords`, `copy_develop_settings`. New skills: lr-auto-correct, lr-save-points, lr-sync-look (plus updated edit-workflow, straighten-crop, object-removal, catalog-organisation).
+- `docs/SDK_COVERAGE.md` maps the whole SDK to tools and lists what is deliberately not exposed and why.
+- Needs a full Lightroom restart (plug-in 0.14.0). Live checks: Auto on JPG and RAW (does Auto change values per photo, how long it takes to settle), reset scopes, people removal, snapshot restore, metadata/colour label, rotate, `get_ai_panel_state` answers.

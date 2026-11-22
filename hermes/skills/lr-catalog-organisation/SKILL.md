@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, catalog, organisation, knowledge]
     related_skills: [lr-catalog-partnering, lr-batch-operations, lr-safe-operations, lr-user-guidance]
-    uses_tools: [get_catalog_info, list_catalogs, request_folder_access, scan_folder, import_folder, catalog_summary, list_catalog_photos, create_collection_set, create_collection, add_to_collection, remove_from_collection, get_collection_photos, create_keyword, set_library_state, batch_set_library_state, undo_collection_change, undo_library_change, undo_batch]
+    uses_tools: [get_catalog_info, list_catalogs, request_folder_access, scan_folder, import_folder, catalog_summary, list_catalog_photos, create_collection_set, create_collection, add_to_collection, remove_from_collection, get_collection_photos, create_keyword, list_keywords, set_photo_metadata, set_library_state, batch_set_library_state, undo_collection_change, undo_library_change, undo_batch]
 ---
 
 # Organising a catalog from a folder of photos
@@ -57,3 +57,8 @@ When organised, say what now exists and offer next steps. Editing then follows l
 - The catalog is not allowed, or the open catalog is not the one the owner named.
 - Counts differ from what the scan said, or a tool reports an error you do not understand.
 - Anything the owner did not approve: other folders, deleting, moving files (you cannot, and must not suggest tricks).
+
+## Titles, captions, labels
+Use `list_keywords` to reuse the catalog's own keyword names before creating new ones. `set_photo_metadata` sets
+title, caption, headline, copyright, creator and the colour label (catalog data only; it returns the earlier
+values). Ask before writing text in the owner's name, and keep captions factual.
