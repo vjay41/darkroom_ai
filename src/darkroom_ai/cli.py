@@ -28,6 +28,7 @@ from darkroom_ai.adapters.lightroom.bridge_file import (
     write_bridge_file,
 )
 from darkroom_ai.adapters.lightroom.client import LightroomClient
+from darkroom_ai.adapters.lightroom.models import Selection
 from darkroom_ai.adapters.photoshop.windows import photoshop_windows
 from darkroom_ai.cleanup import apply_cleanup, plan_cleanup
 from darkroom_ai.compat import assess_version
@@ -100,6 +101,18 @@ def _connectors(settings: Settings, stop: bool, stop_all: bool = False) -> int:
 # -- doctor ---------------------------------------------------------------------------------------
 
 
+def collapsed_stack_warning(selection: Selection) -> str | None:
+    """A warning when the selected photo sits in a collapsed stack (read-only check), else None."""
+    shown = selection.active
+    if shown is None or shown.stack_collapsed is not True:
+        return None
+    return (
+        f"the selected photo ({shown.file_name}) is in a collapsed stack, so Lightroom cannot show "
+        "it in Develop and mask tools would be refused: in the Library module choose "
+        "Photo > Stacking > Expand All Stacks."
+    )
+
+
 def _doctor(settings: Settings) -> int:
     problems = 0
     _line("ok", "config: loaded")
@@ -121,6 +134,10 @@ def _doctor(settings: Settings) -> int:
     try:
         with LightroomClient.from_settings(settings, load_bridge_file()) as lightroom:
             info = lightroom.ping()
+            try:
+                stack_warning = collapsed_stack_warning(lightroom.get_selection())
+            except DarkroomError:
+                stack_warning = None
         version = f"Lightroom {info.lightroom_version}, plug-in {info.plugin_version}"
         if info.writes_allowed:
             _line("ok", f"{version}, writes allowed")
@@ -134,6 +151,8 @@ def _doctor(settings: Settings) -> int:
                 "       Open the configured catalog in Lightroom, or change lightroom.test_catalog "
                 "and run `darkroom lightroom setup` again.",
             )
+        if stack_warning:
+            _line("warn", stack_warning)
         verdict = assess_version("lightroom", info.lightroom_version)
         if verdict.status != "tested":
             # A warning only: an untested version is not refused.

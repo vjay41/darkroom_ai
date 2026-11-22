@@ -55,7 +55,7 @@ deliberate, drilled update.
    `in_stack`, `stack_collapsed` and a `stack_note` when Lightroom does not say; `create_mask` for kinds that need Develop
    refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
    collapsed -> true and the mask call was refused in under 3 s with nothing created. The SDK's metadata calls yield, so
-   they must run inside `LrTasks.pcall` (plain `pcall` fails). Not done: a `darkroom doctor` warning.
+   they must run inside `LrTasks.pcall` (plain `pcall` fails). `darkroom doctor` also warns when the selected photo is in a collapsed stack.
 3. **List filters** (file format, capture date, ISO) on `list_catalog_photos`: needs a plug-in change.
 4. **RAW/DNG**: verify writes and lens corrections on a RAW test catalog; then update `compatibility.toml`.
 5. **Faces**: document how to supply a YuNet ONNX file; verify the face tools.

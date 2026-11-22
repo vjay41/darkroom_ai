@@ -23,6 +23,13 @@ status = "verified"
 verified_on = "Lightroom 15.2.1"
 
 [[features]]
+name = "Stack state (in a stack, collapsed) and early refusal of mask tools"
+tools = ["get_photo_info", "create_mask"]
+status = "verified"
+verified_on = "Lightroom 15.2.1"
+note = "Needs plug-in 0.9.4 or newer: older plug-ins cannot read stack state."
+
+[[features]]
 name = "Preview and numeric analysis"
 tools = ["get_preview", "analyze_photo", "analyze_batch"]
 status = "verified"

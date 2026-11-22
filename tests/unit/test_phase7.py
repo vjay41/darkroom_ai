@@ -260,6 +260,9 @@ def test_doctor_warns_about_an_untested_lightroom_version(
                 configured_catalog="c",
             )
 
+        def get_selection(self) -> Any:
+            return SimpleNamespace(active=None, photos=())
+
     monkeypatch.setattr(cli, "load_bridge_file", lambda: None)
     monkeypatch.setattr(cli, "photoshop_windows", list)
     monkeypatch.setattr(cli, "read_gpus", lambda: GpuReport((), (), error="no nvidia-smi"))
