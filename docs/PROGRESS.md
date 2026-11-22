@@ -142,3 +142,11 @@ PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (owner decisions in section 6). Bui
 - Still open: the owner's real catalog is NOT on the allowlist (the owner adds it with the command or the prompt); `list_catalogs` default search is the
   drive of the open catalog, the folders of allowed catalogs and Pictures (override with `catalog_search_dirs`).
 - Leftovers in the rehearsal catalog: 8 imported scratch photos (from `D:\darkroom_rehearsal\import_test*`) and the keyword `DarkroomLiveTest/Live`.
+
+## Noise reduction and sharpening (built 2026-11-22)
+- Measurement: `analyze_photo` / `analyze_batch` now return `noise_luma`, `noise_chroma` (estimated on the flattest pixels) and `edge_strength`.
+- Skills: lr-noise-reduction, lr-sharpening-clarity (installed in the Hermes profile; restart the connector to pick up the new numbers).
+- Live pilot `scripts/detail_live.py` passes (see compatibility.toml). Lesson: mask edits render in Lightroom about 3 s late; the first run
+  looked like "local noise reduction does nothing" because it measured too early. The skill now says to wait about 5 s.
+- Not done: skin-tone and S-curve live pilots (offered, not yet approved).
+

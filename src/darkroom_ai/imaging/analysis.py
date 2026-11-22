@@ -4,6 +4,12 @@ Everything is computed on the encoded (gamma) RGB values of the preview, 0..1:
 - luma = 0.2126 R + 0.7152 G + 0.0722 B
 - highlight clipping: a pixel counts when any channel is >= 254/255
 - shadow clipping: a pixel counts when all channels are <= 1/255
+- detail: noise is estimated on the flattest quarter of the picture (smallest edge strength, away
+  from pure black and white) as a robust spread of the second-difference response, in 8-bit levels,
+  for luma and for chroma (R-G and B-G). The flattest pixels read a little low, never high. Edge
+  strength is the 99th percentile of the luma gradient (0..1 per pixel). Both are measured on the
+  preview (about 1024 px), so absolute values understate noise at full size: use them to compare
+  before and after, not as a verdict.
 - colour cast: measured on near-neutral mid-tone pixels (low saturation, luma 0.2..0.8), where the
   three channels should be equal. `blue_yellow` > 0 means too yellow/warm (R+G above B),
   `green_magenta` > 0 means too magenta (R+B above G). Values are in 0..1 channel units.
@@ -65,12 +71,20 @@ class ColorCast(_Result):
     reason: str = ""
 
 
+class Detail(_Result):
+    noise_luma: float | None  # 8-bit levels in flat areas (None: no flat area to measure)
+    noise_chroma: float | None
+    edge_strength: float  # p99 of the luma gradient, 0..1 per pixel
+    flat_fraction: float  # share of the picture used for the noise estimate
+
+
 class ImageAnalysis(_Result):
     width: int
     height: int
     tones: Tones
     clipping: Clipping
     color_cast: ColorCast
+    detail: Detail
 
 
 def luma(pixels: Pixels) -> NDArray[np.float32]:
@@ -155,6 +169,47 @@ def _color_cast(pixels: Pixels, y: np.ndarray) -> ColorCast:
     )
 
 
+_LAPLACE_NOISE = np.array([[1, -2, 1], [-2, 4, -2], [1, -2, 1]], dtype=np.float32)
+_NOISE_NORM = 6.0  # the mask's response to white noise has a spread of 6 x sigma
+FLAT_SHARE = 0.25
+MIN_FLAT_PIXELS = 400
+
+
+def _noise(plane: NDArray[np.float32], flat: NDArray[np.bool_]) -> float:
+    import cv2
+
+    response = cv2.filter2D(plane, cv2.CV_32F, _LAPLACE_NOISE, borderType=cv2.BORDER_REFLECT)
+    values = response[flat]
+    spread = 1.4826 * float(np.median(np.abs(values - np.median(values))))
+    return round(spread / _NOISE_NORM * 255.0, 3)
+
+
+def _detail(pixels: Pixels, y: NDArray[np.float32]) -> Detail:
+    import cv2
+
+    gx = cv2.Sobel(y, cv2.CV_32F, 1, 0, ksize=3) / 8.0
+    gy = cv2.Sobel(y, cv2.CV_32F, 0, 1, ksize=3) / 8.0
+    gradient = np.sqrt(gx * gx + gy * gy)
+    edge = round(float(np.percentile(gradient, 99)), 5)
+    usable = (y > 0.04) & (y < 0.96)
+    if int(usable.sum()) < MIN_FLAT_PIXELS:
+        return Detail(noise_luma=None, noise_chroma=None, edge_strength=edge, flat_fraction=0.0)
+    limit = float(np.percentile(gradient[usable], FLAT_SHARE * 100.0))
+    flat = usable & (gradient <= limit)
+    if int(flat.sum()) < MIN_FLAT_PIXELS:
+        return Detail(noise_luma=None, noise_chroma=None, edge_strength=edge, flat_fraction=0.0)
+    chroma = max(
+        _noise(np.ascontiguousarray(pixels[..., 0] - pixels[..., 1]), flat),
+        _noise(np.ascontiguousarray(pixels[..., 2] - pixels[..., 1]), flat),
+    )
+    return Detail(
+        noise_luma=_noise(y, flat),
+        noise_chroma=chroma,
+        edge_strength=edge,
+        flat_fraction=round(float(flat.mean()), 3),
+    )
+
+
 def analyze(pixels: Pixels) -> ImageAnalysis:
     """Measure tones, clipping and colour cast of an RGB image (float32, 0..1)."""
     if pixels.ndim != 3 or pixels.shape[2] != 3 or pixels.size == 0:
@@ -166,4 +221,5 @@ def analyze(pixels: Pixels) -> ImageAnalysis:
         tones=_tones(y),
         clipping=_clipping(pixels),
         color_cast=_color_cast(pixels, y),
+        detail=_detail(pixels, y),
     )

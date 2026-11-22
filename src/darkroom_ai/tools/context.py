@@ -142,13 +142,18 @@ MEASURE_LONG_EDGE = 1024
 
 
 def measured_summary(analysis: ImageAnalysis) -> dict[str, Any]:
-    """The few tone numbers that show what an edit did (shares in percent, luma on 0..1)."""
+    """The few numbers that show what an edit did: tones (shares in percent, luma on 0..1), noise
+    (8-bit levels in flat areas) and edge strength."""
     return {
         "highlights_clipped_pct": analysis.clipping.highlights_pct,
         "shadows_clipped_pct": analysis.clipping.shadows_pct,
         "p05": analysis.tones.p05,
         "p50": analysis.tones.p50,
         "p95": analysis.tones.p95,
+        # Detail (preview scale; compare before and after, not against a fixed limit).
+        "noise_luma": analysis.detail.noise_luma,
+        "noise_chroma": analysis.detail.noise_chroma,
+        "edge_strength": analysis.detail.edge_strength,
     }
 
 

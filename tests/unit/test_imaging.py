@@ -366,3 +366,51 @@ def test_cast_that_cannot_be_judged_is_null_with_a_reason_never_zero() -> None:
     grey = np.full((40, 60, 3), 0.5, dtype=np.float32)
     neutral = analyze(grey).color_cast
     assert neutral.measurable is True and neutral.strength == 0 and neutral.reason == ""
+
+
+# -- noise and edge strength ----------------------------------------------------------------------
+
+
+def noisy(sigma: float, seed: int = 1) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    base = np.full((256, 256, 3), 0.5, dtype=np.float32)
+    return np.clip(base + rng.normal(0.0, sigma, base.shape).astype(np.float32), 0, 1)
+
+
+def test_noise_estimate_follows_the_added_noise() -> None:
+    low = analyze(noisy(0.01)).detail.noise_luma
+    high = analyze(noisy(0.04)).detail.noise_luma
+    assert low is not None and high is not None
+    assert high > 3 * low  # four times the noise reads as clearly more
+    true_level = 0.04 * 255  # the flattest pixels read a little low, never high
+    assert 0.5 * true_level < high < 1.1 * true_level
+
+
+def test_noise_ignores_edges_and_chroma_noise_is_separate() -> None:
+    pixels = np.zeros((256, 256, 3), dtype=np.float32) + 0.3
+    pixels[:, 128:] = 0.7  # one hard edge, no noise
+    quiet = analyze(pixels).detail
+    assert quiet.noise_luma is not None and quiet.noise_luma < 0.3
+    rng = np.random.default_rng(2)
+    colourful = np.full((256, 256, 3), 0.5, dtype=np.float32)
+    colourful[..., 0] += rng.normal(0, 0.03, (256, 256)).astype(np.float32)
+    colourful = np.clip(colourful, 0, 1)
+    detail = analyze(colourful).detail
+    assert detail.noise_chroma is not None and detail.noise_luma is not None
+    assert detail.noise_chroma > detail.noise_luma
+
+
+def test_no_flat_area_means_no_noise_number() -> None:
+    black = np.zeros((64, 64, 3), dtype=np.float32)
+    detail = analyze(black).detail
+    assert detail.noise_luma is None and detail.flat_fraction == 0.0
+
+
+def test_blurring_lowers_edge_strength() -> None:
+    import cv2
+
+    pixels = np.zeros((256, 256, 3), dtype=np.float32) + 0.2
+    pixels[:, 100:156] = 0.8
+    sharp = analyze(pixels).detail.edge_strength
+    soft = analyze(cv2.GaussianBlur(pixels, (0, 0), 4)).detail.edge_strength
+    assert soft < sharp * 0.6

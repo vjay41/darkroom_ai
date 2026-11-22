@@ -148,3 +148,10 @@ tools = ["get_catalog_info", "list_catalogs", "request_catalog_access", "request
 status = "verified"
 verified_on = "Lightroom 15.2.1 (plug-in 0.13.0, rehearsal catalog)"
 note = "`scripts/catalog_live.py` ran 40+ checks live: a folder outside the allowed folders was refused, the owner prompt said No then Yes and the plug-in saw the new folder without a restart, scan flagged a same-name file, 4 photos were imported with files unchanged, collections and sets were made, filled, listed and undone, 12 photos needed a go-ahead, a keyword hierarchy was created, rating/flag/keyword were written to a MASTER and undone, and a catalog photo was edited and undone. Hermes also drove it. NOT verified: opening or creating a catalog (impossible from the plug-in, the owner does it), allowlisting a second real catalog, and imports cannot be undone by darkroom_ai."
+
+[[features]]
+name = "Noise and sharpness measurement + noise reduction / sharpening skills"
+tools = ["analyze_photo", "analyze_batch", "set_develop_parameters", "create_mask", "set_mask_adjustments", "undo"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (plug-in 0.13.0, rehearsal catalog, high-ISO JPG)"
+note = "`scripts/detail_live.py` ran live: colour noise reduction took chroma noise 0.494 -> 0.0, luminance smoothing lowered luma noise, sharpening kept or raised edge strength (0.2186 -> 0.2229), a luminance mask with local luminance noise lowered noise (0.373 -> 0.318), undo restored the baseline and the master never changed. Lightroom re-renders mask edits about 3 seconds late, so measure after waiting. NOT verified: skin-tone and S-curve flows (pilots not run), RAW files, and the noise numbers are estimates from flat areas, not lab measurements."

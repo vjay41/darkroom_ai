@@ -451,6 +451,9 @@ class BatchPhotoNumbers(BaseModel):
     red_high_pct: float | None = None
     color_cast: str | None = None
     color_cast_strength: float | None = None
+    noise_luma: float | None = None  # 8-bit levels in flat areas, preview scale
+    noise_chroma: float | None = None
+    edge_strength: float | None = None  # p99 luma gradient, 0..1 per pixel
     error: str | None = None
 
 
@@ -479,6 +482,9 @@ def _batch_numbers(ctx: ToolContext, photo_id: str, long_edge: int) -> BatchPhot
         red_high_pct=analysis.clipping.red_high_pct,
         color_cast=analysis.color_cast.description,
         color_cast_strength=analysis.color_cast.strength,
+        noise_luma=analysis.detail.noise_luma,
+        noise_chroma=analysis.detail.noise_chroma,
+        edge_strength=analysis.detail.edge_strength,
     )
 
 

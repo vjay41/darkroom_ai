@@ -906,6 +906,9 @@ def test_slider_edits_return_measured_before_and_after(rig: Rig) -> None:
         "p05",
         "p50",
         "p95",
+        "noise_luma",
+        "noise_chroma",
+        "edge_strength",
     }
     assert measured["after"]["p50"] > measured["before"]["p50"]  # a real render, it got brighter
     assert "real preview renders" in measured["source"]
