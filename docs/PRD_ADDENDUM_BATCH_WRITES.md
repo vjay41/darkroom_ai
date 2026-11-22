@@ -1,6 +1,9 @@
-# PRD addendum: batch writes (DRAFT for sign-off, nothing built)
+# PRD addendum: batch writes
 
-Status: **proposal, not approved.** Do not build until the owner signs off (CLAUDE.md: ask before bulk operations).
+Status: **approved 2026-11-22 and built** (decision 16 in `DESIGN.md`). The owner approved the recommended answers to the
+open questions in section 6: one go-ahead per chunk (25 library, 10 develop), stop at the first failure, copies allowed and
+listed in the plan, library batches confirm above 5 photos and develop batches always, budgets of 2 and 10 minutes, no
+culling of masters.
 Date: 2026-11-22. Depends on: plug-in 0.11.0 (library state, tone curve, list filters), tools in `TOOLS.md`.
 
 ## 1. Problem

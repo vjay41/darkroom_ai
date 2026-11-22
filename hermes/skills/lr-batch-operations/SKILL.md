@@ -1,7 +1,7 @@
 ---
 name: lr-batch-operations
 description: "How to work through many photos efficiently and safely in phases: scope, numeric triage, grouping, a pilot, chunked rollout with stop conditions, and a review. Process knowledge only; it never says what an edit should be."
-version: 1.0.0
+version: 1.1.0
 author: Darkroom
 license: MIT
 platforms: [windows]
@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, batch, knowledge]
     related_skills: [lr-safe-operations, lr-user-guidance, lr-genre-knowledge]
-    uses_tools: [get_library_state, set_library_state, undo_library_change, list_catalog_photos, analyze_batch, get_photo_metadata, get_preview, analyze_photo, get_develop_parameters, set_develop_parameters, undo]
+    uses_tools: [batch_set_library_state, batch_set_develop_parameters, undo_batch, get_library_state, set_library_state, undo_library_change, list_catalog_photos, analyze_batch, get_photo_metadata, get_preview, analyze_photo, get_develop_parameters, set_develop_parameters, undo]
 ---
 
 # Many photos: work in phases, not in one go
@@ -43,21 +43,36 @@ decision.
 - A time or call budget that the user set is used up.
 
 ## Keeping it efficient
-- Smaller previews are enough for triage; look at full-size images only for the pilot and for flagged photos.
-- Do not re-measure photos you have not changed. Remember which ids are done, so a resumed run skips them.
-- One confirmation per chunk plan is better than one per photo; but never skip the first confirmation.
+- Small previews are enough for triage; look closely only at the pilot and flagged photos.
+- Remember which ids are done, so a resumed run skips them.
+- One confirmation per chunk plan, never per photo; never skip the first one.
 - Work on working copies only. If an original shows where a copy should be, stop and report.
 
 ## Honest limits
-- Grouping by numbers can put different scenes together; check the pilot against a second photo of the group.
+- Numbers can group different scenes together; check the pilot on a second photo of the group.
 - A batch that "worked" on numbers can still look wrong. Offer samples and let the user's eyes decide.
 
 ## Rating, flagging and keywords
 `get_library_state` reads a photo's stars, pick/reject flag and keywords. `set_library_state` changes them,
 `undo_library_change` takes this session's changes back. They only work on a virtual copy (a master is refused),
 and each change is read back: look at `verified` and `problems` in the result.
-- Only set what the user asked for. Never reject, rate down or tag a whole set as a side effect of editing.
+- Only set what the user asked for; never rate, reject or tag a set as a side effect of editing.
 - A rating or flag is the user's taste, not a measurement: do not infer one from histogram numbers.
 - Keywords are plain names; an existing keyword of that name (any letter case) is reused. A new one stays in
   Lightroom's keyword list even after undo, so keep names few and deliberate.
 - For many photos, follow the phases above: confirm the plan and the exact words first, then do a small chunk.
+
+## Batch tools: one go-ahead for a chunk
+`batch_set_library_state` (rating, flag, keywords) and `batch_set_develop_parameters` (exposure, tone, white balance,
+other settings) apply values you choose, each photo with its own, in one call. Every value still goes through the
+single-photo limits.
+- **Plan first:** `dry_run` shows the plan: which working copies exist, how many new ones a develop batch would create,
+  and any photo not allowed. One bad photo means nothing runs; fix the list and plan again.
+- **One chunk, one go-ahead:** the tool asks the person itself (a develop batch always, a library batch above a few
+  photos). Say the count, the exact change and the new copies first. If declined, nothing changed; do not ask again.
+- **Sizes:** up to 25 photos for library fields, 10 for develop edits. Pilot with the single-photo tools first, then
+  roll out in chunks and re-measure with `analyze_batch` between them.
+- **It stops at the first failure or the time budget.** Read `items` (`ok`, `failed` with reason and step, `not_run`),
+  report, and do not retry in a loop.
+- **Taking it back:** keep the `batch_id`. `undo_batch` restores and reads back the whole batch (this session only).
+  Working copies a batch created stay in the catalog; say how many.

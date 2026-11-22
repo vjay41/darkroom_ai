@@ -1007,7 +1007,7 @@ class UndoResult(ToolResult):
     note: str = ""
 
 
-UNDO_RECORDS = ("undo", "revert")  # journal entries that list edits they took back
+UNDO_RECORDS = ("undo", "revert", "undo_batch")  # journal entries that list edits they took back
 NOTHING_TO_UNDO = (
     "There is nothing to undo in this session. Edits from earlier sessions can only be taken "
     "back by the user, with the command `darkroom revert`."

@@ -27,6 +27,11 @@ hsl_per_pass = 30
 curve_per_pass = 32           # tone curve points (0..255 scale): most one pass may move a point
 curve_total = 64              # most a point may be from a straight line
 min_crop_fraction = 0.25
+batch_library_max = 25            # photos per batch call (rating, flag, keywords)
+batch_develop_max = 10            # photos per develop batch call
+batch_library_confirm_above = 5   # a library batch of more photos than this needs the person's go-ahead
+batch_library_budget_s = 120      # a batch is stopped and reported after this many seconds
+batch_develop_budget_s = 600
 
 [backgrounds]
 dir = "backgrounds"         # replace_background only uses pictures from this folder

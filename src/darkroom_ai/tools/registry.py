@@ -16,6 +16,7 @@ from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.tools import (
     app_status,
     background,
+    batch,
     capabilities,
     catalog_tools,
     library_tools,
@@ -212,6 +213,19 @@ TOOLS: tuple[Tool, ...] = (
         library_tools.undo_library_change,
         writes=True,
     ),
+    _tool(
+        "batch_set_library_state",
+        batch.BatchSetLibraryStateInput,
+        batch.batch_set_library_state,
+        writes=True,
+    ),
+    _tool(
+        "batch_set_develop_parameters",
+        batch.BatchSetDevelopParametersInput,
+        batch.batch_set_develop_parameters,
+        writes=True,
+    ),
+    _tool("undo_batch", batch.UndoBatchInput, batch.undo_batch, writes=True),
     _tool(
         "list_presets",
         lightroom_tools.ListPresetsInput,

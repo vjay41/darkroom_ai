@@ -121,6 +121,13 @@ verified_on = "Photoshop 27.8"
 note = "The picture-background path (add image layer below) was not run live."
 
 [[features]]
+name = "Batch writes (develop and library) and undo_batch"
+tools = ["batch_set_library_state", "batch_set_develop_parameters", "undo_batch"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (JPG and Sony ARW)"
+note = "Plan, go-ahead, run, verified undo and untouched masters were confirmed live on three test photos. Stopping at a failure mid-batch and the time budget are covered by unit tests only."
+
+[[features]]
 name = "Catalog list filters (rating, flag, keyword)"
 tools = ["list_catalog_photos"]
 status = "verified"

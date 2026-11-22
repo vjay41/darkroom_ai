@@ -47,6 +47,9 @@ not at all.
 | `curve_per_pass` | 32 | Tone curve: most one pass may move a point from the current curve (0..255 scale) |
 | `curve_total` | 64 | Tone curve: most a point may be from a straight line (no curve) |
 | `min_crop_fraction` | 0.25 | A crop must keep at least this share of the frame |
+| `batch_library_max` / `batch_develop_max` | 25 / 10 | Photos per batch call (library fields / develop edits) |
+| `batch_library_confirm_above` | 5 | A library batch of more photos than this needs the person's go-ahead; a develop batch always does |
+| `batch_library_budget_s` / `batch_develop_budget_s` | 120 / 600 | A batch is stopped and reported after this many seconds |
 These are *bounds*, not recommendations. Generic parameters in `set_develop_parameters` are limited to Lightroom's own
 slider ranges (`tools/develop_parameters.py`, data only).
 
@@ -88,6 +91,14 @@ slider ranges (`tools/develop_parameters.py`, data only).
     A master is refused by the plug-in itself, so an original file is never touched through Lightroom's automatic XMP writing.
     Every change is read back and journaled with what is needed to take it back (`undo_library_change`). Culling masters
     would need an explicit decision and a bulk-confirmation design first.
+16. Batch writes (2026-11-22, approved by the owner): `batch_set_library_state`, `batch_set_develop_parameters` and
+    `undo_batch`. A batch is planned and validated first (one invalid item means nothing runs, and `dry_run` shows the
+    plan), then run item by item through the same guarded handlers, so every clamp, the virtual-copy rule and the read-back
+    still apply. One go-ahead per chunk, asked by the tool itself: always for develop batches, above
+    `batch_library_confirm_above` photos for library batches. Chunks are 25 (library) and 10 (develop) photos; the run stops
+    at the first failure or when the time budget is used up and reports done, failed and not run. Every step is journaled
+    under one `batch_id`; `undo_batch` restores and reads back the whole batch (this session only). A batch may create
+    working copies (the go-ahead says how many) but never deletes them. Culling masters stays out of scope.
 ## Non-goals (v1)
 A second LLM or an agent loop inside this project; generative edits; deleting or moving files; a GUI; AI Denoise or
 any UI automation (keystrokes, screen capture, PowerShell); cloud Lightroom; scripted or automatic editing logic.

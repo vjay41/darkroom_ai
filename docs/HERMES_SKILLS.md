@@ -15,7 +15,7 @@ backs up anything it replaces.
 | `lr-safe-operations` | What the tools protect, which actions need a person's go-ahead, checks before and after a write, recognising a stale connector or wrong photo, when to stop and ask. |
 | `lr-user-guidance` | How to talk with a beginner photographer: state the intent, explain in plain words, show before and after, admit limits, teach a little. |
 | `lr-upgrade` | How to read `get_capabilities` and `run_selftest` after an Adobe or darkroom_ai update and what to report. |
-| `lr-batch-operations` | Working through many photos in phases: scope, numeric triage (`analyze_batch`), group, pilot, chunked rollout with stop conditions, review. |
+| `lr-batch-operations` | Working through many photos in phases: scope, numeric triage (`analyze_batch`), group, pilot, chunked rollout with stop conditions, review; the batch write tools (plan, one go-ahead per chunk, stop at first failure, `undo_batch`). |
 
 ## Rules for writing a skill
 1. **Knowledge, not recipes.** No slider values, no fixed order of steps, no per-genre numbers. Describe how things

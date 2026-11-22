@@ -2,7 +2,7 @@
 
 # Tool reference
 
-37 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+40 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -41,6 +41,9 @@
 | [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
 | [`set_library_state`](#set_library_state) | writes | Set a virtual copy's star rating, pick/reject flag and keywords (catalog data only). |
 | [`undo_library_change`](#undo_library_change) | writes | Take back darkroom_ai's library changes (rating, flag, keywords) made in THIS session. |
+| [`batch_set_library_state`](#batch_set_library_state) | writes | Set rating, pick/reject flag and keywords on several virtual copies in one batch (up to 25). |
+| [`batch_set_develop_parameters`](#batch_set_develop_parameters) | writes | Edit several photos in one batch (up to 10), each with its own values, on virtual copies. |
+| [`undo_batch`](#undo_batch) | writes | Take back every change of one batch made in THIS session, by its batch_id. |
 | [`list_presets`](#list_presets) | reads | List Lightroom's develop presets (name and folder). |
 | [`apply_preset`](#apply_preset) | writes | Apply one of Lightroom's develop presets (a saved look) to the photo's virtual copy, by its exact name from list_presets. |
 
@@ -445,6 +448,38 @@ Take back darkroom_ai's library changes (rating, flag, keywords) made in THIS se
 |---|---|---|---|---|
 | `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
 | `scope` | `last` \| `all` | no | `last` |  |
+
+### `batch_set_library_state`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Set rating, pick/reject flag and keywords on several virtual copies in one batch (up to 25). Each item names a photo and its values (same rules as set_library_state: virtual copies only, never a master). Everything is checked first; if any item is not allowed nothing runs. A batch of more than 5 photos needs the person's go-ahead, which this tool asks for itself. The run stops at the first failure and lists what was done, failed and not run. Use dry_run to see the plan without changing anything. Take a whole batch back with undo_batch.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `items` | list of any | yes |  | min items 1, max items 25 |
+| `dry_run` | boolean | no | `False` | Only check and show the plan; change nothing. |
+
+### `batch_set_develop_parameters`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Edit several photos in one batch (up to 10), each with its own values, on virtual copies. Each item gives changes for exposure and tone, white balance and/or other develop settings; every value goes through the same limits as adjust_lighting, adjust_white_balance and set_develop_parameters, and a master gets one new working copy (the plan says how many will be created). Always needs the person's go-ahead, which this tool asks for itself. Everything is checked first; the run stops at the first failure and lists what was done, failed and not run. Use dry_run to see the plan without changing anything. Take a whole batch back with undo_batch (settings are restored; created copies stay in the catalog).
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `items` | list of any | yes |  | min items 1, max items 25 |
+| `dry_run` | boolean | no | `False` | Only check and show the plan; change nothing. |
+
+### `undo_batch`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Take back every change of one batch made in THIS session, by its batch_id. Restores settings and library fields from the journal and reads them back. Virtual copies a batch created are not deleted (deleting is never done). Changes made to the same photos after the batch are not separated out: the oldest recorded values are put back.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `batch_id` | string | yes |  | min length 1 |
 
 ### `list_presets`
 

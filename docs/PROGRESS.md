@@ -57,9 +57,9 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 - Git history and `PRD.md` contain the owner's name and local paths (no secrets, photos or catalogs).
 
 ## Next steps (post-v1, in rough priority)
-1. **Batch writes**: a batch id in the journal, one undo for a whole batch, chunk and error-budget limits, one
-   confirmation per chunk plan. The PRD addendum is drafted in `PRD_ADDENDUM_BATCH_WRITES.md` and **waits for the owner's
-   sign-off and answers to its open questions; nothing is built.** Process design is in `lr-batch-operations`.
+1. **Batch writes**: DONE (owner approved the addendum 2026-11-22). `batch_set_library_state`, `batch_set_develop_parameters`,
+   `undo_batch`; verified live on three test photos (JPG + 2 ARW). Not run live: stopping at a mid-batch failure and the time
+   budget (unit tests only). See `PRD_ADDENDUM_BATCH_WRITES.md` and `DESIGN.md` decision 16.
 2. **Collapsed-stack detection**: DONE and verified live (plug-in 0.9.4, 2026-11-22). `get_photo`/`get_photo_info` report
    `in_stack`, `stack_collapsed` and a `stack_note` when Lightroom does not say; `create_mask` for kinds that need Develop
    refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
@@ -89,9 +89,10 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: batch writes built and verified live (`scripts/batch_live.py`); `lr-batch-operations` 1.1.0 installed in the darkroom profile. Hermes needs a restart to see the three new tools.
 - 2026-11-22: plug-in 0.11.1: `inspect_masks` no longer cuts off a mask's Tools list (depth 3 to 6); verified live.
 - 2026-11-22: RAW (Sony ARW) develop writes, Kelvin white balance, lens toggles, library fields and undo verified live; `scripts/raw_live.py`. An aborted first run left one edited virtual copy in the test catalog.
-- 2026-11-22: list filters (rating, flag, keyword) verified live on plug-in 0.11.0; `edited` filter dropped; batch-writes PRD addendum drafted (no build).
+- 2026-11-22: list filters (rating, flag, keyword) verified live on plug-in 0.11.0; `edited` filter dropped; batch-writes PRD addendum drafted.
 - 2026-11-22: tone-curve tools (`get_tone_curve`, `adjust_tone_curve`) and `lr-tone-curve` skill; verified live.
 - 2026-11-22: library tools (rating, pick/reject, keywords, undo) on virtual copies only; verified live (plug-in 0.10.0).
 - 2026-11-22: collapsed-stack detection verified live (plug-in 0.9.4); mask tools refuse early.

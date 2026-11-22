@@ -142,6 +142,13 @@ class GuardrailSettings(_Section):
     curve_total: float = Field(default=64.0, gt=0.0, le=255.0)
     # A crop must keep at least this share of the frame.
     min_crop_fraction: float = Field(default=0.25, gt=0.0, le=1.0)
+    # Batch writes: photos per call, when a library batch needs the person's go-ahead, and how long
+    # a batch may run before it is stopped and reported. A develop batch always needs the go-ahead.
+    batch_library_max: int = Field(default=25, ge=1, le=25)
+    batch_develop_max: int = Field(default=10, ge=1, le=25)
+    batch_library_confirm_above: int = Field(default=5, ge=0, le=25)
+    batch_library_budget_s: float = Field(default=120.0, gt=0.0, le=3600.0)
+    batch_develop_budget_s: float = Field(default=600.0, gt=0.0, le=7200.0)
 
 
 class BackgroundSettings(_Section):

@@ -19,6 +19,7 @@ from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult, resolve_
 
 SET_TOOL = "set_library_state"
 UNDO_TOOL = "undo_library_change"
+BATCH_UNDO_TOOL = "undo_batch"  # a batch undo also takes back library changes
 MAX_KEYWORDS = 20
 MAX_KEYWORD_LENGTH = 64
 
@@ -115,7 +116,7 @@ class SetLibraryStateResult(ToolResult):
     note: str = ""
 
 
-def _target_copy(ctx: ToolContext, photo_id: str) -> PhotoInfo:
+def target_copy(ctx: ToolContext, photo_id: str) -> PhotoInfo:
     """The virtual copy to change: the photo itself if it is one, else its existing working copy."""
     photo = resolve_copy(ctx, photo_id)
     if not photo.is_virtual_copy:
@@ -157,7 +158,7 @@ def _problems(args: SetLibraryStateInput, after: LibraryState) -> list[str]:
 
 
 def set_library_state(ctx: ToolContext, args: SetLibraryStateInput) -> Outcome:
-    photo = _target_copy(ctx, args.photo_id)
+    photo = target_copy(ctx, args.photo_id)
     change = ctx.lightroom.set_library_state(
         photo.id,
         rating=args.rating,
@@ -226,7 +227,7 @@ def pending_library_changes(ctx: ToolContext, photo_id: str) -> list[JournalEntr
     already = {
         str(entry_id)
         for entry in entries
-        if entry.tool == UNDO_TOOL and entry.status == "ok" and entry.applied
+        if entry.tool in (UNDO_TOOL, BATCH_UNDO_TOOL) and entry.status == "ok" and entry.applied
         for entry_id in entry.applied.get("undone", [])
     }
     return [
@@ -242,15 +243,10 @@ def pending_library_changes(ctx: ToolContext, photo_id: str) -> list[JournalEntr
     ]
 
 
-def undo_library_change(ctx: ToolContext, args: UndoLibraryChangeInput) -> Outcome:
-    photo = _target_copy(ctx, args.photo_id)
-    pending = pending_library_changes(ctx, photo.id)
-    if not pending:
-        return Outcome(
-            UndoLibraryChangeResult(photo_id=photo.id, undone_steps=0, note=NOTHING_TO_UNDO)
-        )
-    chosen = pending if args.scope == "all" else pending[-1:]
-
+def restore_library_entries(
+    ctx: ToolContext, photo: PhotoInfo, chosen: Sequence[JournalEntry]
+) -> LibraryState:
+    """Put back what `chosen` (oldest first) changed on a photo; returns the state read back."""
     current = ctx.lightroom.get_library_state(photo.id)
     rating: int | None = None
     pick: int | None = None
@@ -283,6 +279,19 @@ def undo_library_change(ctx: ToolContext, args: UndoLibraryChangeInput) -> Outco
             add_keywords=to_add,
             remove_keywords=to_remove,
         ).after
+    return after
+
+
+def undo_library_change(ctx: ToolContext, args: UndoLibraryChangeInput) -> Outcome:
+    photo = target_copy(ctx, args.photo_id)
+    pending = pending_library_changes(ctx, photo.id)
+    if not pending:
+        return Outcome(
+            UndoLibraryChangeResult(photo_id=photo.id, undone_steps=0, note=NOTHING_TO_UNDO)
+        )
+    chosen = pending if args.scope == "all" else pending[-1:]
+
+    after = restore_library_entries(ctx, photo, chosen)
     result = UndoLibraryChangeResult(
         photo_id=photo.id, undone_steps=len(chosen), after=_shown(photo.id, after)
     )

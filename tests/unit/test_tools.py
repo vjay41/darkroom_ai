@@ -95,6 +95,9 @@ NOT_ABOUT_ONE_PHOTO = {
     "import_folder",
     "list_develop_parameters",
     "analyze_batch",
+    "batch_set_library_state",
+    "batch_set_develop_parameters",
+    "undo_batch",
 }
 
 
@@ -142,6 +145,9 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "get_library_state",
         "set_library_state",
         "undo_library_change",
+        "batch_set_library_state",
+        "batch_set_develop_parameters",
+        "undo_batch",
         "list_presets",
         "apply_preset",
     )
