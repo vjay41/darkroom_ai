@@ -141,3 +141,10 @@ tools = ["list_catalog_photos"]
 status = "verified"
 verified_on = "Lightroom 15.2.1"
 note = "Rating, flag and keyword need plug-in 0.11.0; file format, ISO and capture date need 0.12.0. An older plug-in is refused rather than returning an unfiltered list. There is no edited filter because Lightroom flags every virtual copy as edited."
+
+[[features]]
+name = "Catalog management (catalog overview, collections, keywords, owner allowlist, master metadata)"
+tools = ["get_catalog_info", "list_catalogs", "request_catalog_access", "request_folder_access", "create_collection_set", "create_collection", "add_to_collection", "remove_from_collection", "get_collection_photos", "create_keyword", "undo_collection_change", "scan_folder", "import_folder", "set_library_state"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (plug-in 0.13.0, rehearsal catalog)"
+note = "`scripts/catalog_live.py` ran 40+ checks live: a folder outside the allowed folders was refused, the owner prompt said No then Yes and the plug-in saw the new folder without a restart, scan flagged a same-name file, 4 photos were imported with files unchanged, collections and sets were made, filled, listed and undone, 12 photos needed a go-ahead, a keyword hierarchy was created, rating/flag/keyword were written to a MASTER and undone, and a catalog photo was edited and undone. Hermes also drove it. NOT verified: opening or creating a catalog (impossible from the plug-in, the owner does it), allowlisting a second real catalog, and imports cannot be undone by darkroom_ai."

@@ -1,6 +1,6 @@
 # PRD addendum: catalog management by Hermes (draft, needs the owner's sign-off)
 
-Status: APPROVED by the owner on 2026-11-22 (decisions in section 6). Build has not started.
+Status: APPROVED by the owner and BUILT on 2026-11-22 (decisions in section 6). Verified live: see docs/PROGRESS.md.
 
 ## 1. Problem
 The owner wants to hand Hermes a folder of photos and have Hermes do the cataloguing: see which catalogs exist, work in the

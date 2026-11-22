@@ -126,5 +126,19 @@ there and add a dated line here.
 - 2026-11-21: P7 skills installed; edit-loop check passed; P6 soak passed (20 cycles, 0 failures); people mask verified;
   displayed-photo guard; P1c handshake and probe; soak runner; `--stop-all`.
 
-## Catalog management (approved 2026-11-22)
-PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (decisions in section 6). Build order: allowlist list + CLI/approval, plug-in 0.13.0 read commands, import/organise commands, Python tools + fakes + tests, skills, live run on a new empty catalog. Nothing built yet.
+## Catalog management (built 2026-11-22)
+PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (owner decisions in section 6). Built and verified live on the rehearsal catalog
+(`scripts/catalog_live.py`, all checks pass; Hermes also drove it). Plug-in 0.13.0 (needs a full Lightroom restart to load).
+- Allowlist: `bridge.json` holds `allowed_catalogs` and `photos_roots`; only the owner changes them: `darkroom lightroom allow --catalog PATH
+  --photos-folder DIR`, or Hermes' `request_catalog_access` / `request_folder_access` (Yes/No prompt with the full path). The plug-in re-reads the
+  lists on every request, so no restart is needed. `darkroom lightroom setup` keeps the owner's approvals.
+- Tools: list_catalogs, get_catalog_info, request_catalog_access, request_folder_access, create_collection_set, create_collection, add_to_collection,
+  remove_from_collection, get_collection_photos, create_keyword, undo_collection_change. import_folder capped at 50 per call (go-ahead above 10,
+  added files kept in the journal). scan_folder flags same-name files already in the catalog.
+- Rating, flag and keywords may now be written to masters (owner decision); the photo whose id is passed is the one that changes.
+- Skills: lr-catalog-organisation, lr-catalog-partnering (installed in the Hermes profile, plus a note in `darkroom-ai-lightroom`).
+- Bug found by the live run and fixed: create_keyword for "A/B" failed because a keyword made in the same write step cannot be a parent; each level is now its own step.
+- Limits: Lightroom's SDK cannot create, open or switch catalogs or remove photos; Hermes guides the owner (File > Open Catalog / New Catalog, then Start Bridge).
+- Still open: the owner's real catalog is NOT on the allowlist (the owner adds it with the command or the prompt); `list_catalogs` default search is the
+  drive of the open catalog, the folders of allowed catalogs and Pictures (override with `catalog_search_dirs`).
+- Leftovers in the rehearsal catalog: 8 imported scratch photos (from `D:\darkroom_rehearsal\import_test*`) and the keyword `DarkroomLiveTest/Live`.

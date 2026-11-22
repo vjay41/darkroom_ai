@@ -1701,20 +1701,29 @@ function Commands.read.collection_photos(params, ctx)
 	}
 end
 
+-- One level per write step: Lightroom does not let a keyword created in the same step be used as a
+-- parent (the second level of "A/B" failed that way), so each level is committed before the next.
 function Commands.write.create_keyword(params, ctx)
 	local parts = splitPath(params.path, "path")
 	local created, parent = {}, nil
-	withWrite(ctx, "darkroom_ai: create keyword", function()
-		for _, name in ipairs(parts) do
-			local siblings = parent and (parent:getChildren() or {}) or (ctx.catalog:getKeywords() or {})
-			local found = byName(siblings, name)
+	for _, name in ipairs(parts) do
+		ctx.checkpoint()
+		local siblings = parent and (parent:getChildren() or {}) or (ctx.catalog:getKeywords() or {})
+		local found = byName(siblings, name)
+		if not found then
+			local level = parent
+			withWrite(ctx, "darkroom_ai: create keyword", function()
+				ctx.catalog:createKeyword(name, {}, true, level, true)
+			end)
+			siblings = level and (level:getChildren() or {}) or (ctx.catalog:getKeywords() or {})
+			found = byName(siblings, name)
 			if not found then
-				found = ctx.catalog:createKeyword(name, {}, true, parent, true)
-				created[#created + 1] = name
+				fail("CREATE_FAILED", "Lightroom did not create the keyword " .. name)
 			end
-			parent = found
+			created[#created + 1] = name
 		end
-	end)
+		parent = found
+	end
 	return { path = table.concat(parts, "/"), created_levels = list(created) }
 end
 
