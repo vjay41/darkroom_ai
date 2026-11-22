@@ -37,7 +37,7 @@ local model through LM Studio. Other Adobe versions give a warning (`get_capabil
 | Reliability: 20-cycle soak on the test catalog | 0 failures |
 | RAW/DNG develop writes | Not verified |
 | Colour and depth range masks | Not available through Lightroom's scripting interface |
-| Face detection | Needs a YuNet ONNX file you provide; none is shipped or downloaded |
+| Face detection | Left to Lightroom: people and subject masks use Lightroom's own detection. No face model is shipped or needed |
 | Import a folder into the catalog | Verified (asks first) |
 | Photoshop hand-off (`replace_background`: 16-bit TIFF in, new PSD out) | Present and verified, but outside the v1 scope; other Photoshop tools are not exposed |
 

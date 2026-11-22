@@ -15,7 +15,7 @@ carries a plain next step; this page adds the situations that took real effort t
 | People mask times out | Nobody picked a person in Lightroom's panel and pressed Create Mask | Run it again with Develop showing the working copy; pick the person, press Create Mask (or Return) within about 60 s. |
 | An edit "applied" but the preview did not change | Lightroom dropped the write on recompute, or a legacy key was used | Compare `differs_from_applied` in `analyze_photo`; use the `...2012` keys; read back with `get_develop_parameters`. |
 | Clipping numbers differ between two measurements | Different preview sizes | Measure at the same `long_edge`. |
-| `FACE_MODEL_MISSING` | No face model configured | Put a YuNet ONNX file on the machine and set `[faces] model` in `darkroom.local.toml`. Nothing is downloaded automatically. |
+| `FACE_MODEL_MISSING` | Face measurements are off (by design) | Not a fault. Use `get_preview` and Lightroom's people or subject masks. Optional: set `[faces] model` to a YuNet ONNX file you provide. |
 | `ADOBE_VERSION_UNSUPPORTED` / untested version warning | A version outside `compatibility.toml` | Follow `UPGRADE.md`; run `darkroom selftest`. It warns; it does not block. |
 | `ADOBE_FEATURE_UNAVAILABLE` | The Adobe app reports a feature as disabled | Likely a licence, trial or settings matter inside the Adobe app; fix it there. darkroom_ai has no licence logic. |
 | Deploy refuses to run | No person at the keyboard | Run `darkroom deploy` yourself in a terminal; `--dry-run` shows the plan anywhere. |

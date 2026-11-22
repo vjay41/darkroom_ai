@@ -311,7 +311,7 @@ def analyze_photo(ctx: ToolContext, args: AnalyzePhotoInput) -> Outcome:
     except DarkroomError as exc:
         if exc.code is not ErrorCode.FACE_MODEL_MISSING:
             raise
-        note = f"[{exc.code.value}] {exc.message} {exc.next_step}"
+        note = f"[{exc.code.value}] {exc.message} {exc.next_step}"  # informational, not a failure
     result = AnalyzePhotoResult(
         photo_id=target.id,
         preview_path=str(preview.path),

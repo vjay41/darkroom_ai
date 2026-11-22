@@ -39,7 +39,7 @@ onnx_input_width = 1024
 onnx_input_height = 1024
 
 [faces]
-# model = "D:/models/face_detection_yunet.onnx"   # without it face analysis returns FACE_MODEL_MISSING
+# model = "D:/models/face_detection_yunet.onnx"   # optional: faces are normally left to Lightroom (people/subject masks)
 score_threshold = 0.7
 [gpu]
 min_free_mb = 3000          # doctor warns if a GPU that Photoshop uses has less free memory than this

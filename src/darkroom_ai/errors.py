@@ -148,9 +148,11 @@ _DEFAULTS: dict[ErrorCode, tuple[str, str]] = {
         "another photo.",
     ),
     ErrorCode.FACE_MODEL_MISSING: (
-        "No face-detection model is available, so face and skin-tone analysis is switched off.",
-        "Put a YuNet face-detection ONNX file on this computer and set its path as "
-        "faces.model in darkroom.toml. Nothing is downloaded automatically.",
+        "Face and skin-tone measurements are not computed here: Lightroom finds faces and "
+        "people itself.",
+        "Look at the preview (get_preview) and use Lightroom's own people or subject masks "
+        "(create_mask) for faces. Optional: a YuNet ONNX file set as faces.model in "
+        "darkroom.toml turns the measurements on; nothing is downloaded automatically.",
     ),
     ErrorCode.IMAGE_UNREADABLE: (
         "The image file could not be read.",

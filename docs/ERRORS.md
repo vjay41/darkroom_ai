@@ -11,7 +11,7 @@ Every failure is a `DarkroomError` with a stable code, a plain message and a nex
 | `CONFIG_INVALID` | The configuration is not valid. | Fix the listed settings in darkroom.toml (or darkroom.local.toml) and run `darkroom doctor`. |
 | `CONFIRMATION_REQUIRED` | This action needs your explicit go-ahead. | Review the plan that was shown and confirm it to continue. |
 | `CONNECTOR_STALE` | The darkroom_ai connector is running older code than the files on disk, so it refuses to change anything. | Restart the connector: toggle darkroom_ai off and on in Hermes' Capabilities (or quit and reopen Hermes), or run `darkroom connectors --stop-stale`. Reads still work. |
-| `FACE_MODEL_MISSING` | No face-detection model is available, so face and skin-tone analysis is switched off. | Put a YuNet face-detection ONNX file on this computer and set its path as faces.model in darkroom.toml. Nothing is downloaded automatically. |
+| `FACE_MODEL_MISSING` | Face and skin-tone measurements are not computed here: Lightroom finds faces and people itself. | Look at the preview (get_preview) and use Lightroom's own people or subject masks (create_mask) for faces. Optional: a YuNet ONNX file set as faces.model in darkroom.toml turns the measurements on; nothing is downloaded automatically. |
 | `GUARDRAIL_REJECTED` | The request is outside a safety rule. | Read the message above; nothing was changed. |
 | `IMAGE_UNREADABLE` | The image file could not be read. | Check that the file exists and is a JPG, PNG, TIFF or supported RAW file. |
 | `LLM_BAD_TOOL_CALL` | The model returned a tool call that could not be used. | Retry; if it keeps happening, change tool_mode for this profile or try another profile (`darkroom models test` compares them). |

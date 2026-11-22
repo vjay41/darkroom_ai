@@ -35,8 +35,8 @@ All v1 build phases are done except the owner-only release steps. `make quality`
 - `darkroom deploy --dry-run` on the real profile: nothing to write.
 
 ## Known limits (stated in the README too)
-RAW/DNG develop writes and RAW lens work unverified; colour and depth range masks unavailable through the SDK; no face
-model shipped (`FACE_MODEL_MISSING`); one Lightroom client at a time; mask tools take over Develop briefly; a virtual
+RAW/DNG develop writes and RAW lens work unverified; colour and depth range masks unavailable through the SDK; face
+detection is left to Lightroom's own people/subject masks (no model by design); one Lightroom client at a time; mask tools take over Develop briefly; a virtual
 copy in a collapsed stack cannot be shown; Hermes needs a restart to see new tools; Adobe versions frozen until a
 deliberate, drilled update.
 
@@ -58,7 +58,6 @@ deliberate, drilled update.
    they must run inside `LrTasks.pcall` (plain `pcall` fails). `darkroom doctor` also warns when the selected photo is in a collapsed stack.
 3. **List filters** (file format, capture date, ISO) on `list_catalog_photos`: needs a plug-in change.
 4. **RAW/DNG**: verify writes and lens corrections on a RAW test catalog; then update `compatibility.toml`.
-5. **Faces**: document how to supply a YuNet ONNX file; verify the face tools.
 6. **Lua checks** in CI: provide `luac` so the 8 skipped tests run.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 

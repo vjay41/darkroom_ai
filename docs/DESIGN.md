@@ -78,6 +78,9 @@ slider ranges (`tools/develop_parameters.py`, data only).
 12. Autonomy: do everything that can be done without asking; ask only for irreversible actions, the production
     catalog, or credentials that are missing.
 13. No scripted editing anywhere (this document's first section).
+14. Faces and people are Lightroom's job (2026-11-22): the agent uses Lightroom's own people, subject and
+    background masks and does not keep its own face data. No face model is shipped or required; the optional
+    YuNet measurement path stays off by default. `FACE_MODEL_MISSING` is informational, not a defect.
 
 ## Non-goals (v1)
 A second LLM or an agent loop inside this project; generative edits; deleting or moving files; a GUI; AI Denoise or
