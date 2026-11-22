@@ -4,7 +4,7 @@ Living status. Keep it short and current: update it in every change that moves t
 build log (every spike, failure and live check up to 2026-11-22) is kept privately by the owner; the facts that matter
 are summarised here and in `DESIGN.md`.
 
-Last updated: 2026-11-22. Branch: `dev` (ahead of the v0.1.0 release). Version `0.1.0` plus unreleased library, tone-curve and filter tools; plug-in 0.12.0. Verified on Windows 11, Python 3.13, Lightroom Classic
+Last updated: 2026-11-22. Branch: `dev` (same as `master` at v0.1.1). Version `0.1.1`; plug-in 0.12.0. Verified on Windows 11, Python 3.13, Lightroom Classic
 15.2.1, Photoshop 2026 (27.8), Hermes with a local model via LM Studio.
 
 ## Where it stands
@@ -48,7 +48,8 @@ copy in a collapsed stack cannot be shown; Hermes needs a restart to see new too
 deliberate, drilled update.
 
 ## Release status
-Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested at release time, test-catalog writes only; ARW verified afterwards on 2026-11-22).
+Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested at release time, test-catalog writes only).
+**v0.1.1** (2026-11-22) adds: library tools, tone-curve tools, batch writes with `undo_batch`, list filters (rating, flag, keyword, file format, ISO, capture date), RAW (ARW and DNG) verified, `inspect_masks` fix, and a connector that ends itself when stale and idle. All verified live on the test catalog only.
 
 - Repository is public: https://github.com/vjay41/darkroom_ai (MIT, `LICENSE`).
 - `dev` (default branch), `master` and tag `v0.1.0` all pointed at `3e236d9` when released; `master` was
@@ -74,7 +75,7 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
 ## Open threads and housekeeping
-- `dev` is pushed (the owner approved pushing dev); `master` and the v0.1.0 tag are untouched.
+- `dev` is pushed. `master` was fast-forwarded to `dev` and tagged `v0.1.1` on the owner's explicit instruction (2026-11-22).
 - Library tools use guardrail defaults of at most 20 keywords per call; tone curve moves at most 32 per pass and 64 in total (`darkroom.toml`). Treat them as starting values.
 - Spike keywords `darkroom-ai-library-spike` and `darkroom-ai-filter-spike`, and extra virtual copies, remain in the TEST catalog; harmless.
 - Hermes profile `darkroom` now has `lr-tone-curve`, the updated `lr-batch-operations` and the developer skill `darkroom-dev-review` (under software-development, read-and-propose only). A backup of the replaced skill is in the profile's `backups/`.
