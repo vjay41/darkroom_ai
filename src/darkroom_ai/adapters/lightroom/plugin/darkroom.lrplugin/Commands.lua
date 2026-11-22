@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.9.1"
+local PLUGIN_VERSION = "0.9.2"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -86,7 +86,29 @@ local function findWritablePhoto(ctx, id, needsVirtualCopy)
 	return photo
 end
 
+-- Stack state (read-only). A photo inside a COLLAPSED stack cannot be shown in Develop, which
+-- the mask tools need. Returns nil when Lightroom does not report it.
+local function stackState(photo)
+	local okIn, inStack = pcall(function()
+		return photo:getRawMetadata("isInStackInFolder")
+	end)
+	if not okIn or type(inStack) ~= "boolean" then
+		return nil, nil
+	end
+	if not inStack then
+		return false, false
+	end
+	local okCollapsed, collapsed = pcall(function()
+		return photo:getRawMetadata("stackInFolderIsCollapsed")
+	end)
+	if okCollapsed and type(collapsed) == "boolean" then
+		return true, collapsed
+	end
+	return true, nil
+end
+
 local function summary(photo)
+	local inStack, stackCollapsed = stackState(photo)
 	local isCopy = photo:getRawMetadata("isVirtualCopy") and true or false
 	local master = isCopy and photo:getRawMetadata("masterPhoto") or nil
 	local dims = photo:getRawMetadata("dimensions")
@@ -101,6 +123,8 @@ local function summary(photo)
 		copy_name = photo:getFormattedMetadata("copyName"),
 		width = dims and dims.width or nil,
 		height = dims and dims.height or nil,
+		in_stack = inStack,
+		stack_collapsed = stackCollapsed,
 	}
 end
 

@@ -494,10 +494,26 @@ def _create_people(ctx: ToolContext, photo_id: str, created: bool) -> Outcome:
     )
 
 
+def _refuse_collapsed_stack(ctx: ToolContext, photo_id: str) -> None:
+    """Lightroom cannot show a photo that sits in a collapsed stack, so a mask that needs the photo
+    in Develop would only wait and fail. Say so at once instead (read-only check)."""
+    if ctx.lightroom.get_photo(photo_id).stack_collapsed is not True:
+        return
+    raise DarkroomError(
+        ErrorCode.LR_BUSY_USER,
+        f"The working copy ({photo_id}) is inside a collapsed stack, so Lightroom cannot show it "
+        "in Develop and this mask cannot be made. Nothing was changed.",
+        next_step="In Lightroom's Library module (a folder or All Photographs as the source) "
+        "choose Photo > Stacking > Expand All Stacks, then call create_mask again.",
+        details={"photo_id": photo_id, "stack_collapsed": True},
+    )
+
+
 def create_mask(ctx: ToolContext, args: CreateMaskInput) -> Outcome:
     copy, created = working_copy(ctx, args.photo_id)
     if args.is_written:
         return _create_written(ctx, args, copy.id, created)
+    _refuse_collapsed_stack(ctx, copy.id)
     if args.mask_type == "aiSelection" and args.subtype == "people":
         return _create_people(ctx, copy.id, created)
     before = ctx.lightroom.get_develop_settings(copy.id, [MASKS_KEY]).get(MASKS_KEY)

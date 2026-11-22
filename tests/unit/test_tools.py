@@ -994,6 +994,21 @@ def test_create_mask_checks_the_result_and_is_undoable(rig: Rig) -> None:
     assert rig.call("list_masks", photo_id=got["photo_id"])["count"] == 0
 
 
+def test_mask_in_a_collapsed_stack_is_refused_at_once_with_the_fix(rig: Rig) -> None:
+    first = rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="subject")
+    copy_id = first["photo_id"]
+    rig.lightroom.collapsed_stack_ids.add(copy_id)
+    info = rig.call("get_photo_info", photo_id=copy_id)
+    assert info["photo"]["in_stack"] is True and info["photo"]["stack_collapsed"] is True
+    with pytest.raises(DarkroomError) as caught:
+        rig.call("create_mask", photo_id=copy_id, mask_type="aiSelection", subtype="sky")
+    assert caught.value.code is ErrorCode.LR_BUSY_USER
+    assert "Expand All Stacks" in caught.value.next_step
+    assert rig.call("list_masks", photo_id=copy_id)["count"] == 1  # nothing was added
+    rig.lightroom.collapsed_stack_ids.clear()
+    assert rig.call("create_mask", photo_id=copy_id, mask_type="aiSelection", subtype="sky")
+
+
 def test_create_mask_rejects_a_wrong_subtype(rig: Rig) -> None:
     with pytest.raises(DarkroomError) as caught:
         rig.call("create_mask", photo_id=MASTER, mask_type="aiSelection", subtype="sunset")

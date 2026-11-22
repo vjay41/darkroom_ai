@@ -82,6 +82,8 @@ class SimulatedLightroom:
         self.calls: list[str] = []
         # Mask subtypes this simulated Lightroom does not create (as the real one with "people").
         self.refused_mask_subtypes: set[str] = set()
+        # Photos that sit in a collapsed stack (Lightroom cannot show these in Develop).
+        self.collapsed_stack_ids: set[str] = set()
         # The photo Lightroom shows in Develop; a new virtual copy is selected, as in Lightroom.
         self.selected_id = "master-1"
         self.add_photo("master-1", "TEST_0001.jpg", file_format=file_format)
@@ -106,7 +108,10 @@ class SimulatedLightroom:
                 "No photo with that id",
                 details={"plugin_code": "PHOTO_NOT_FOUND"},
             )
-        return PhotoInfo.model_validate(self.photos[photo_id])
+        info = dict(self.photos[photo_id])
+        if photo_id in self.collapsed_stack_ids:
+            info.update(in_stack=True, stack_collapsed=True)
+        return PhotoInfo.model_validate(info)
 
     def _copy_only(self, photo_id: str) -> None:
         if not self._info(photo_id).is_virtual_copy:
@@ -119,11 +124,11 @@ class SimulatedLightroom:
     # -- LightroomAdapter -----------------------------------------------------------------------
 
     def bridge_status(self) -> BridgeStatus:
-        return BridgeStatus(instance="fake", plugin_version="0.9.1", uptime_s=1.0)
+        return BridgeStatus(instance="fake", plugin_version="0.9.2", uptime_s=1.0)
 
     def ping(self) -> PingInfo:
         return PingInfo(
-            plugin_version="0.9.1",
+            plugin_version="0.9.2",
             protocol=1,
             lightroom_version="15.2.1",
             catalog_path="D:\\cat\\Test.lrcat",
@@ -134,7 +139,7 @@ class SimulatedLightroom:
     def list_commands(self) -> CommandList:
         self.calls.append("list_commands")
         return CommandList(
-            plugin_version="0.9.1", read=tuple(sorted(REQUIRED_PLUGIN_COMMANDS)), write=()
+            plugin_version="0.9.2", read=tuple(sorted(REQUIRED_PLUGIN_COMMANDS)), write=()
         )
 
     def get_selection(self) -> Selection:

@@ -43,6 +43,10 @@ class PhotoInfo(_Result):
     copy_name: str | None = None
     width: int | None = None
     height: int | None = None
+    in_stack: bool | None = None
+    """True if the photo is in a stack in its folder; None if Lightroom did not report it."""
+    stack_collapsed: bool | None = None
+    """True if that stack is collapsed (the photo cannot be shown in Develop); None if unknown."""
     snapshots: tuple[Snapshot, ...] = ()
 
 
