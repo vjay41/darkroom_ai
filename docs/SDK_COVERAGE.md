@@ -39,7 +39,7 @@ the Hermes skills.
 | Search the catalog incl. colour label (`findPhotos`) | `find_photos` | **verified live** after a fix: labelColor takes a number 1-5 and an invalid value stalls Lightroom, so values are now checked against the SDK's types |
 | Smart collections (`createSmartCollection`) | `create_smart_collection` | **verified live** (created and removed through undo_collection_change) |
 | Smart previews (`buildSmartPreviews`) | `build_smart_previews` | runs without error; the preview file itself was not inspected |
-| Metadata and file-naming presets | `list_catalog_presets`, `apply_metadata_preset` | list verified live; this catalog has no metadata presets, so apply is unverified |
+| Metadata and file-naming presets | `list_catalog_presets`, `apply_metadata_preset` | file-naming list verified live. **Metadata presets: SDK limit** - on Lightroom 15.2.1 `LrApplication.metadataPresets()` returns an empty table even when a preset shows in Lightroom's own menu, and applying by id fails, so `apply_metadata_preset` returns `PRESET_NOT_FOUND`. Use `set_photo_metadata` for copyright and similar fields |
 | Collections and sets, add/remove photos | `create_collection_set`, `create_collection`, `add_to_collection`, `remove_from_collection`, `get_collection_photos`, `undo_collection_change` | verified |
 | Import from folder (no move/copy) | `scan_folder`, `import_folder` | verified |
 | Virtual copies (working copies) | automatic in every edit tool | verified |

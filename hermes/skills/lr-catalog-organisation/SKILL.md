@@ -69,5 +69,5 @@ date; combine with intersect or union). Use it to answer "where are my red-label
 a search that keeps itself current, `create_smart_collection` saves the same conditions as a smart collection
 (it only adds a collection). `build_smart_previews` makes small editable stand-ins for up to 25 photos so work can
 continue when originals are offline. `list_catalog_presets` lists metadata or file-naming presets;
-`apply_metadata_preset` overwrites the fields a preset fills in, so say which fields and ask first. All of these
+`apply_metadata_preset` overwrites the fields a preset fills in, so say which fields and ask first. On Lightroom 15.2.1 the SDK lists no metadata presets (`PRESET_NOT_FOUND`); set the fields directly with `set_photo_metadata` instead. All of these
 are unverified on a live Lightroom yet.
