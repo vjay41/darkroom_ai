@@ -1,6 +1,6 @@
 ---
 name: lr-ai-enhance
-description: "Use Lightroom's own AI Enhance (Denoise, Raw Details, Super Resolution) and Reflection Removal: when each helps, what it costs, how to check the result and go back. Process knowledge only."
+description: "Use Lightroom's own AI Enhance (Denoise, Super Resolution) and Reflection Removal: when each helps, what it costs, how to check the result and go back. Process knowledge only."
 version: 1.0.0
 author: Darkroom
 license: MIT
@@ -20,7 +20,7 @@ minutes and load the GPU, so do one photo at a time and say so before starting.
 ## Choose
 - Noisy high-ISO photo: `enhance` with feature `denoise`. Start with a moderate amount; more removes detail.
   Compare noise before and after with `analyze_photo`.
-- RAW with soft fine detail: `enhance` with `rawDetails`. Not useful on a JPG.
+- RAW with soft fine detail: Lightroom applies Raw Details together with Denoise or Super Resolution; it cannot be run alone.
 - Need more pixels for a big print or a hard crop: `enhance` with `superRes` (about four times the pixels). Do this
   last, after the edit is settled.
 - Glass glare or window reflections: `reflection_removal`, quality `preview` first, then `standard` or `best` if
@@ -33,4 +33,4 @@ changed, use `restore_snapshot` with the snapshot named in the result and tell t
 
 ## Do not
 Run these in bulk without asking, stack Denoise on top of heavy sharpening, or claim success from the tool
-answer alone: look at the picture. Checked on this PC: Denoise on a RAW took about half a minute; Reflection Removal at preview quality about 15 seconds; Denoise and Raw Details are not offered for JPG files (Super Resolution is). The reflection panel getter may answer nothing, so judge it from the picture and Lightroom's history.
+answer alone: look at the picture. Checked on this PC: Denoise on a RAW took about half a minute; Reflection Removal at preview quality about 15 seconds; Denoise is not offered for JPG files (Super Resolution is, about 15 seconds). The reflection panel getter may answer nothing, so judge it from the picture and Lightroom's history.

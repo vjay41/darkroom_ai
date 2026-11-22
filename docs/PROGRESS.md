@@ -4,7 +4,7 @@ Living status. Keep it short and current: update it in every change that moves t
 build log (every spike, failure and live check up to 2026-11-22) is kept privately by the owner; the facts that matter
 are summarised here and in `DESIGN.md`.
 
-Last updated: 2026-11-22. Branch: `dev` (same as `master` at v0.2.0). Version `0.2.0`; plug-in 0.13.1. Verified on Windows 11, Python 3.13, Lightroom Classic
+Last updated: 2026-11-22. Branch: `dev` (same as `master` at v0.3.0). Version `0.3.0`; plug-in 0.15.0. Verified on Windows 11, Python 3.13, Lightroom Classic
 15.2.1, Photoshop 2026 (27.8), Hermes with a local model via LM Studio.
 
 ## Where it stands
@@ -49,6 +49,8 @@ deliberate, drilled update.
 
 ## Release status
 Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested at release time, test-catalog writes only).
+**v0.3.0** (2026-11-22) adds: SDK coverage (catalog search and smart collections, smart previews, metadata presets, AI Enhance Denoise and Super Resolution, Reflection Removal, reset scopes, rotate, auto-adjust). Verified live on the rehearsal catalog and in a Hermes end-to-end run. **Not verified live:** `apply_metadata_preset` (Lightroom did not load a hand-written preset; unit-tested only) and `remove_distracting_people` (blocked: Lightroom shows an Adobe error while offline; the tool returns `ADOBE_FEATURE_UNAVAILABLE`). Raw Details cannot run alone (Lightroom applies it with Denoise or Super Resolution), so it is not offered.
+
 **v0.2.0** (2026-11-22) adds: catalog management (allowlist, collections, keywords, imports), noise and sharpness measurement with two skills, `measure_region` with the skin-tone skill, S-curve and RAW verification, and fast catalog-wide reads (plug-in 0.13.1). All verified live on the rehearsal catalog only.
 
 **v0.1.1** (2026-11-22) adds: library tools, tone-curve tools, batch writes with `undo_batch`, list filters (rating, flag, keyword, file format, ISO, capture date), RAW (ARW and DNG) verified, `inspect_masks` fix, and a connector that ends itself when stale and idle. All verified live on the test catalog only.

@@ -74,7 +74,7 @@
 | [`build_smart_previews`](#build_smart_previews) | writes | Build smart previews (small editable stand-ins) for up to 25 photos, so they can be edited while the original files are offline. |
 | [`list_catalog_presets`](#list_catalog_presets) | reads | List the names of Lightroom's metadata presets (for example a copyright template) or file-naming presets. |
 | [`apply_metadata_preset`](#apply_metadata_preset) | writes | Apply a metadata preset to photos. |
-| [`enhance`](#enhance) | writes | Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100), 'rawDetails' or 'superRes' (doubles the pixels). |
+| [`enhance`](#enhance) | writes | Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100, RAW only) or 'superRes' (doubles the pixels). |
 | [`reflection_removal`](#reflection_removal) | writes | Run Lightroom's AI Reflection Removal (for example glass glare) on the working copy. |
 | [`undo`](#undo) | writes | Take back darkroom_ai's edits made in THIS session: the last one, or all of them. |
 | [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
@@ -861,12 +861,12 @@ Apply a metadata preset to photos. It overwrites the fields the preset fills in,
 
 **Writes** (changes the catalog or a photo's settings).
 
-Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100), 'rawDetails' or 'superRes' (doubles the pixels). It can take minutes and uses the GPU, changes what the photo shows, saves a snapshot first and needs the person's go-ahead. Judge the result with get_preview and get_ai_panel_state.
+Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100, RAW only) or 'superRes' (doubles the pixels). Raw Details cannot be run alone: Lightroom applies it with those two. It can take minutes and uses the GPU, changes what the photo shows, saves a snapshot first and needs the person's go-ahead. Judge the result with get_preview and get_ai_panel_state.
 
 | Parameter | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `photo_id` | string | yes |  | min length 1 |
-| `feature` | `denoise` \| `rawDetails` \| `superRes` | yes |  |  |
+| `feature` | `denoise` \| `superRes` | yes |  |  |
 | `amount` | integer (may be null) | no | `None` |  |
 
 ### `reflection_removal`

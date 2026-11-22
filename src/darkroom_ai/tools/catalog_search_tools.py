@@ -197,15 +197,16 @@ def apply_metadata_preset(ctx: ToolContext, args: ApplyMetadataPresetInput) -> O
 
 
 class EnhanceInput(BaseModel):
-    """Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100), 'rawDetails' or
-    'superRes' (doubles the pixels). It can take minutes and uses the GPU, changes what the photo
+    """Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100, RAW only) or
+    'superRes' (doubles the pixels). Raw Details cannot be run alone: Lightroom applies it with
+    those two. It can take minutes and uses the GPU, changes what the photo
     shows, saves a snapshot first and needs the person's go-ahead. Judge the result with
     get_preview and get_ai_panel_state."""
 
     model_config = ConfigDict(extra="forbid")
 
     photo_id: str = Field(min_length=1)
-    feature: Literal["denoise", "rawDetails", "superRes"]
+    feature: Literal["denoise", "superRes"]
     amount: int | None = Field(default=None, ge=1, le=100)
 
 

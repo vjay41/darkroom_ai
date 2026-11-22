@@ -1,6 +1,6 @@
 [project]
 name = "darkroom-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local, offline AI photo-editing agent that drives Lightroom Classic and Photoshop with a local vision LLM."
 readme = "README.md"
 requires-python = ">=3.13,<3.15"

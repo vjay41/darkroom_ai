@@ -210,11 +210,15 @@ def main() -> None:
         return {"ok": call("build_smart_previews", photo_ids=[m1])["requested"] == 1}
 
     def s_metadata_preset() -> dict[str, Any]:
-        names = st.get("md_presets") or []
+        names = call("list_catalog_presets", kind="metadata")["presets"]
         if not names:
             return {"ok": True, "skipped": "no metadata presets in this catalog"}
-        out = call("apply_metadata_preset", photo_ids=[st["c1"]], preset=names[0])
-        return {"ok": out["applied"] == 1, "preset": names[0]}
+        copy_id = call("get_photo_info", photo_id=m1)["working_copy_id"]
+        out = call("apply_metadata_preset", photo_ids=[copy_id], preset=names[0])
+        info = call("get_photo_metadata", photo_id=copy_id)
+        seen = "darkroom-test-preset" in short(info, 4000)
+        call("set_photo_metadata", photo_id=copy_id, copyright="")
+        return {"ok": out["applied"] == 1 and seen, "preset": names[0], "copyright_seen": seen}
 
     def s_copy_settings() -> dict[str, Any]:
         src = st["c1"]
@@ -333,6 +337,17 @@ def main() -> None:
         )
         return {"ok": clean, "values": done}
 
+    def s_super_res() -> dict[str, Any]:
+        out = call("enhance", photo_id=master("DSC_2413-3.jpg"), feature="superRes")
+        return {"ok": bool(out["run"]["callback_called"]), "run": short(out["run"], 600)}
+
+    def s_reset_scopes() -> dict[str, Any]:
+        done = {}
+        for scope in ("masks", "spots", "crop", "transforms", "red_eye"):
+            out = call("reset_develop", photo_id=m1, scope=scope)
+            done[scope] = bool(out["result"]["snapshot"])
+        return {"ok": all(done.values()), "snapshots_taken": done}
+
     def s_scene() -> dict[str, Any]:
         c = st["c1"]
         return {
@@ -387,12 +402,14 @@ def main() -> None:
         ("remove_objects", s_remove_objects),
         ("red_eye", s_red_eye),
         ("retouch_state", s_retouch_state),
+        ("reset_scopes", s_reset_scopes),
         ("scene", s_scene),
         ("presets", s_presets),
         ("export", s_export),
     ]
     if args.ai:
         plan += [("enhance", s_enhance), ("reflection", s_reflection)]
+        plan += [("super_res", s_super_res)]
     if only and "cleanup" in only:
         plan.append(("cleanup", s_cleanup))
     for name, fn in plan:
