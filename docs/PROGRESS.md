@@ -4,7 +4,7 @@ Living status. Keep it short and current: update it in every change that moves t
 build log (every spike, failure and live check up to 2026-11-22) is kept privately by the owner; the facts that matter
 are summarised here and in `DESIGN.md`.
 
-Last updated: 2026-11-22. Branch: `dev`. Version `0.1.0`. Verified on Windows 11, Python 3.13, Lightroom Classic
+Last updated: 2026-11-22. Branch: `dev` (ahead of the v0.1.0 release). Version `0.1.0` plus unreleased library, tone-curve and filter tools; plug-in 0.11.0. Verified on Windows 11, Python 3.13, Lightroom Classic
 15.2.1, Photoshop 2026 (27.8), Hermes with a local model via LM Studio.
 
 ## Where it stands
@@ -34,6 +34,13 @@ All v1 build phases are done except the owner-only release steps. `make quality`
 - Handshake and capability probe live: protocol 1 matches, no missing plug-in commands.
 - `darkroom deploy --dry-run` on the real profile: nothing to write.
 
+- Supervised portrait run (2026-11-22, TEST catalog, Hermes + Qwen3.8 27B): one portrait JPG, working copy only, 2 of 3
+  passes used. Subject mask created and read back with the expected exposure value; lens profile toggle applied and held.
+  Journal shows no errors. **Not verified:** which lens profile actually resolved (name reads null), per-face skin
+  measurement (no face model by design; the agent sampled a region instead), visual check of the mask shape, and
+  `inspect_masks` reported no tools while `list_masks` showed the mask (disagreement, to investigate). The +0.25 EV
+  lift raised highlight clipping from 0.32% to 1.12%; the agent reported it and left it.
+
 ## Known limits (stated in the README too)
 RAW/DNG develop writes and RAW lens work unverified; colour and depth range masks unavailable through the SDK; face
 detection is left to Lightroom's own people/subject masks (no model by design); one Lightroom client at a time; mask tools take over Develop briefly; a virtual
@@ -51,18 +58,25 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested,
 
 ## Next steps (post-v1, in rough priority)
 1. **Batch writes**: a batch id in the journal, one undo for a whole batch, chunk and error-budget limits, one
-   confirmation per chunk plan. Needs a short PRD addendum and sign-off first. Design is in `lr-batch-operations`.
+   confirmation per chunk plan. The PRD addendum is drafted in `PRD_ADDENDUM_BATCH_WRITES.md` and **waits for the owner's
+   sign-off and answers to its open questions; nothing is built.** Process design is in `lr-batch-operations`.
 2. **Collapsed-stack detection**: DONE and verified live (plug-in 0.9.4, 2026-11-22). `get_photo`/`get_photo_info` report
    `in_stack`, `stack_collapsed` and a `stack_note` when Lightroom does not say; `create_mask` for kinds that need Develop
    refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
    collapsed -> true and the mask call was refused in under 3 s with nothing created. The SDK's metadata calls yield, so
    they must run inside `LrTasks.pcall` (plain `pcall` fails). `darkroom doctor` also warns when the selected photo is in a collapsed stack.
-3. **List filters** (file format, capture date, ISO) on `list_catalog_photos`: needs a plug-in change.
+3. **List filters**: rating, flag and keyword are DONE and verified live (plug-in 0.11.0, 18 checks). There is deliberately no
+   "edited" filter (Lightroom flags every virtual copy as edited). File format, capture date and ISO filters remain open.
 4. **RAW/DNG**: verify writes and lens corrections on a RAW test catalog; then update `compatibility.toml`.
 6. **Lua checks** in CI: provide `luac` so the 8 skipped tests run.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
 ## Open threads and housekeeping
+- Unpushed commits on `dev` since v0.1.0: library tools, tone-curve tools, list filters (and this documentation update). Push only when told.
+- Library tools use guardrail defaults of at most 20 keywords per call; tone curve moves at most 32 per pass and 64 in total (`darkroom.toml`). Treat them as starting values.
+- Spike keywords `darkroom-ai-library-spike` and `darkroom-ai-filter-spike`, and extra virtual copies, remain in the TEST catalog; harmless.
+- Hermes profile `darkroom` now has `lr-tone-curve`, the updated `lr-batch-operations` and the developer skill `darkroom-dev-review` (under software-development, read-and-propose only). A backup of the replaced skill is in the profile's `backups/`.
+- Unverified: Windows `poetry install` itself, RAW/DNG writes, the production catalog, and edit quality across photo types.
 - `dev` is pushed up to v0.1.0; later commits are local until the owner says to push.
 - A stray Photoshop instance may be open from an earlier test; it is not needed for v1.
 - Two empty people masks may remain on one test-catalog working copy; harmless.
@@ -75,6 +89,9 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: list filters (rating, flag, keyword) verified live on plug-in 0.11.0; `edited` filter dropped; batch-writes PRD addendum drafted (no build).
+- 2026-11-22: tone-curve tools (`get_tone_curve`, `adjust_tone_curve`) and `lr-tone-curve` skill; verified live.
+- 2026-11-22: library tools (rating, pick/reject, keywords, undo) on virtual copies only; verified live (plug-in 0.10.0).
 - 2026-11-22: collapsed-stack detection verified live (plug-in 0.9.4); mask tools refuse early.
 - 2026-11-22: documentation set written; deploy kit, `NOTICE`, install guide; release-hygiene pass (skills no longer name the user).
 - 2026-11-22: `analyze_batch` verified live; `lr-batch-operations` skill.
