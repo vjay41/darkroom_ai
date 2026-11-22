@@ -63,4 +63,4 @@ supervised pass.
 
 ## What is *not* tested yet
 DNG files from cameras or phones (only an ARW-converted DNG was run); colour/depth range masks (unavailable); face detection (no model
-shipped); the Lua plug-in under `luac` in CI; the production catalog. These are listed in `PROGRESS.md`.
+shipped); the production catalog (the Lua syntax tests pass when run with the SDK's `luac.exe`; there is no CI service). These are listed in `PROGRESS.md`.

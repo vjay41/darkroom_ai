@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -88,9 +89,9 @@ def test_write_commands_match_between_plugin_and_fake() -> None:
 
 @pytest.mark.parametrize("path", LUA_FILES, ids=lambda p: p.name)
 def test_lua_syntax(path: Path) -> None:
-    luac = os.environ.get("DARKROOM_LUAC")
+    luac = os.environ.get("DARKROOM_LUAC") or shutil.which("luac5.1") or shutil.which("luac")
     if not luac:
-        pytest.skip("set DARKROOM_LUAC to the SDK's luac.exe to syntax-check the plug-in")
+        pytest.skip("set DARKROOM_LUAC to the SDK's luac.exe (or put luac on PATH) to check Lua")
     result = subprocess.run([luac, "-p", str(path)], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
 

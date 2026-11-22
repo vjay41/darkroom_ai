@@ -70,7 +70,7 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 3. **List filters**: rating, flag, keyword, file format, ISO and capture date are DONE and verified live (plug-in 0.12.0; 34 checks on 143 photos, JPG + RAW). There is deliberately no
    "edited" filter (Lightroom flags every virtual copy as edited).
 4. **RAW**: Sony ARW verified 2026-11-22 (`scripts/raw_live.py`, 2 files, all checks). DNG verified the same day on `DSC00482.dng`, which Lightroom made from the ARW (the ARW file stays on disk; the test catalog now points at the DNG for that photo, so scripts that named `DSC00482.ARW` need the `.dng` path). The lens profile resolves by name on ARW and DNG (`Adobe (Sony FE 24-70mm F2.8 GM II)`).
-6. **Lua checks** in CI: provide `luac` so the 8 skipped tests run.
+6. **Lua syntax checks**: DONE. The repo has no CI service; the 8 tests run whenever `DARKROOM_LUAC` is set or `luac` is on PATH. Run on 2026-11-22 with the SDK's `luac.exe` (Lua 5.1): 25 passed, none skipped, plug-in 0.12.0.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
 ## Open threads and housekeeping
@@ -96,6 +96,7 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: Lua syntax tests run with the SDK's `luac.exe`: all pass (plug-in 0.12.0); the test also finds `luac` on PATH.
 - 2026-11-22: DNG develop writes verified live and the RAW lens profile confirmed to resolve (ARW and DNG).
 - 2026-11-22: mid-batch failure and time budget verified live (`scripts/batch_failure_live.py`).
 - 2026-11-22: connector ends itself when stale and idle (`runtime.stale_exit_*`); Hermes-driven batch run verified live (undo read-back verified).
