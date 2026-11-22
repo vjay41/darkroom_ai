@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Iterator
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -159,7 +159,8 @@ def test_export_tiff_only_for_virtual_copies_and_never_overwrites(client: Lightr
     copy = client.create_virtual_copy("uuid-1", "x")
     exported = client.export_tiff(copy.id, "handoff-1")
     assert exported.bit_depth == 16
-    assert exported.path.name == "handoff-1.tif"
+    # The plug-in answers with a Windows path; read it as one on any OS.
+    assert PureWindowsPath(str(exported.path)).name == "handoff-1.tif"
 
     with pytest.raises(DarkroomError) as caught:
         client.export_tiff(copy.id, "handoff-1")

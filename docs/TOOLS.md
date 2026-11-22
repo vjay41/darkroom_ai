@@ -109,6 +109,11 @@ List photos in the open Lightroom catalog, one page at a time, with their ids an
 | `max_rating` | integer (may be null) | no | `None` | Only photos rated at most this (0 finds the unrated). |
 | `flag` | `pick` \| `reject` \| `none` (may be null) | no | `None` | Only photos with this flag. |
 | `keyword` | string (may be null) | no | `None` | Only photos that have this keyword (any letter case). |
+| `file_format` | string (may be null) | no | `None` | Only photos of this file format: RAW, DNG, JPG, TIFF, PSD or VIDEO. |
+| `min_iso` | integer (may be null) | no | `None` | Only photos at this ISO or higher. |
+| `max_iso` | integer (may be null) | no | `None` | Only photos at this ISO or lower. |
+| `captured_from` | string (may be null) | no | `None` | Only photos captured on or after this date, written YYYY-MM-DD. |
+| `captured_to` | string (may be null) | no | `None` | Only photos captured on or before this date, written YYYY-MM-DD. |
 
 ### `catalog_summary`
 

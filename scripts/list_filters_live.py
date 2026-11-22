@@ -95,7 +95,62 @@ def run(args: argparse.Namespace) -> None:
         "the plug-in confirms the filters", set(page.filters_applied) == {"keyword", "min_rating"}
     )
 
-    print("6. take the library changes back")
+    print("7. file format (any letter case)")
+    formats = sorted({p.file_format.upper() for p in everything})
+    print(f"  formats in the catalog: {formats}")
+    for fmt in formats:
+        want = {p.id for p in everything if p.file_format.upper() == fmt}
+        check(f"file_format={fmt}: {len(want)} photos", ids(file_format=fmt.lower()) == want)
+    check(
+        "a format nobody has finds nothing",
+        ids(file_format="VIDEO") == {p.id for p in everything if p.file_format.upper() == "VIDEO"},
+    )
+
+    print("8. ISO ranges (inclusive; photos without an ISO are never in a range)")
+
+    def iso_of(photo: PhotoMetadata) -> int | None:
+        digits = "".join(ch for ch in str(photo.iso or "") if ch.isdigit())
+        return int(digits) if digits else None
+
+    values = sorted(v for v in (iso_of(p) for p in everything) if v is not None)
+    check("some photos report an ISO", len(values) > 0)
+    if values:
+        mid = values[len(values) // 2]
+        print(f"  median ISO {mid}, range {values[0]}..{values[-1]}")
+        for low, high in ((None, mid), (mid, None), (mid, mid), (values[-1] + 1, None)):
+            want = {
+                p.id
+                for p in everything
+                if iso_of(p) is not None
+                and (low is None or iso_of(p) >= low)  # type: ignore[operator]
+                and (high is None or iso_of(p) <= high)  # type: ignore[operator]
+            }
+            got = ids(min_iso=low, max_iso=high)
+            check(f"min_iso={low} max_iso={high}: {len(got)} photos", got == want)
+
+    print("9. capture date (checked by partitioning, and against the year in the photo's own text)")
+    dated = {p.id for p in everything if p.capture_time}
+    wide = ids(captured_from="1900-01-01", captured_to="2100-12-31")
+    check(f"every photo with a capture time is in the wide range ({len(wide)})", wide == dated)
+    seen: set[str] = set()
+    overlap = False
+    year_ok = True
+    for year in range(2000, 2027):
+        in_year = listing(captured_from=f"{year}-01-01", captured_to=f"{year}-12-31")
+        found = {p.id for p in in_year}
+        overlap = overlap or bool(found & seen)
+        seen |= found
+        year_ok = year_ok and all(str(year) in str(p.capture_time) for p in in_year)
+        if found:
+            print(f"  {year}: {len(found)} photos")
+    check(
+        "the years do not overlap and together cover every dated photo",
+        not overlap and seen == dated,
+    )
+    check("each photo's year filter agrees with its own capture time text", year_ok)
+    check("a date range in the far future finds nothing", ids(captured_from="2100-01-01") == set())
+
+    print("10. take the library changes back")
     undone = tools.call("undo_library_change", {"photo_id": copy.id, "scope": "all"})
     check("undone", undone["undone_steps"] == 1)
     check("the keyword no longer matches", ids(keyword=KEYWORD) == set())

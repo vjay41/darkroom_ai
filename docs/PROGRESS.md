@@ -4,7 +4,7 @@ Living status. Keep it short and current: update it in every change that moves t
 build log (every spike, failure and live check up to 2026-11-22) is kept privately by the owner; the facts that matter
 are summarised here and in `DESIGN.md`.
 
-Last updated: 2026-11-22. Branch: `dev` (ahead of the v0.1.0 release). Version `0.1.0` plus unreleased library, tone-curve and filter tools; plug-in 0.11.1. Verified on Windows 11, Python 3.13, Lightroom Classic
+Last updated: 2026-11-22. Branch: `dev` (ahead of the v0.1.0 release). Version `0.1.0` plus unreleased library, tone-curve and filter tools; plug-in 0.12.0. Verified on Windows 11, Python 3.13, Lightroom Classic
 15.2.1, Photoshop 2026 (27.8), Hermes with a local model via LM Studio.
 
 ## Where it stands
@@ -65,8 +65,8 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
    refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
    collapsed -> true and the mask call was refused in under 3 s with nothing created. The SDK's metadata calls yield, so
    they must run inside `LrTasks.pcall` (plain `pcall` fails). `darkroom doctor` also warns when the selected photo is in a collapsed stack.
-3. **List filters**: rating, flag and keyword are DONE and verified live (plug-in 0.11.0, 18 checks). There is deliberately no
-   "edited" filter (Lightroom flags every virtual copy as edited). File format, capture date and ISO filters remain open.
+3. **List filters**: rating, flag, keyword, file format, ISO and capture date are DONE (plug-in 0.12.0). There is deliberately no
+   "edited" filter (Lightroom flags every virtual copy as edited).
 4. **RAW**: Sony ARW verified 2026-11-22 (`scripts/raw_live.py`, 2 files, all checks). Still open: DNG, and whether a lens profile really resolves for RAW.
 6. **Lua checks** in CI: provide `luac` so the 8 skipped tests run.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.

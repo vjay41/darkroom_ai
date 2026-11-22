@@ -185,8 +185,20 @@ class SimulatedLightroom:
         max_rating: int | None = None,
         flag: str | None = None,
         keyword: str | None = None,
+        file_format: str | None = None,
+        min_iso: int | None = None,
+        max_iso: int | None = None,
+        captured_from: str | None = None,
+        captured_to: str | None = None,
     ) -> CatalogPage:
         self.calls.append("list_catalog")
+        shooting = {
+            "file_format": file_format,
+            "min_iso": min_iso,
+            "max_iso": max_iso,
+            "captured_from": captured_from,
+            "captured_to": captured_to,
+        }
         wanted = (path_contains or "").lower()
         ids = [
             pid
@@ -194,6 +206,7 @@ class SimulatedLightroom:
             if (include_virtual_copies or not photo["is_virtual_copy"])
             and wanted in str(photo["path"]).lower()
             and self._passes_filters(pid, min_rating, max_rating, flag, keyword)
+            and self._passes_shooting_filters(pid, shooting)
         ]
         window = ids[offset : offset + limit]
         photos = tuple(self.get_metadata(pid) for pid in window)
@@ -204,6 +217,7 @@ class SimulatedLightroom:
                 ("max_rating", max_rating),
                 ("flag", flag),
                 ("keyword", keyword),
+                *shooting.items(),
             )
             if value is not None
         )
@@ -214,6 +228,23 @@ class SimulatedLightroom:
             photos=photos,
             filters_applied=used,
         )
+
+    def _passes_shooting_filters(self, photo_id: str, wanted: dict[str, Any]) -> bool:
+        """File format, ISO and capture date; every simulated photo is ISO 200, shot 2026-01-15."""
+        photo = self.photos[photo_id]
+        iso, day = 200, "2026-01-15"
+        if (
+            wanted["file_format"]
+            and str(photo["file_format"]).upper() != wanted["file_format"].upper()
+        ):
+            return False
+        if wanted["min_iso"] is not None and iso < wanted["min_iso"]:
+            return False
+        if wanted["max_iso"] is not None and iso > wanted["max_iso"]:
+            return False
+        if wanted["captured_from"] and day < wanted["captured_from"]:
+            return False
+        return not (wanted["captured_to"] and day > wanted["captured_to"])
 
     def _passes_filters(
         self,

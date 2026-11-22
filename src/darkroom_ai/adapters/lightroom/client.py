@@ -68,6 +68,10 @@ _BACKOFF = (1.0, 1.5, 2.2, 3.0)
 _LAST_CLOSE: dict[tuple[str, int, int], float] = {}
 
 
+# Filters that need plug-in 0.12.0 (the rating, flag and keyword filters need 0.11.0).
+NEWER_FILTERS = ("file_format", "min_iso", "max_iso", "captured_from", "captured_to")
+
+
 class LightroomClient:
     def __init__(
         self,
@@ -418,6 +422,11 @@ class LightroomClient:
         max_rating: int | None = None,
         flag: str | None = None,
         keyword: str | None = None,
+        file_format: str | None = None,
+        min_iso: int | None = None,
+        max_iso: int | None = None,
+        captured_from: str | None = None,
+        captured_to: str | None = None,
     ) -> CatalogPage:
         params: dict[str, Any] = {
             "offset": offset,
@@ -431,6 +440,11 @@ class LightroomClient:
             "max_rating": max_rating,
             "flag": flag,
             "keyword": keyword,
+            "file_format": file_format,
+            "min_iso": min_iso,
+            "max_iso": max_iso,
+            "captured_from": captured_from,
+            "captured_to": captured_to,
         }
         requested = {name: value for name, value in filters.items() if value is not None}
         params.update(requested)
@@ -439,10 +453,12 @@ class LightroomClient:
         if ignored:
             # An older plug-in skips filters it does not know and lists everything: never show that
             # as if it were filtered.
+            newest = set(ignored) & set(NEWER_FILTERS)
+            needs = "0.12.0" if newest else "0.11.0"
             raise DarkroomError(
                 ErrorCode.LR_COMMAND_FAILED,
                 f"The Lightroom plug-in did not apply the filter(s) {', '.join(ignored)}: it is "
-                "older than 0.11.0. Nothing was listed.",
+                f"older than {needs}. Nothing was listed.",
                 next_step="Restart Lightroom so it loads the current plug-in, start the bridge "
                 "(File > Plug-in Extras), then retry.",
                 details={"ignored_filters": ignored},

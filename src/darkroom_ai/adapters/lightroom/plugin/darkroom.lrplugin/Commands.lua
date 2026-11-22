@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.11.1"
+local PLUGIN_VERSION = "0.12.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -369,6 +369,43 @@ local function listFilters(params)
 		filters.keyword = string.lower(params.keyword)
 		names[#names + 1] = "keyword"
 	end
+	for _, name in ipairs({ "min_iso", "max_iso" }) do
+		local value = params[name]
+		if value ~= nil then
+			if type(value) ~= "number" or value < 0 or value % 1 ~= 0 then
+				fail("INVALID_PARAMS", name .. " must be a whole number, 0 or more")
+			end
+			filters[name] = value
+			names[#names + 1] = name
+		end
+	end
+	if filters.min_iso and filters.max_iso and filters.min_iso > filters.max_iso then
+		fail("INVALID_PARAMS", "min_iso must not be greater than max_iso")
+	end
+	if params.file_format ~= nil then
+		if type(params.file_format) ~= "string" or params.file_format == "" then
+			fail("INVALID_PARAMS", "file_format must be a non-empty name such as RAW, DNG, JPG, TIFF, PSD or VIDEO")
+		end
+		filters.file_format = string.upper(params.file_format)
+		names[#names + 1] = "file_format"
+	end
+	for _, name in ipairs({ "captured_from", "captured_to" }) do
+		local value = params[name]
+		if value ~= nil then
+			local year, month, day = nil, nil, nil
+			if type(value) == "string" then
+				year, month, day = string.match(value, "^(%d%d%d%d)%-(%d%d)%-(%d%d)$")
+			end
+			if not year or tonumber(month) < 1 or tonumber(month) > 12 or tonumber(day) < 1 or tonumber(day) > 31 then
+				fail("INVALID_PARAMS", name .. " must be a date written YYYY-MM-DD")
+			end
+			filters[name] = value
+			names[#names + 1] = name
+		end
+	end
+	if filters.captured_from and filters.captured_to and filters.captured_from > filters.captured_to then
+		fail("INVALID_PARAMS", "captured_from must not be later than captured_to")
+	end
 	filters.names = names
 	filters.active = #names > 0
 	return filters
@@ -386,6 +423,36 @@ local function matchesFilters(photo, filters)
 	end
 	if filters.pick ~= nil and (photo:getRawMetadata("pickStatus") or 0) ~= filters.pick then
 		return false
+	end
+	if filters.file_format then
+		if string.upper(tostring(photo:getRawMetadata("fileFormat") or "")) ~= filters.file_format then
+			return false
+		end
+	end
+	if filters.min_iso or filters.max_iso then
+		local iso = photo:getRawMetadata("isoSpeedRating")
+		if type(iso) ~= "number" then
+			return false -- no recorded ISO: it cannot be in a range
+		end
+		if filters.min_iso and iso < filters.min_iso then
+			return false
+		end
+		if filters.max_iso and iso > filters.max_iso then
+			return false
+		end
+	end
+	if filters.captured_from or filters.captured_to then
+		local stamp = photo:getRawMetadata("dateTimeOriginalISO8601")
+		if type(stamp) ~= "string" or #stamp < 10 then
+			return false -- no capture date: it cannot be in a range
+		end
+		local day = string.sub(stamp, 1, 10)
+		if filters.captured_from and day < filters.captured_from then
+			return false
+		end
+		if filters.captured_to and day > filters.captured_to then
+			return false
+		end
 	end
 	if filters.keyword then
 		local found = false

@@ -128,8 +128,8 @@ verified_on = "Lightroom 15.2.1 (JPG and Sony ARW)"
 note = "Plan, go-ahead, run, verified undo and untouched masters were confirmed live on three test photos. Stopping at a failure mid-batch and the time budget are covered by unit tests only."
 
 [[features]]
-name = "Catalog list filters (rating, flag, keyword)"
+name = "Catalog list filters (rating, flag, keyword, file format, ISO, capture date)"
 tools = ["list_catalog_photos"]
 status = "verified"
 verified_on = "Lightroom 15.2.1"
-note = "Needs plug-in 0.11.0; an older plug-in is refused rather than returning an unfiltered list. There is no edited filter because Lightroom flags every virtual copy as edited."
+note = "Rating, flag and keyword need plug-in 0.11.0; file format, ISO and capture date need 0.12.0. An older plug-in is refused rather than returning an unfiltered list. There is no edited filter because Lightroom flags every virtual copy as edited."

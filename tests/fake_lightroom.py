@@ -49,6 +49,8 @@ class FakePhoto:
     rating: int | None = None
     pick_status: int = 0
     keywords: list[str] = field(default_factory=list)
+    iso: int | None = 200
+    captured: str | None = "2026-01-15"
 
     def summary(self) -> dict[str, Any]:
         data = {
@@ -279,11 +281,37 @@ class FakeLightroomPlugin:
             and (photo.rating or 0) <= params.get("max_rating", 5)
             and ("flag" not in params or photo.pick_status == status[params["flag"]])
             and (
+                "file_format" not in params
+                or photo.file_format.upper() == str(params["file_format"]).upper()
+            )
+            and (photo.iso is not None or not ({"min_iso", "max_iso"} & params.keys()))
+            and (photo.iso or 0) >= params.get("min_iso", 0)
+            and (photo.iso or 0) <= params.get("max_iso", 10**9)
+            and (
+                photo.captured is not None or not ({"captured_from", "captured_to"} & params.keys())
+            )
+            and (photo.captured or "") >= params.get("captured_from", "")
+            and (photo.captured or "9999") <= params.get("captured_to", "9999-99-99")
+            and (
                 "keyword" not in params
                 or params["keyword"].lower() in {k.lower() for k in photo.keywords}
             )
         ]
-        applied = [n for n in ("min_rating", "max_rating", "flag", "keyword") if n in params]
+        applied = [
+            n
+            for n in (
+                "min_rating",
+                "max_rating",
+                "flag",
+                "keyword",
+                "file_format",
+                "min_iso",
+                "max_iso",
+                "captured_from",
+                "captured_to",
+            )
+            if n in params
+        ]
         offset, limit = int(params.get("offset", 0)), int(params.get("limit", 50))
         window = chosen[offset : offset + limit]
         return {

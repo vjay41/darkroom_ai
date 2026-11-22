@@ -1,7 +1,7 @@
 # The Lightroom plug-in (`darkroom.lrplugin`)
 
 A small Lua plug-in that runs inside Lightroom Classic and does the real work through Adobe's SDK. It lives in
-`src/darkroom_ai/adapters/lightroom/plugin/darkroom.lrplugin/`. Version 0.11.1, protocol 1.
+`src/darkroom_ai/adapters/lightroom/plugin/darkroom.lrplugin/`. Version 0.12.0, protocol 1.
 
 ## Files
 | File | Role |

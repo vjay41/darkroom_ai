@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Sequence
+from datetime import date
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -157,6 +158,9 @@ def get_photo_metadata(ctx: ToolContext, args: GetPhotoMetadataInput) -> Outcome
     return Outcome(PhotoMetadataResult(metadata=ctx.lightroom.get_metadata(args.photo_id)))
 
 
+DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
+
+
 class ListCatalogPhotosInput(BaseModel):
     """List photos in the open Lightroom catalog, one page at a time, with their ids and
     camera/lens/exposure facts. Reads only; changes nothing."""
@@ -192,14 +196,45 @@ class ListCatalogPhotosInput(BaseModel):
         description="Only photos that have this keyword (any letter case).",
     )
 
+    file_format: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Only photos of this file format: RAW, DNG, JPG, TIFF, PSD or VIDEO.",
+    )
+    min_iso: int | None = Field(
+        default=None, ge=0, description="Only photos at this ISO or higher."
+    )
+    max_iso: int | None = Field(default=None, ge=0, description="Only photos at this ISO or lower.")
+    captured_from: str | None = Field(
+        default=None,
+        pattern=DATE_PATTERN,
+        description="Only photos captured on or after this date, written YYYY-MM-DD.",
+    )
+    captured_to: str | None = Field(
+        default=None,
+        pattern=DATE_PATTERN,
+        description="Only photos captured on or before this date, written YYYY-MM-DD.",
+    )
+
     @model_validator(mode="after")
-    def _ratings_in_order(self) -> Self:
+    def _ranges_in_order(self) -> Self:
         if (
             self.min_rating is not None
             and self.max_rating is not None
             and self.min_rating > self.max_rating
         ):
             raise ValueError("min_rating must not be greater than max_rating")
+        if self.min_iso is not None and self.max_iso is not None and self.min_iso > self.max_iso:
+            raise ValueError("min_iso must not be greater than max_iso")
+        if self.captured_from and self.captured_to and self.captured_from > self.captured_to:
+            raise ValueError("captured_from must not be later than captured_to")
+        for name in ("captured_from", "captured_to"):
+            value = getattr(self, name)
+            if value is not None:
+                try:
+                    date.fromisoformat(value)
+                except ValueError as exc:
+                    raise ValueError(f"{name} is not a real date: {value}") from exc
         return self
 
 
@@ -218,6 +253,11 @@ def list_catalog_photos(ctx: ToolContext, args: ListCatalogPhotosInput) -> Outco
         max_rating=args.max_rating,
         flag=args.flag,
         keyword=args.keyword,
+        file_format=args.file_format.upper() if args.file_format else None,
+        min_iso=args.min_iso,
+        max_iso=args.max_iso,
+        captured_from=args.captured_from,
+        captured_to=args.captured_to,
     )
     more = page.offset + page.returned < page.total
     note = (

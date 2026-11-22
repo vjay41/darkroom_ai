@@ -90,6 +90,11 @@ class LightroomAdapter(Protocol):
         max_rating: int | None = None,
         flag: str | None = None,
         keyword: str | None = None,
+        file_format: str | None = None,
+        min_iso: int | None = None,
+        max_iso: int | None = None,
+        captured_from: str | None = None,
+        captured_to: str | None = None,
     ) -> CatalogPage: ...
 
     def get_develop_settings(
