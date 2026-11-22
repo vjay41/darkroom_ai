@@ -23,7 +23,7 @@ Current baseline: 449 tests pass with `DARKROOM_LUAC` set (none skipped). Withou
   `Commands.lua`.
 - Lua syntax: set `DARKROOM_LUAC` to the Lightroom SDK's `luac.exe` to enable 8 extra tests. In the SDK download it is at
   `Lua Compiler\win\luac.exe` (Lua 5.1.5); the path may contain spaces, so set the variable without extra quotes
-  (PowerShell: `$env:DARKROOM_LUAC = 'C:\path	o\Lua Compiler\win\luac.exe'`). Never put the path in the repo.
+  (PowerShell: `$env:DARKROOM_LUAC = 'C:\path\to\Lua Compiler\win\luac.exe'`). Never put the path in the repo.
 - Integration markers (`lightroom`, `photoshop`, `gpu`, `llm`, `integration`) exist for tests that need the real thing;
   they skip unless the matching `DARKROOM_IT_*` variable is set.
 
