@@ -49,20 +49,21 @@ def test_set_rating_flag_and_keywords_are_read_back(rig: Rig) -> None:
     assert state(rig, copy)["keywords"] == ["bride", "Wedding"]
 
 
-def test_a_master_photo_is_refused_and_nothing_changes(rig: Rig) -> None:
-    with pytest.raises(DarkroomError) as caught:
-        rig.call("set_library_state", photo_id=MASTER, rating=5)
-    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
-    assert "virtual copies" in str(caught.value)
+def test_a_master_photo_can_be_rated_and_the_change_is_undoable(rig: Rig) -> None:
+    result = rig.call("set_library_state", photo_id=MASTER, rating=5, add_keywords=["keeper"])
+    assert result["photo_id"] == MASTER and result["verified"] is True
+    assert state(rig, MASTER)["rating"] == 5
+    rig.call("undo_library_change", photo_id=MASTER)
     assert state(rig, MASTER)["rating"] is None
+    assert state(rig, MASTER)["keywords"] == []
 
 
-def test_a_master_with_a_working_copy_changes_the_copy_not_the_master(rig: Rig) -> None:
+def test_the_photo_named_is_the_photo_changed_even_when_a_working_copy_exists(rig: Rig) -> None:
     copy = make_copy(rig)
     result = rig.call("set_library_state", photo_id=MASTER, rating=2)
-    assert result["photo_id"] == copy
-    assert state(rig, copy)["rating"] == 2
-    assert state(rig, MASTER)["rating"] is None
+    assert result["photo_id"] == MASTER
+    assert state(rig, MASTER)["rating"] == 2
+    assert state(rig, copy)["rating"] is None
 
 
 def test_rating_zero_clears_and_keywords_match_case_insensitively(rig: Rig) -> None:
@@ -138,9 +139,3 @@ def test_library_undo_does_not_touch_develop_edits_and_develop_undo_ignores_libr
     assert state(rig, copy)["rating"] == 3
     rig.call("undo_library_change", photo_id=copy)
     assert state(rig, copy)["rating"] is None
-
-
-def test_the_simulated_lightroom_refuses_library_writes_on_a_master(rig: Rig) -> None:
-    with pytest.raises(DarkroomError) as caught:
-        rig.lightroom.set_library_state(MASTER, rating=1)
-    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED

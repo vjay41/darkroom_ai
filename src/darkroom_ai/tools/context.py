@@ -17,7 +17,13 @@ from darkroom_ai.imaging.analysis import ImageAnalysis, analyze
 from darkroom_ai.imaging.faces import FaceDetector
 from darkroom_ai.imaging.io import load_image
 from darkroom_ai.imaging.masks import MaskProvider
-from darkroom_ai.interfaces import ActionJournal, LightroomAdapter, PhotoshopAdapter, ProcessControl
+from darkroom_ai.interfaces import (
+    AccessStore,
+    ActionJournal,
+    LightroomAdapter,
+    PhotoshopAdapter,
+    ProcessControl,
+)
 from darkroom_ai.runtime import CodeGuard
 from darkroom_ai.safety.confirm import Confirmer, DenyAll, require_confirmation
 from darkroom_ai.safety.guardrails import ClampedChange, Limit, clamp_change
@@ -36,6 +42,8 @@ class ToolContext:
     masks: MaskProvider | None = None
     faces: FaceDetector | None = None
     processes: ProcessControl | None = None
+    # The owner's catalog / photo-folder allowlist (None: no way to read or change it here).
+    access: AccessStore | None = None
     # Set by the MCP server only: tells whether this process runs older code than the files on disk.
     connector: CodeGuard | None = None
     # master photo id -> id of the virtual copy the tools work on

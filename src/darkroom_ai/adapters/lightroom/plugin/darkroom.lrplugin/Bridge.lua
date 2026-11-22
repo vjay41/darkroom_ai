@@ -77,6 +77,22 @@ local function isPort(value)
 	return type(value) == "number" and value >= 1024 and value <= 65535 and value == math.floor(value)
 end
 
+-- True when the open catalog is the configured one or one the owner added to allowed_catalogs.
+local function catalogAllowed(config, catalogPath)
+	local open = normalizePath(catalogPath)
+	if open == normalizePath(config.catalog_path) then
+		return true
+	end
+	if type(config.allowed_catalogs) == "table" then
+		for _, allowed in ipairs(config.allowed_catalogs) do
+			if open == normalizePath(allowed) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 -- Reads bridge.json from the plug-in folder. Returns config, nil or nil, reason.
 local function loadConfig()
 	local path = LrPathUtils.child(_PLUGIN.path, "bridge.json")
@@ -139,6 +155,15 @@ local function handleRequest(request, config, instance, job)
 		return errorResponse(id, "UNKNOWN_COMMAND", "Unknown command: " .. command)
 	end
 
+	-- The owner can allowlist a catalog or a photo folder while Lightroom is running: pick up the
+	-- lists from bridge.json again (the token must still match, so a rewritten file is ignored).
+	local fresh = loadConfig()
+	if fresh and fresh.token == config.token then
+		config.allowed_catalogs = fresh.allowed_catalogs
+		config.photos_roots = fresh.photos_roots
+		config.photos_root = fresh.photos_root
+	end
+
 	local catalog = LrApplication.activeCatalog()
 	local catalogPath = catalog:getPath()
 	local ctx = {
@@ -156,7 +181,7 @@ local function handleRequest(request, config, instance, job)
 		config = config,
 		catalog = catalog,
 		catalog_path = catalogPath,
-		writes_allowed = normalizePath(catalogPath) == normalizePath(config.catalog_path),
+		writes_allowed = catalogAllowed(config, catalogPath),
 	}
 
 	if isWrite and not ctx.writes_allowed then
@@ -164,9 +189,9 @@ local function handleRequest(request, config, instance, job)
 		return errorResponse(
 			id,
 			"WRONG_CATALOG",
-			"Refused: the open catalog (" .. tostring(catalogPath) .. ") is not the configured catalog ("
+			"Refused: the open catalog (" .. tostring(catalogPath) .. ") is not on the allowlist (configured catalog: "
 				.. config.catalog_path
-				.. ")"
+				.. "). Ask the owner to allow it (request_catalog_access)."
 		)
 	end
 

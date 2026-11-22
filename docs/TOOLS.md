@@ -2,7 +2,7 @@
 
 # Tool reference
 
-40 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+51 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -13,6 +13,17 @@
 | [`get_photo_info`](#get_photo_info) | reads | Read facts about a photo and its current basic settings. |
 | [`list_catalog_photos`](#list_catalog_photos) | reads | List photos in the open Lightroom catalog, one page at a time, with their ids and camera/lens/exposure facts. |
 | [`catalog_summary`](#catalog_summary) | reads | Summarise the whole catalog: how many photos, and counts by camera, lens, ISO band, file format, star rating, capture year and folder. |
+| [`list_catalogs`](#list_catalogs) | reads | List the Lightroom catalogs (.lrcat files) found on this PC, say which one is open now and which ones darkroom_ai is allowed to change. |
+| [`get_catalog_info`](#get_catalog_info) | reads | Describe the catalog that is open in Lightroom now: how many photos, virtual copies and keywords, the collection tree with counts, the folder tree with counts, whether darkroom_ai may change it, and which catalogs and photo folders the owner has allowed. |
+| [`request_catalog_access`](#request_catalog_access) | writes | Ask the OWNER to allow darkroom_ai to change a catalog (and optionally the photo folders it uses). |
+| [`request_folder_access`](#request_folder_access) | writes | Ask the OWNER to allow darkroom_ai to import from and edit photos in a folder (for example the folder they just gave you). |
+| [`create_collection_set`](#create_collection_set) | writes | Create a collection set (a folder for collections) in the open catalog. |
+| [`create_collection`](#create_collection) | writes | Create a collection in the open catalog. |
+| [`add_to_collection`](#add_to_collection) | writes | Add photos (masters or virtual copies) to an existing collection. |
+| [`remove_from_collection`](#remove_from_collection) | writes | Remove photos from a collection (the photos stay in the catalog). |
+| [`get_collection_photos`](#get_collection_photos) | reads | List the photos in one collection (ids and file names, at most 200). |
+| [`create_keyword`](#create_keyword) | writes | Create a keyword, or a keyword hierarchy ("Places/Japan/Kyoto"), in the catalog. |
+| [`undo_collection_change`](#undo_collection_change) | writes | Take back darkroom_ai's collection changes made in THIS session (adds, removes, created collections and sets). |
 | [`scan_folder`](#scan_folder) | reads | Say what importing a folder would add to the catalog (new photos, already-present photos, unsupported files) without changing anything. |
 | [`import_folder`](#import_folder) | writes | Add the photos in a folder to the catalog WITHOUT moving, copying or changing any file. |
 | [`get_photo_metadata`](#get_photo_metadata) | reads | Read the camera, lens and exposure facts of a photo (make, model, lens, focal length, aperture, shutter speed, ISO, capture time, size, file type). |
@@ -39,9 +50,9 @@
 | [`replace_background`](#replace_background) | writes | Cut out the subject and put it on a new background. |
 | [`undo`](#undo) | writes | Take back darkroom_ai's edits made in THIS session: the last one, or all of them. |
 | [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
-| [`set_library_state`](#set_library_state) | writes | Set a virtual copy's star rating, pick/reject flag and keywords (catalog data only). |
+| [`set_library_state`](#set_library_state) | writes | Set a photo's star rating, pick/reject flag and keywords (catalog data only). |
 | [`undo_library_change`](#undo_library_change) | writes | Take back darkroom_ai's library changes (rating, flag, keywords) made in THIS session. |
-| [`batch_set_library_state`](#batch_set_library_state) | writes | Set rating, pick/reject flag and keywords on several virtual copies in one batch (up to 25). |
+| [`batch_set_library_state`](#batch_set_library_state) | writes | Set rating, pick/reject flag and keywords on several photos in one batch (up to 25). |
 | [`batch_set_develop_parameters`](#batch_set_develop_parameters) | writes | Edit several photos in one batch (up to 10), each with its own values, on virtual copies. |
 | [`undo_batch`](#undo_batch) | writes | Take back every change of one batch made in THIS session, by its batch_id. |
 | [`list_presets`](#list_presets) | reads | List Lightroom's develop presets (name and folder). |
@@ -127,6 +138,118 @@ Summarise the whole catalog: how many photos, and counts by camera, lens, ISO ba
 | `top` | integer | no | `10` | How many entries to list per group. min 3, max 30 |
 | `path_contains` | string (may be null) | no | `None` | Only photos whose file path contains this text (a folder). |
 
+### `list_catalogs`
+
+Reads only.
+
+List the Lightroom catalogs (.lrcat files) found on this PC, say which one is open now and which ones darkroom_ai is allowed to change. Reads file names, sizes and dates only; it never opens a catalog. folder (optional) also searches one more folder, two levels deep.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `folder` | string (may be null) | no | `None` | One more folder to search. |
+
+### `get_catalog_info`
+
+Reads only.
+
+Describe the catalog that is open in Lightroom now: how many photos, virtual copies and keywords, the collection tree with counts, the folder tree with counts, whether darkroom_ai may change it, and which catalogs and photo folders the owner has allowed. Read only. Call it first in any catalog session, and again after the owner opens another catalog.
+
+No parameters.
+
+### `request_catalog_access`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Ask the OWNER to allow darkroom_ai to change a catalog (and optionally the photo folders it uses). The owner sees the full path and answers Yes or No; nothing is allowed on your say-so. The catalog must exist. Allowing a catalog does not open it: the owner still opens it in Lightroom (see get_catalog_info).
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `catalog_path` | string | yes |  | Full path of the .lrcat file. min length 1 |
+| `photo_folders` | list of string | no |  | Folders whose photos may be edited or imported in that catalog. max items 5 |
+
+### `request_folder_access`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Ask the OWNER to allow darkroom_ai to import from and edit photos in a folder (for example the folder they just gave you). The owner sees the full path and answers Yes or No.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `folder` | string | yes |  | Full path of the folder. min length 1 |
+
+### `create_collection_set`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Create a collection set (a folder for collections) in the open catalog. The path's last name is the new set; the sets before it must exist. Safe to repeat: an existing set is reused. Undo with undo_collection_change.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `path` | string | yes |  | Name with "/" between levels, for example "Trips/Japan 2026". min length 1, max length 300 |
+
+### `create_collection`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Create a collection in the open catalog. The path's last name is the new collection; the sets before it must exist (create_collection_set first). An existing collection is reused. Undo with undo_collection_change.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `path` | string | yes |  | Name with "/" between levels, for example "Trips/Japan 2026". min length 1, max length 300 |
+
+### `add_to_collection`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Add photos (masters or virtual copies) to an existing collection. Photos already in it are skipped. More than 10 new photos is a bulk change: the owner is asked for a go-ahead first. Undo with undo_collection_change.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `collection` | string | yes |  | Collection path such as "Trips/Japan". min length 1 |
+| `photo_ids` | list of string | yes |  | min items 1, max items 200 |
+
+### `remove_from_collection`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Remove photos from a collection (the photos stay in the catalog). Undo with undo_collection_change.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `collection` | string | yes |  | Collection path such as "Trips/Japan". min length 1 |
+| `photo_ids` | list of string | yes |  | min items 1, max items 200 |
+
+### `get_collection_photos`
+
+Reads only.
+
+List the photos in one collection (ids and file names, at most 200). Read only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `collection` | string | yes |  | min length 1 |
+| `limit` | integer | no | `100` | min 1, max 200 |
+
+### `create_keyword`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Create a keyword, or a keyword hierarchy ("Places/Japan/Kyoto"), in the catalog. Existing levels are reused. To put keywords on photos use set_library_state or batch_set_library_state. A created keyword cannot be deleted by darkroom_ai (remove it in Lightroom if needed).
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `path` | string | yes |  | Name with "/" between levels, for example "Trips/Japan 2026". min length 1, max length 300 |
+
+### `undo_collection_change`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Take back darkroom_ai's collection changes made in THIS session (adds, removes, created collections and sets). scope "last" takes back the most recent one, "all" every one, newest first. A created collection or set is only deleted while it is empty.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `scope` | `last` \| `all` | no | `last` |  |
+
 ### `scan_folder`
 
 Reads only.
@@ -142,13 +265,13 @@ Say what importing a folder would add to the catalog (new photos, already-presen
 
 **Writes** (changes the catalog or a photo's settings).
 
-Add the photos in a folder to the catalog WITHOUT moving, copying or changing any file. This is a bulk change: the person is asked for a go-ahead showing how many photos will be added, so call scan_folder first and tell them. Adds at most max_files new photos per call; call again for the rest. It cannot be undone with the undo tool (remove the photos in Lightroom if needed).
+Add the photos in a folder to the catalog WITHOUT moving, copying or changing any file. This is a bulk change: the person is asked for a go-ahead showing how many photos will be added, so call scan_folder first and tell them. Adds at most max_files (50) new photos per call; call again for the rest. More than 10 photos needs the person's go-ahead. The list of added files is kept in the journal. It cannot be undone with the undo tool (the person removes the photos in Lightroom if needed).
 
 | Parameter | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `folder` | string | yes |  | Absolute folder path, inside the allowed folder. min length 1 |
 | `recursive` | boolean | no | `False` | Include sub-folders. |
-| `max_files` | integer | no | `200` | min 1, max 500 |
+| `max_files` | integer | no | `50` | min 1, max 50 |
 
 ### `get_photo_metadata`
 
@@ -433,7 +556,7 @@ Read a photo's star rating, pick/reject flag and keywords. Changes nothing.
 
 **Writes** (changes the catalog or a photo's settings).
 
-Set a virtual copy's star rating, pick/reject flag and keywords (catalog data only). rating is 0-5 (0 clears the rating); flag is "pick", "reject" or "none"; add_keywords and remove_keywords are plain names (an existing keyword of that name is reused, a new one is created at the top level of the keyword list). Only virtual copies are changed, never a master photo. The change is read back from Lightroom and can be taken back with undo_library_change.
+Set a photo's star rating, pick/reject flag and keywords (catalog data only). rating is 0-5 (0 clears the rating); flag is "pick", "reject" or "none"; add_keywords and remove_keywords are plain names (an existing keyword of that name is reused, a new one is created at the top level of the keyword list). Works on master photos and on virtual copies: the photo whose id you pass is the one that changes. The change is read back from Lightroom and can be taken back with undo_library_change.
 
 | Parameter | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -458,7 +581,7 @@ Take back darkroom_ai's library changes (rating, flag, keywords) made in THIS se
 
 **Writes** (changes the catalog or a photo's settings).
 
-Set rating, pick/reject flag and keywords on several virtual copies in one batch (up to 25). Each item names a photo and its values (same rules as set_library_state: virtual copies only, never a master). Everything is checked first; if any item is not allowed nothing runs. A batch of more than 5 photos needs the person's go-ahead, which this tool asks for itself. The run stops at the first failure and lists what was done, failed and not run. Use dry_run to see the plan without changing anything. Take a whole batch back with undo_batch.
+Set rating, pick/reject flag and keywords on several photos in one batch (up to 25). Each item names a photo and its values (same rules as set_library_state: a master or a virtual copy, exactly the photo whose id you give). Everything is checked first; if any item is not allowed nothing runs. A batch of more than 5 photos needs the person's go-ahead, which this tool asks for itself. The run stops at the first failure and lists what was done, failed and not run. Use dry_run to see the plan without changing anything. Take a whole batch back with undo_batch.
 
 | Parameter | Type | Required | Default | Notes |
 |---|---|---|---|---|

@@ -15,11 +15,19 @@ import numpy as np
 
 from darkroom_ai.adapters.lightroom.models import (
     BridgeStatus,
+    CatalogInfo,
     CatalogPage,
+    CollectionContents,
+    CollectionCreated,
+    CollectionDeleted,
+    CollectionMembers,
+    CollectionNode,
+    CollectionPhoto,
     CommandList,
     ExportedTiff,
     FolderImport,
     FolderScan,
+    KeywordCreated,
     LibraryChange,
     LibraryState,
     MaskCreation,
@@ -87,6 +95,12 @@ class SimulatedLightroom:
         self.settings: dict[str, dict[str, Any]] = {}
         self.library: dict[str, dict[str, Any]] = {}
         self.calls: list[str] = []
+        # Collections by path ('Set/Sub/Name') -> photo ids; collection sets by path.
+        self.collections: dict[str, list[str]] = {}
+        self.collection_sets: set[str] = set()
+        self.keywords: set[str] = set()
+        # How many new photos scan_folder reports (and import_folder can add).
+        self.importable = 3
         # Mask subtypes this simulated Lightroom does not create (as the real one with "people").
         self.refused_mask_subtypes: set[str] = set()
         # Photos that sit in a collapsed stack (Lightroom cannot show these in Develop).
@@ -267,14 +281,19 @@ class SimulatedLightroom:
     def scan_folder(self, folder: str, recursive: bool = False) -> FolderScan:
         self.calls.append("scan_folder")
         return FolderScan(
-            folder=folder, new_count=3, new_files=(f"{folder}\\a.jpg",), already_in_catalog=1
+            folder=folder,
+            new_count=self.importable,
+            new_files=(f"{folder}\\a.jpg",),
+            already_in_catalog=1,
         )
 
     def import_folder(
         self, folder: str, recursive: bool = False, max_files: int = 200
     ) -> FolderImport:
         self.calls.append("import_folder")
-        return FolderImport(folder=folder, added=min(3, max_files), already_in_catalog=1)
+        added = min(self.importable, max_files)
+        paths = tuple(f"{folder}\\new_{n}.jpg" for n in range(added))
+        return FolderImport(folder=folder, added=added, added_paths=paths, already_in_catalog=1)
 
     def create_mask(
         self, photo_id: str, mask_type: str, subtype: str | None = None
@@ -408,7 +427,7 @@ class SimulatedLightroom:
         remove_keywords: Sequence[str] = (),
     ) -> LibraryChange:
         self.calls.append("set_library_state")
-        self._copy_only(photo_id)
+        self._info(photo_id)
         before = self._library_state(photo_id)
         entry = self.library[photo_id]
         if rating is not None:
@@ -421,6 +440,158 @@ class SimulatedLightroom:
         for name in remove_keywords:
             entry["keywords"] = {k for k in entry["keywords"] if k.lower() != name.lower()}
         return LibraryChange(before=before, after=self._library_state(photo_id))
+
+    # -- catalog organisation ---------------------------------------------------------------
+
+    @staticmethod
+    def _clean_path(path: str) -> str:
+        parts = [part.strip() for part in path.split("/") if part.strip()]
+        if not parts:
+            raise DarkroomError(ErrorCode.LR_COMMAND_FAILED, "The path is empty.")
+        return "/".join(parts)
+
+    def _need_set(self, path: str) -> None:
+        parent = path.rsplit("/", 1)[0] if "/" in path else ""
+        if parent and parent not in self.collection_sets:
+            raise DarkroomError(
+                ErrorCode.LR_COMMAND_FAILED,
+                f"The parent set does not exist: {parent}",
+                details={"plugin_code": "COLLECTION_NOT_FOUND"},
+            )
+
+    def _need_collection(self, path: str) -> str:
+        key = self._clean_path(path)
+        if key not in self.collections:
+            raise DarkroomError(
+                ErrorCode.LR_COMMAND_FAILED,
+                f"No collection {key}",
+                details={"plugin_code": "COLLECTION_NOT_FOUND"},
+            )
+        return key
+
+    def catalog_info(self) -> CatalogInfo:
+        self.calls.append("catalog_info")
+
+        def node(path: str, kind: str) -> CollectionNode:
+            name = path.rsplit("/", 1)[-1]
+            if kind == "collection":
+                return CollectionNode(name=name, kind=kind, photo_count=len(self.collections[path]))
+            prefix = path + "/"
+            kids = [
+                node(p, "set")
+                for p in sorted(self.collection_sets)
+                if p.startswith(prefix) and "/" not in p[len(prefix) :]
+            ] + [
+                node(p, "collection")
+                for p in sorted(self.collections)
+                if p.startswith(prefix) and "/" not in p[len(prefix) :]
+            ]
+            return CollectionNode(name=name, kind=kind, children=tuple(kids))
+
+        top = [node(p, "set") for p in sorted(self.collection_sets) if "/" not in p] + [
+            node(p, "collection") for p in sorted(self.collections) if "/" not in p
+        ]
+        return CatalogInfo(
+            catalog_path=self.ping().catalog_path,
+            writes_allowed=True,
+            total_photos=len(self.photos),
+            virtual_copies=sum(1 for p in self.photos.values() if p["is_virtual_copy"]),
+            keyword_count=len(self.keywords),
+            collections=tuple(top),
+        )
+
+    def create_collection_set(self, path: str) -> CollectionCreated:
+        self.calls.append("create_collection_set")
+        key = self._clean_path(path)
+        self._need_set(key)
+        created = key not in self.collection_sets
+        self.collection_sets.add(key)
+        return CollectionCreated(path=key, created=created)
+
+    def create_collection(self, path: str) -> CollectionCreated:
+        self.calls.append("create_collection")
+        key = self._clean_path(path)
+        self._need_set(key)
+        created = key not in self.collections
+        self.collections.setdefault(key, [])
+        return CollectionCreated(path=key, created=created, photo_count=len(self.collections[key]))
+
+    def add_to_collection(self, collection: str, photo_ids: Sequence[str]) -> CollectionMembers:
+        self.calls.append("add_to_collection")
+        key = self._need_collection(collection)
+        members = self.collections[key]
+        added, already, missing = [], 0, []
+        for photo_id in photo_ids:
+            if photo_id not in self.photos:
+                missing.append(photo_id)
+            elif photo_id in members or photo_id in added:
+                already += 1
+            else:
+                added.append(photo_id)
+        members.extend(added)
+        return CollectionMembers(
+            collection=key,
+            added_ids=tuple(added),
+            already_in=already,
+            missing_ids=tuple(missing),
+            photo_count=len(members),
+        )
+
+    def remove_from_collection(
+        self, collection: str, photo_ids: Sequence[str]
+    ) -> CollectionMembers:
+        self.calls.append("remove_from_collection")
+        key = self._need_collection(collection)
+        removed = [p for p in photo_ids if p in self.collections[key]]
+        self.collections[key] = [p for p in self.collections[key] if p not in removed]
+        return CollectionMembers(
+            collection=key, removed_ids=tuple(removed), photo_count=len(self.collections[key])
+        )
+
+    def delete_collection(self, path: str, kind: str) -> CollectionDeleted:
+        self.calls.append("delete_collection")
+        key = self._clean_path(path)
+        if kind == "collection":
+            if key not in self.collections:
+                return CollectionDeleted(deleted=False, path=key)
+            if self.collections[key]:
+                raise DarkroomError(
+                    ErrorCode.LR_COMMAND_FAILED,
+                    "Refused: the collection still has photos.",
+                    details={"plugin_code": "NOT_EMPTY"},
+                )
+            del self.collections[key]
+            return CollectionDeleted(deleted=True, path=key)
+        if key not in self.collection_sets:
+            return CollectionDeleted(deleted=False, path=key)
+        inside = [p for p in (*self.collections, *self.collection_sets) if p.startswith(key + "/")]
+        if inside:
+            raise DarkroomError(
+                ErrorCode.LR_COMMAND_FAILED,
+                "Refused: the set still contains collections or sets.",
+                details={"plugin_code": "NOT_EMPTY"},
+            )
+        self.collection_sets.discard(key)
+        return CollectionDeleted(deleted=True, path=key)
+
+    def collection_photos(self, collection: str, limit: int = 100) -> CollectionContents:
+        self.calls.append("collection_photos")
+        key = self._need_collection(collection)
+        ids = self.collections[key]
+        shown = tuple(
+            CollectionPhoto(id=i, file_name=self.photos[i]["file_name"]) for i in ids[:limit]
+        )
+        return CollectionContents(collection=key, total=len(ids), photos=shown)
+
+    def create_keyword(self, path: str) -> KeywordCreated:
+        self.calls.append("create_keyword")
+        key = self._clean_path(path)
+        created = []
+        for name in key.split("/"):
+            if name.lower() not in {k.lower() for k in self.keywords}:
+                self.keywords.add(name)
+                created.append(name)
+        return KeywordCreated(path=key, created_levels=tuple(created))
 
     def create_snapshot(self, photo_id: str, name: str) -> SnapshotResult:
         return SnapshotResult(created=True, snapshot=Snapshot(id="s1", name=name))

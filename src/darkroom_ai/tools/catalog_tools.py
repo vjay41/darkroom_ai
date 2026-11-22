@@ -20,6 +20,8 @@ from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult
 
 PAGE = 100
 DEFAULT_MAX_PHOTOS = 2000
+MAX_IMPORT_PER_CALL = 50
+IMPORT_CONFIRM_ABOVE = 10
 ISO_BANDS = ((400, "up to 400"), (1600, "401-1600"), (6400, "1601-6400"))
 YEAR = re.compile(r"(?<!\d)((?:19|20)\d\d)(?!\d)")
 
@@ -157,11 +159,12 @@ def scan_folder(ctx: ToolContext, args: ScanFolderInput) -> Outcome:
 class ImportFolderInput(FolderInput):
     """Add the photos in a folder to the catalog WITHOUT moving, copying or changing any file.
     This is a bulk change: the person is asked for a go-ahead showing how many photos will be
-    added, so call scan_folder first and tell them. Adds at most max_files new photos per call;
-    call again for the rest. It cannot be undone with the undo tool (remove the photos in
-    Lightroom if needed)."""
+    added, so call scan_folder first and tell them. Adds at most max_files (50) new photos per
+    call; call again for the rest. More than 10 photos needs the person's go-ahead. The list of
+    added files is kept in the journal. It cannot be undone with the undo tool (the person
+    removes the photos in Lightroom if needed)."""
 
-    max_files: int = Field(default=200, ge=1, le=500)
+    max_files: int = Field(default=MAX_IMPORT_PER_CALL, ge=1, le=MAX_IMPORT_PER_CALL)
 
 
 class ImportFolderResult(ToolResult):
@@ -178,11 +181,13 @@ def import_folder(ctx: ToolContext, args: ImportFolderInput) -> Outcome:
             folder=args.folder, added=0, already_in_catalog=scan.already_in_catalog
         )
         return Outcome(ImportFolderResult(imported=empty, note=note))
-    require_confirmation(
-        ctx.confirmer,
-        f"add {count} photos from {args.folder} to the catalog (files are not moved or changed)",
-        {"folder": args.folder, "photos_to_add": count, "recursive": args.recursive},
-    )
+    if count > IMPORT_CONFIRM_ABOVE:
+        require_confirmation(
+            ctx.confirmer,
+            f"add {count} photos from {args.folder} to the catalog (files are not moved or "
+            "changed; the catalog change cannot be undone by darkroom_ai)",
+            {"folder": args.folder, "photos_to_add": count, "recursive": args.recursive},
+        )
     done = ctx.lightroom.import_folder(args.folder, args.recursive, args.max_files)
     note = (
         f"{done.left_for_next_call} more new photos remain: call import_folder again."
@@ -191,5 +196,5 @@ def import_folder(ctx: ToolContext, args: ImportFolderInput) -> Outcome:
     )
     return Outcome(
         ImportFolderResult(imported=done, note=note),
-        applied={"folder": args.folder, "added": done.added},
+        applied={"folder": args.folder, "added": done.added, "added_paths": list(done.added_paths)},
     )

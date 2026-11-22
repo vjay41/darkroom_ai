@@ -13,6 +13,8 @@ SKILLS = Path(__file__).parents[2] / "hermes" / "skills"
 SKILL_DIRS = sorted(p for p in SKILLS.iterdir() if p.is_dir())
 EXPECTED = {
     "lr-batch-operations",
+    "lr-catalog-organisation",
+    "lr-catalog-partnering",
     "lr-genre-knowledge",
     "lr-lens-corrections",
     "lr-masking",

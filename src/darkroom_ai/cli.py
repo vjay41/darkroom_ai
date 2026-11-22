@@ -292,6 +292,33 @@ def _lightroom_ping(settings: Settings) -> int:
     return EXIT_OK
 
 
+def _lightroom_allow(catalog: str | None, folders: list[str]) -> int:
+    """Human-only: add a catalog and/or photo folders to the allowlist in bridge.json."""
+    from darkroom_ai.adapters.lightroom.bridge_file import BridgeAccessStore
+
+    store = BridgeAccessStore()
+    if catalog:
+        path = Path(catalog)
+        if not (path.is_file() and path.suffix.lower() == ".lrcat"):
+            print(f"Not a Lightroom catalog (.lrcat) file: {catalog}")
+            return EXIT_PROBLEM
+        store.allow_catalog(str(path))
+        print(f"catalog allowed: {path}")
+    for folder in folders:
+        if not Path(folder).is_dir():
+            print(f"Not a folder: {folder}")
+            return EXIT_PROBLEM
+        store.allow_photos_folder(str(Path(folder)))
+        print(f"photo folder allowed: {folder}")
+    print("allowed catalogs:")
+    for item in store.allowed_catalogs():
+        print(f"  {item}")
+    print("allowed photo folders (empty means no folder limit):")
+    for item in store.photos_roots():
+        print(f"  {item}")
+    return EXIT_OK
+
+
 def _selftest(settings: Settings, write: bool, photo_id: str | None) -> int:
     from darkroom_ai.adapters.photoshop.client import PhotoshopClient
     from darkroom_ai.selftest import format_report, run_selftest
@@ -408,6 +435,14 @@ def build_parser() -> argparse.ArgumentParser:
     setup = lightroom_commands.add_parser("setup", help="write the plug-in's bridge.json")
     setup.add_argument("--rotate-token", action="store_true", help="generate a new token")
     lightroom_commands.add_parser("ping", help="check that the plug-in answers")
+    allow = lightroom_commands.add_parser(
+        "allow",
+        help="allow a catalog and/or photo folders (the owner's allowlist); no arguments lists it",
+    )
+    allow.add_argument("--catalog", help="full path of a .lrcat file to allow")
+    allow.add_argument(
+        "--photos-folder", action="append", default=[], help="a photo folder to allow"
+    )
     return parser
 
 
@@ -438,6 +473,8 @@ def main(argv: list[str] | None = None) -> int:
 
             mcp_server.run(settings)
             return EXIT_OK
+        if args.lightroom_command == "allow":
+            return _lightroom_allow(args.catalog, args.photos_folder)
         if args.lightroom_command == "setup":
             return _lightroom_setup(settings, args.rotate_token)
         return _lightroom_ping(settings)

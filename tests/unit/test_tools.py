@@ -91,6 +91,17 @@ NOT_ABOUT_ONE_PHOTO = {
     "find_photo",
     "list_catalog_photos",
     "catalog_summary",
+    "list_catalogs",
+    "get_catalog_info",
+    "request_catalog_access",
+    "request_folder_access",
+    "create_collection_set",
+    "create_collection",
+    "add_to_collection",
+    "remove_from_collection",
+    "get_collection_photos",
+    "create_keyword",
+    "undo_collection_change",
     "scan_folder",
     "import_folder",
     "list_develop_parameters",
@@ -117,6 +128,17 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "get_photo_info",
         "list_catalog_photos",
         "catalog_summary",
+        "list_catalogs",
+        "get_catalog_info",
+        "request_catalog_access",
+        "request_folder_access",
+        "create_collection_set",
+        "create_collection",
+        "add_to_collection",
+        "remove_from_collection",
+        "get_collection_photos",
+        "create_keyword",
+        "undo_collection_change",
         "scan_folder",
         "import_folder",
         "get_photo_metadata",
@@ -1063,9 +1085,18 @@ def test_catalog_summary_counts_the_catalog(rig: Rig) -> None:
     assert got["iso_bands"] == {"up to 400": got["total_photos"]}
 
 
-def test_import_folder_needs_the_go_ahead(tmp_path: Path) -> None:
+def test_a_small_import_runs_and_keeps_the_list_of_added_files(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)  # refuses every prompt: 3 photos is below the go-ahead threshold
+    assert rig.call("scan_folder", folder="D:\\darkroom_test\\photos")["scan"]["new_count"] == 3
+    got = rig.call("import_folder", folder="D:\\darkroom_test\\photos")
+    assert got["imported"]["added"] == 3
+    entry = [e for e in rig.journal.entries() if e.tool == "import_folder"][-1]
+    assert entry.applied is not None and len(entry.applied["added_paths"]) == 3
+
+
+def test_a_larger_import_needs_the_go_ahead_and_is_capped_at_50(tmp_path: Path) -> None:
     refused = Rig(tmp_path / "a")
-    assert refused.call("scan_folder", folder="D:\\darkroom_test\\photos")["scan"]["new_count"] == 3
+    refused.lightroom.importable = 12
     with pytest.raises(DarkroomError) as caught:
         refused.call("import_folder", folder="D:\\darkroom_test\\photos")
     assert caught.value.code is ErrorCode.CONFIRMATION_REQUIRED
@@ -1073,9 +1104,12 @@ def test_import_folder_needs_the_go_ahead(tmp_path: Path) -> None:
 
     confirmer = AllowAll()
     allowed = Rig(tmp_path / "b", confirmer=confirmer)
-    got = allowed.call("import_folder", folder="D:\\darkroom_test\\photos", max_files=2)
-    assert got["imported"]["added"] == 2
-    assert "3 photos" not in confirmer.asked[0] and "2 photos" in confirmer.asked[0]
+    allowed.lightroom.importable = 80
+    got = allowed.call("import_folder", folder="D:\\darkroom_test\\photos")
+    assert got["imported"]["added"] == 50
+    assert "50 photos" in confirmer.asked[0]
+    with pytest.raises(DarkroomError):
+        allowed.call("import_folder", folder="D:\\darkroom_test\\photos", max_files=51)
 
 
 def test_iso_band_reads_lightroom_text() -> None:

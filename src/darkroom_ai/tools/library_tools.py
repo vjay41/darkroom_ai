@@ -1,8 +1,8 @@
 """Library tools: star rating, pick/reject flag and keywords.
 
-These change catalog metadata only (no pixels, no develop settings) and only on virtual copies,
-the same rule as every other write. Each change is read back from Lightroom and journaled with the
-values needed to take it back (`undo_library_change`).
+These change catalog metadata only (no pixels, no develop settings), on a master photo or a
+virtual copy (owner decision 2026-11-22). Each change is read back from Lightroom and journaled
+with the values needed to take it back (`undo_library_change`).
 """
 
 from __future__ import annotations
@@ -13,9 +13,8 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from darkroom_ai.adapters.lightroom.models import LibraryState, PhotoInfo
-from darkroom_ai.errors import DarkroomError, ErrorCode
 from darkroom_ai.safety.journal import JournalEntry
-from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult, resolve_copy
+from darkroom_ai.tools.context import Outcome, ToolContext, ToolResult
 
 SET_TOOL = "set_library_state"
 UNDO_TOOL = "undo_library_change"
@@ -73,13 +72,13 @@ def get_library_state(ctx: ToolContext, args: GetLibraryStateInput) -> Outcome:
 
 
 class SetLibraryStateInput(_Input):
-    """Set a virtual copy's star rating, pick/reject flag and keywords (catalog data only).
+    """Set a photo's star rating, pick/reject flag and keywords (catalog data only).
 
     rating is 0-5 (0 clears the rating); flag is "pick", "reject" or "none"; add_keywords and
     remove_keywords are plain names (an existing keyword of that name is reused, a new one is
-    created at the top level of the keyword list). Only virtual copies are changed, never a
-    master photo. The change is read back from Lightroom and can be taken back with
-    undo_library_change.
+    created at the top level of the keyword list). Works on master photos and on virtual copies:
+    the photo whose id you pass is the one that changes. The change is read back from Lightroom
+    and can be taken back with undo_library_change.
     """
 
     rating: int | None = Field(default=None, ge=0, le=5)
@@ -117,18 +116,13 @@ class SetLibraryStateResult(ToolResult):
 
 
 def target_copy(ctx: ToolContext, photo_id: str) -> PhotoInfo:
-    """The virtual copy to change: the photo itself if it is one, else its existing working copy."""
-    photo = resolve_copy(ctx, photo_id)
-    if not photo.is_virtual_copy:
-        raise DarkroomError(
-            ErrorCode.GUARDRAIL_REJECTED,
-            "Library changes are only made to virtual copies, never to a master photo. "
-            "Nothing was changed.",
-            next_step="Use the id of the photo's virtual copy, or make a first edit with any "
-            "adjust tool (that creates the working copy), then retry with its id.",
-            details={"photo_id": photo_id},
-        )
-    return photo
+    """The photo to change: exactly the one named (a master or a virtual copy).
+
+    Owner decision 2026-11-22: rating, flag and keywords may be written to master photos too.
+    This is catalog data only; the file and the develop settings are not touched. Nothing is
+    redirected to a working copy any more, so the id you pass is the photo that changes.
+    """
+    return ctx.lightroom.get_photo(photo_id)
 
 
 def _shown(photo_id: str, state: LibraryState) -> LibraryStateResult:

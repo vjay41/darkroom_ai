@@ -43,21 +43,21 @@ decision.
 - A time or call budget that the user set is used up.
 
 ## Keeping it efficient
-- Small previews are enough for triage; look closely only at the pilot and flagged photos.
+- Small previews are enough for triage; look closely at the pilot and flagged photos only.
 - Remember which ids are done, so a resumed run skips them.
-- One confirmation per chunk plan, never per photo; never skip the first one.
-- Work on working copies only. If an original shows where a copy should be, stop and report.
+- One confirmation per chunk plan, not per photo; never skip the first.
+- Develop edits go to working copies only; if an original shows where a copy should be, stop.
 
-## Honest limits
-- Numbers can group different scenes together; check the pilot on a second photo of the group.
-- A batch that "worked" on numbers can still look wrong. Offer samples and let the user's eyes decide.
+## Limits
+- Numbers can mix scenes; check the pilot on a second photo.
+- A batch that worked on numbers can still look wrong: offer samples; the user's eyes decide.
 
 ## Rating, flagging and keywords
 `get_library_state` reads a photo's stars, pick/reject flag and keywords. `set_library_state` changes them,
-`undo_library_change` takes this session's changes back. They only work on a virtual copy (a master is refused),
-and each change is read back: look at `verified` and `problems` in the result.
-- Only set what the user asked for; never rate, reject or tag a set as a side effect of editing.
-- A rating or flag is the user's taste, not a measurement: do not infer one from histogram numbers.
+`undo_library_change` takes this session's changes back. They change exactly the photo whose id you pass, a master
+or a virtual copy (catalog data only; the file is never touched), and each change is read back: look at `verified` and `problems` in the result.
+- Only set what the user asked for; never rate, reject or tag as a side effect of editing.
+- A rating or flag is the user's taste, not a measurement: never infer one from numbers.
 - Keywords are plain names; an existing keyword of that name (any letter case) is reused. A new one stays in
   Lightroom's keyword list even after undo, so keep names few and deliberate.
 - For many photos, follow the phases above: confirm the plan and the exact words first, then do a small chunk.

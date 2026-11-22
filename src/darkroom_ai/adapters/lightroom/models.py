@@ -22,6 +22,9 @@ class PingInfo(_Result):
     writes_allowed: bool
     # When set, the plug-in refuses writes for photos whose files are outside this folder.
     photos_root: str | None = None
+    # Added in plug-in 0.13.0: every catalog and photo folder the owner has allowed.
+    allowed_catalogs: tuple[str, ...] = ()
+    photos_roots: tuple[str, ...] = ()
 
 
 class Snapshot(_Result):
@@ -116,6 +119,10 @@ class FolderScan(_Result):
     already_in_catalog: int = 0
     unsupported_files: int = 0
     truncated: bool = False
+    # New files whose file NAME is already in the catalog (maybe the same photo in another folder).
+    same_name_count: int = 0
+    same_name_files: tuple[str, ...] = ()  # the first few only
+    same_name_checked: bool = False  # False: catalog too large for the check, or old plug-in
 
 
 class ImportFailure(_Result):
@@ -126,6 +133,7 @@ class ImportFailure(_Result):
 class FolderImport(_Result):
     folder: str
     added: int
+    added_paths: tuple[str, ...] = ()
     failed: tuple[ImportFailure, ...] = ()
     already_in_catalog: int = 0
     left_for_next_call: int = 0
@@ -229,3 +237,68 @@ class PresetChange(_Result):
     preset: PresetInfo
     before: dict[str, Any] = Field(default_factory=dict)
     after: dict[str, Any] = Field(default_factory=dict)
+
+
+class CollectionNode(_Result):
+    name: str
+    kind: str  # "set" or "collection"
+    photo_count: int | None = None
+    is_smart: bool = False
+    children: tuple[CollectionNode, ...] = ()
+
+
+class FolderNode(_Result):
+    name: str
+    path: str
+    photo_count: int = 0
+    children: tuple[FolderNode, ...] = ()
+
+
+class CatalogInfo(_Result):
+    """What is in the open catalog (counts, collection tree, folder tree)."""
+
+    catalog_path: str
+    writes_allowed: bool
+    total_photos: int
+    virtual_copies: int = 0
+    keyword_count: int = 0
+    collections: tuple[CollectionNode, ...] = ()
+    folders: tuple[FolderNode, ...] = ()
+    truncated: bool = False
+
+
+class CollectionCreated(_Result):
+    path: str
+    created: bool
+    photo_count: int = 0
+
+
+class CollectionMembers(_Result):
+    collection: str
+    added_ids: tuple[str, ...] = ()
+    removed_ids: tuple[str, ...] = ()
+    already_in: int = 0
+    missing_ids: tuple[str, ...] = ()
+    photo_count: int = 0
+
+
+class CollectionDeleted(_Result):
+    deleted: bool
+    path: str
+
+
+class CollectionPhoto(_Result):
+    id: str
+    file_name: str | None = None
+
+
+class CollectionContents(_Result):
+    collection: str
+    is_smart: bool = False
+    total: int
+    photos: tuple[CollectionPhoto, ...] = ()
+
+
+class KeywordCreated(_Result):
+    path: str
+    created_levels: tuple[str, ...] = ()

@@ -84,6 +84,14 @@ class LightroomSettings(_Section):
     test_catalog: Path | None = None
     # Development edits are only made to photos whose files are under this folder (test copies).
     test_photos_dir: Path | None = None
+    # More catalogs the owner has allowed (the plug-in writes to any of them, not only
+    # test_catalog), and more photo folders. Also kept in bridge.json when the owner approves
+    # one in Hermes.
+    allowed_catalogs: list[Path] = Field(default_factory=list)
+    photos_roots: list[Path] = Field(default_factory=list)
+    # Folders list_catalogs searches for .lrcat files (two levels deep). Empty: a few sensible
+    # places are searched (the drive of the open catalog, your Pictures folder).
+    catalog_search_dirs: list[Path] = Field(default_factory=list)
 
     @field_validator("host")
     @classmethod

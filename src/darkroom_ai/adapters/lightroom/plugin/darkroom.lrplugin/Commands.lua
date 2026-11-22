@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.12.0"
+local PLUGIN_VERSION = "0.13.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -66,19 +66,48 @@ local function normalizePath(path)
 	return (string.gsub(p, "\\+$", ""))
 end
 
+-- The folders photos may be edited or imported from: photos_root (the first one) plus photos_roots
+-- (added later by the owner). No roots configured means no folder limit.
+local function allowedRoots(ctx)
+	local roots = {}
+	local first = ctx.config.photos_root
+	if type(first) == "string" and first ~= "" then
+		roots[#roots + 1] = first
+	end
+	if type(ctx.config.photos_roots) == "table" then
+		for _, root in ipairs(ctx.config.photos_roots) do
+			if type(root) == "string" and root ~= "" then
+				roots[#roots + 1] = root
+			end
+		end
+	end
+	return roots
+end
+
+local function underAllowedRoot(ctx, path)
+	local roots = allowedRoots(ctx)
+	if #roots == 0 then
+		return true, nil
+	end
+	local normalized = normalizePath(path)
+	for _, root in ipairs(roots) do
+		local base = normalizePath(root)
+		if normalized and (normalized == base or string.sub(normalized, 1, #base + 1) == base .. "\\") then
+			return true, nil
+		end
+	end
+	return false, table.concat(roots, "; ")
+end
+
 -- Photo lookup for write commands, with two extra refusals:
--- * photos_root (optional, from bridge.json): the photo's file must be under that folder.
+-- * allowed folders (optional, from bridge.json): the photo's file must be under one of them.
 --   A virtual copy has the same file path as its master, so the rule covers copies too.
 -- * needsVirtualCopy: develop edits are only made to virtual copies, never to master photos.
 local function findWritablePhoto(ctx, id, needsVirtualCopy)
 	local photo = findPhoto(ctx, id)
-	local root = ctx.config.photos_root
-	if type(root) == "string" and root ~= "" then
-		local path = normalizePath(photo:getRawMetadata("path"))
-		local prefix = normalizePath(root) .. "\\"
-		if not path or string.sub(path, 1, #prefix) ~= prefix then
-			fail("PHOTO_OUTSIDE_ROOT", "Refused: the photo's file is not under the allowed folder (" .. root .. ")")
-		end
+	local ok, shown = underAllowedRoot(ctx, photo:getRawMetadata("path"))
+	if not ok then
+		fail("PHOTO_OUTSIDE_ROOT", "Refused: the photo's file is not under an allowed folder (" .. shown .. ")")
 	end
 	if needsVirtualCopy and not photo:getRawMetadata("isVirtualCopy") then
 		fail("NOT_A_VIRTUAL_COPY", "Refused: develop edits are only made to virtual copies, never to master photos")
@@ -180,6 +209,8 @@ function Commands.read.ping(_, ctx)
 		configured_catalog = ctx.config.catalog_path,
 		photos_root = ctx.config.photos_root,
 		writes_allowed = ctx.writes_allowed,
+		allowed_catalogs = list(ctx.config.allowed_catalogs or {}),
+		photos_roots = list(allowedRoots(ctx)),
 	}
 end
 
@@ -527,20 +558,39 @@ local function checkedFolder(params, ctx)
 	if LrFileUtils.exists(folder) ~= "directory" then
 		fail("FOLDER_NOT_FOUND", "No such folder: " .. folder)
 	end
-	local root = ctx.config.photos_root
-	if type(root) == "string" and root ~= "" then
-		local normalized, base = normalizePath(folder), normalizePath(root)
-		if normalized ~= base and string.sub(normalized, 1, #base + 1) ~= base .. "\\" then
-			fail("PHOTO_OUTSIDE_ROOT", "Refused: the folder is not under the allowed folder (" .. root .. ")")
-		end
+	local ok, shown = underAllowedRoot(ctx, folder)
+	if not ok then
+		fail("PHOTO_OUTSIDE_ROOT", "Refused: the folder is not under an allowed folder (" .. shown .. ")")
 	end
 	return folder
+end
+
+-- File names (lower case) of the photos already in the catalog, for the "same name elsewhere" hint.
+-- Skipped for very large catalogs (returns nil) so a scan stays quick.
+local NAME_INDEX_LIMIT = 5000
+
+local function nameIndex(ctx)
+	local photos = ctx.catalog:getAllPhotos()
+	if #photos > NAME_INDEX_LIMIT then
+		return nil
+	end
+	local names = {}
+	for _, photo in ipairs(photos) do
+		ctx.checkpoint()
+		local name = photo:getFormattedMetadata("fileName")
+		if type(name) == "string" then
+			names[string.lower(name)] = true
+		end
+	end
+	return names
 end
 
 local function scanFolder(params, ctx)
 	local folder = checkedFolder(params, ctx)
 	local iterator = params.recursive and LrFileUtils.recursiveFiles(folder) or LrFileUtils.files(folder)
 	local newFiles, existing, unsupported, seen = {}, 0, 0, 0
+	local names = nameIndex(ctx)
+	local sameName = {}
 	for path in iterator do
 		ctx.checkpoint()
 		local extension = string.lower(LrPathUtils.extension(path) or "")
@@ -553,13 +603,24 @@ local function scanFolder(params, ctx)
 				existing = existing + 1
 			else
 				newFiles[#newFiles + 1] = path
+				if names and names[string.lower(LrPathUtils.leafName(path))] then
+					sameName[#sameName + 1] = path
+				end
 			end
 		else
 			unsupported = unsupported + 1
 		end
 	end
 	table.sort(newFiles)
-	return { folder = folder, new_files = newFiles, already_in_catalog = existing, unsupported_files = unsupported, truncated = seen > SCAN_LIMIT }
+	return {
+		folder = folder,
+		new_files = newFiles,
+		already_in_catalog = existing,
+		unsupported_files = unsupported,
+		truncated = seen > SCAN_LIMIT,
+		same_name_files = sameName,
+		same_name_checked = names ~= nil,
+	}
 end
 
 function Commands.read.scan_folder(params, ctx)
@@ -570,6 +631,12 @@ function Commands.read.scan_folder(params, ctx)
 		shown[i] = result.new_files[i]
 	end
 	result.new_files = list(shown)
+	result.same_name_count = #result.same_name_files
+	local sameShown = {}
+	for i = 1, math.min(#result.same_name_files, 20) do
+		sameShown[i] = result.same_name_files[i]
+	end
+	result.same_name_files = list(sameShown)
 	return result
 end
 
@@ -579,7 +646,7 @@ function Commands.write.import_folder(params, ctx)
 		fail("INVALID_PARAMS", "max_files must be 1-500")
 	end
 	local scan = scanFolder(params, ctx)
-	local added, failed = 0, {}
+	local added, failed, addedPaths = 0, {}, {}
 	local todo = {}
 	for i = 1, math.min(#scan.new_files, maxFiles) do
 		todo[#todo + 1] = scan.new_files[i]
@@ -592,6 +659,7 @@ function Commands.write.import_folder(params, ctx)
 			end)
 			if ok then
 				added = added + 1
+				addedPaths[#addedPaths + 1] = path
 			else
 				failed[#failed + 1] = { path = path, error = tostring(err) }
 			end
@@ -600,6 +668,7 @@ function Commands.write.import_folder(params, ctx)
 	return {
 		folder = scan.folder,
 		added = added,
+		added_paths = list(addedPaths),
 		failed = list(failed),
 		already_in_catalog = scan.already_in_catalog,
 		left_for_next_call = #scan.new_files - #todo,
@@ -1249,8 +1318,8 @@ end
 
 --------------------------------------------------------------------------------
 -- Library state: star rating, pick/reject flag, keywords.
--- Catalog metadata only: no pixels, no develop settings. Writes go to virtual copies only (the
--- same rule as every other write), so a master photo and its file are never touched.
+-- Catalog metadata only: no pixels, no develop settings. Allowed on master photos and on virtual copies
+-- (owner decision 2026-11-22); the photo's file is never touched.
 
 local MAX_KEYWORDS_PER_CALL = 20
 local MAX_KEYWORD_LENGTH = 64
@@ -1315,7 +1384,7 @@ function Commands.read.get_library_state(params, ctx)
 end
 
 function Commands.write.set_library_state(params, ctx)
-	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local photo = findWritablePhoto(ctx, params.photo_id, false)
 	local rating = params.rating
 	if rating ~= nil and (type(rating) ~= "number" or rating < 0 or rating > 5 or rating % 1 ~= 0) then
 		fail("INVALID_PARAMS", "rating must be a whole number from 0 (no rating) to 5")
@@ -1360,6 +1429,375 @@ function Commands.write.set_library_state(params, ctx)
 		end
 	end)
 	return { before = before, after = libraryState(photo) }
+end
+
+--------------------------------------------------------------------------------
+-- Catalog organisation: collections, collection sets, keywords, catalog overview.
+-- Catalog data only. Nothing here touches a photo's pixels, develop settings or file.
+
+local MAX_PHOTOS_PER_CALL = 200
+local MAX_TREE_NODES = 300
+
+local function splitPath(text, label)
+	if type(text) ~= "string" then
+		fail("INVALID_PARAMS", label .. " must be text such as \"Trips/Japan 2026\"")
+	end
+	local parts = {}
+	for part in string.gmatch(text, "[^/]+") do
+		local trimmed = string.match(part, "^%s*(.-)%s*$")
+		if trimmed ~= "" then
+			if #trimmed > 100 then
+				fail("INVALID_PARAMS", label .. ": each name must be at most 100 characters")
+			end
+			parts[#parts + 1] = trimmed
+		end
+	end
+	if #parts == 0 then
+		fail("INVALID_PARAMS", label .. " is empty")
+	end
+	return parts
+end
+
+local function childSets(ctx, parent)
+	if parent then
+		return parent:getChildCollectionSets() or {}
+	end
+	return ctx.catalog:getChildCollectionSets() or {}
+end
+
+local function childCollections(ctx, parent)
+	if parent then
+		return parent:getChildCollections() or {}
+	end
+	return ctx.catalog:getChildCollections() or {}
+end
+
+local function byName(items, name)
+	local wanted = string.lower(name)
+	for _, item in ipairs(items) do
+		if string.lower(item:getName()) == wanted then
+			return item
+		end
+	end
+	return nil
+end
+
+-- The collection set at "A/B" (nil path = the top level). Returns set, or nil when it does not exist.
+local function findSet(ctx, parts)
+	local parent = nil
+	for _, name in ipairs(parts) do
+		local found = byName(childSets(ctx, parent), name)
+		if not found then
+			return nil, false
+		end
+		parent = found
+	end
+	return parent, true
+end
+
+local function findCollection(ctx, text)
+	local parts = splitPath(text, "collection")
+	local name = table.remove(parts)
+	local parent, ok = findSet(ctx, parts)
+	if not ok then
+		return nil
+	end
+	return byName(childCollections(ctx, parent), name)
+end
+
+local function pathOf(item)
+	local names = { item:getName() }
+	local parent = item:getParent()
+	while parent do
+		table.insert(names, 1, parent:getName())
+		parent = parent:getParent()
+	end
+	return table.concat(names, "/")
+end
+
+local function photoIds(photos)
+	local ids = {}
+	for _, photo in ipairs(photos) do
+		ids[photo:getRawMetadata("uuid")] = true
+	end
+	return ids
+end
+
+local function idList(params, label)
+	local ids = params.photo_ids
+	if type(ids) ~= "table" or #ids == 0 or #ids > MAX_PHOTOS_PER_CALL then
+		fail("INVALID_PARAMS", label .. " must be a list of 1-" .. MAX_PHOTOS_PER_CALL .. " photo ids")
+	end
+	for _, id in ipairs(ids) do
+		if type(id) ~= "string" or id == "" then
+			fail("INVALID_PARAMS", label .. " must contain only photo id text")
+		end
+	end
+	return ids
+end
+
+function Commands.write.create_collection_set(params, ctx)
+	local parts = splitPath(params.path, "path")
+	local name = table.remove(parts)
+	local parent, ok = findSet(ctx, parts)
+	if not ok then
+		fail("COLLECTION_NOT_FOUND", "The parent set does not exist: " .. table.concat(parts, "/"))
+	end
+	local existing = byName(childSets(ctx, parent), name)
+	if not existing then
+		withWrite(ctx, "darkroom_ai: create collection set", function()
+			ctx.catalog:createCollectionSet(name, parent, true)
+		end)
+	end
+	local now = byName(childSets(ctx, parent), name)
+	if not now then
+		fail("CREATE_FAILED", "Lightroom did not create the collection set " .. name)
+	end
+	return { path = pathOf(now), created = existing == nil }
+end
+
+function Commands.write.create_collection(params, ctx)
+	local parts = splitPath(params.path, "path")
+	local name = table.remove(parts)
+	local parent, ok = findSet(ctx, parts)
+	if not ok then
+		fail("COLLECTION_NOT_FOUND", "The parent set does not exist: " .. table.concat(parts, "/") .. " (create it first)")
+	end
+	local existing = byName(childCollections(ctx, parent), name)
+	if not existing then
+		withWrite(ctx, "darkroom_ai: create collection", function()
+			ctx.catalog:createCollection(name, parent, true)
+		end)
+	end
+	local now = byName(childCollections(ctx, parent), name)
+	if not now then
+		fail("CREATE_FAILED", "Lightroom did not create the collection " .. name)
+	end
+	return { path = pathOf(now), created = existing == nil, photo_count = #(now:getPhotos() or {}) }
+end
+
+function Commands.write.add_to_collection(params, ctx)
+	local ids = idList(params, "photo_ids")
+	local collection = findCollection(ctx, params.collection)
+	if not collection then
+		fail("COLLECTION_NOT_FOUND", "No collection " .. tostring(params.collection) .. " (create_collection first)")
+	end
+	if collection:isSmartCollection() then
+		fail("SMART_COLLECTION", "Smart collections fill themselves; photos cannot be added by hand")
+	end
+	local present = photoIds(collection:getPhotos() or {})
+	local toAdd, addedIds, already, missing = {}, {}, 0, {}
+	for _, id in ipairs(ids) do
+		ctx.checkpoint()
+		local photo = ctx.catalog:findPhotoByUuid(id)
+		if not photo then
+			missing[#missing + 1] = id
+		else
+			local ok, shown = underAllowedRoot(ctx, photo:getRawMetadata("path"))
+			if not ok then
+				fail("PHOTO_OUTSIDE_ROOT", "Refused: " .. id .. " is not under an allowed folder (" .. shown .. ")")
+			end
+			if present[id] then
+				already = already + 1
+			elseif not photoIds(toAdd)[id] then
+				toAdd[#toAdd + 1] = photo
+				addedIds[#addedIds + 1] = id
+			end
+		end
+	end
+	if #toAdd > 0 then
+		withWrite(ctx, "darkroom_ai: add to collection", function()
+			collection:addPhotos(toAdd)
+		end)
+	end
+	return {
+		collection = pathOf(collection),
+		added_ids = list(addedIds),
+		already_in = already,
+		missing_ids = list(missing),
+		photo_count = #(collection:getPhotos() or {}),
+	}
+end
+
+function Commands.write.remove_from_collection(params, ctx)
+	local ids = idList(params, "photo_ids")
+	local collection = findCollection(ctx, params.collection)
+	if not collection then
+		fail("COLLECTION_NOT_FOUND", "No collection " .. tostring(params.collection))
+	end
+	if collection:isSmartCollection() then
+		fail("SMART_COLLECTION", "Smart collections fill themselves; photos cannot be removed by hand")
+	end
+	local present = photoIds(collection:getPhotos() or {})
+	local toRemove, removedIds = {}, {}
+	for _, id in ipairs(ids) do
+		ctx.checkpoint()
+		local photo = ctx.catalog:findPhotoByUuid(id)
+		if photo and present[id] then
+			toRemove[#toRemove + 1] = photo
+			removedIds[#removedIds + 1] = id
+		end
+	end
+	if #toRemove > 0 then
+		withWrite(ctx, "darkroom_ai: remove from collection", function()
+			collection:removePhotos(toRemove)
+		end)
+	end
+	return {
+		collection = pathOf(collection),
+		removed_ids = list(removedIds),
+		photo_count = #(collection:getPhotos() or {}),
+	}
+end
+
+-- Deletes an EMPTY collection or collection set (used to take back one darkroom_ai created).
+function Commands.write.delete_collection(params, ctx)
+	local parts = splitPath(params.path, "path")
+	local kind = params.kind
+	if kind ~= "collection" and kind ~= "set" then
+		fail("INVALID_PARAMS", "kind must be 'collection' or 'set'")
+	end
+	local target
+	if kind == "collection" then
+		target = findCollection(ctx, params.path)
+		if target and #(target:getPhotos() or {}) > 0 then
+			fail("NOT_EMPTY", "Refused: the collection still has photos; remove them first")
+		end
+	else
+		target = findSet(ctx, parts)
+		if target and (#childSets(ctx, target) > 0 or #childCollections(ctx, target) > 0) then
+			fail("NOT_EMPTY", "Refused: the set still contains collections or sets")
+		end
+	end
+	if not target then
+		return { deleted = false, path = params.path }
+	end
+	withWrite(ctx, "darkroom_ai: delete empty " .. kind, function()
+		target:delete()
+	end)
+	return { deleted = true, path = params.path }
+end
+
+function Commands.read.collection_photos(params, ctx)
+	local collection = findCollection(ctx, params.collection)
+	if not collection then
+		fail("COLLECTION_NOT_FOUND", "No collection " .. tostring(params.collection))
+	end
+	local limit = tonumber(params.limit) or 100
+	if limit < 1 or limit > MAX_PHOTOS_PER_CALL then
+		fail("INVALID_PARAMS", "limit must be 1-" .. MAX_PHOTOS_PER_CALL)
+	end
+	local photos = collection:getPhotos() or {}
+	local shown = {}
+	for i = 1, math.min(#photos, limit) do
+		ctx.checkpoint()
+		shown[i] = { id = photos[i]:getRawMetadata("uuid"), file_name = photos[i]:getFormattedMetadata("fileName") }
+	end
+	return {
+		collection = pathOf(collection),
+		is_smart = collection:isSmartCollection() and true or false,
+		total = #photos,
+		photos = list(shown),
+	}
+end
+
+function Commands.write.create_keyword(params, ctx)
+	local parts = splitPath(params.path, "path")
+	local created, parent = {}, nil
+	withWrite(ctx, "darkroom_ai: create keyword", function()
+		for _, name in ipairs(parts) do
+			local siblings = parent and (parent:getChildren() or {}) or (ctx.catalog:getKeywords() or {})
+			local found = byName(siblings, name)
+			if not found then
+				found = ctx.catalog:createKeyword(name, {}, true, parent, true)
+				created[#created + 1] = name
+			end
+			parent = found
+		end
+	end)
+	return { path = table.concat(parts, "/"), created_levels = list(created) }
+end
+
+local function collectionTree(ctx, parent, depth, budget)
+	local nodes = {}
+	local function add(item, kind, children)
+		if budget.left <= 0 then
+			budget.truncated = true
+			return
+		end
+		budget.left = budget.left - 1
+		local node = { name = item:getName(), kind = kind }
+		if kind == "collection" then
+			node.photo_count = #(item:getPhotos() or {})
+			node.is_smart = item:isSmartCollection() and true or false
+		elseif depth < 4 then
+			node.children = children
+		end
+		nodes[#nodes + 1] = node
+	end
+	for _, set in ipairs(childSets(ctx, parent)) do
+		ctx.checkpoint()
+		local children = depth < 4 and collectionTree(ctx, set, depth + 1, budget) or Json.EMPTY_ARRAY
+		add(set, "set", children)
+	end
+	for _, collection in ipairs(childCollections(ctx, parent)) do
+		ctx.checkpoint()
+		add(collection, "collection")
+	end
+	return list(nodes)
+end
+
+local function folderTree(ctx, folders, depth, budget)
+	local nodes = {}
+	for _, folder in ipairs(folders) do
+		ctx.checkpoint()
+		if budget.left <= 0 then
+			budget.truncated = true
+			break
+		end
+		budget.left = budget.left - 1
+		local node = { name = folder:getName(), path = folder:getPath(), photo_count = #(folder:getPhotos(false) or {}) }
+		if depth < 4 then
+			node.children = folderTree(ctx, folder:getChildren() or {}, depth + 1, budget)
+		end
+		nodes[#nodes + 1] = node
+	end
+	return list(nodes)
+end
+
+local function keywordCount(keywords, budget)
+	for _, keyword in ipairs(keywords) do
+		budget.count = budget.count + 1
+		if budget.count > 5000 then
+			return
+		end
+		keywordCount(keyword:getChildren() or {}, budget)
+	end
+end
+
+function Commands.read.catalog_info(_, ctx)
+	local photos = ctx.catalog:getAllPhotos()
+	local copies = 0
+	for _, photo in ipairs(photos) do
+		ctx.checkpoint()
+		if photo:getRawMetadata("isVirtualCopy") then
+			copies = copies + 1
+		end
+	end
+	local collectionBudget = { left = MAX_TREE_NODES, truncated = false }
+	local folderBudget = { left = MAX_TREE_NODES, truncated = false }
+	local keywordBudget = { count = 0 }
+	keywordCount(ctx.catalog:getKeywords() or {}, keywordBudget)
+	return {
+		catalog_path = ctx.catalog_path,
+		writes_allowed = ctx.writes_allowed,
+		total_photos = #photos,
+		virtual_copies = copies,
+		keyword_count = keywordBudget.count,
+		collections = collectionTree(ctx, nil, 1, collectionBudget),
+		folders = folderTree(ctx, ctx.catalog:getFolders() or {}, 1, folderBudget),
+		truncated = collectionBudget.truncated or folderBudget.truncated,
+	}
 end
 
 return Commands

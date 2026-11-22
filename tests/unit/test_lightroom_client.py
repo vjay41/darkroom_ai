@@ -357,3 +357,29 @@ def test_photo_not_shown_error_mentions_collapsed_stacks() -> None:
     )
     assert error.code is ErrorCode.LR_BUSY_USER
     assert "Expand All Stacks" in error.next_step and "Do not click" in error.next_step
+
+
+def test_the_new_catalog_commands_work_through_the_client(client: LightroomClient) -> None:
+    created = client.create_collection("Keepers")
+    assert created.created is True
+    added = client.add_to_collection("Keepers", ["uuid-1"])
+    assert added.added_ids == ("uuid-1",) and added.photo_count == 1
+    assert client.collection_photos("Keepers").total == 1
+    assert client.catalog_info().total_photos == 1
+    assert client.remove_from_collection("Keepers", ["uuid-1"]).removed_ids == ("uuid-1",)
+
+
+def test_an_older_plugin_gets_a_clear_error_for_the_new_commands(
+    client: LightroomClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unknown(*_a: object, **_k: object) -> dict[str, object]:
+        raise DarkroomError(
+            ErrorCode.LR_COMMAND_FAILED,
+            "Unknown command",
+            details={"plugin_code": "UNKNOWN_COMMAND"},
+        )
+
+    monkeypatch.setattr(client, "call", unknown)
+    with pytest.raises(DarkroomError) as caught:
+        client.create_collection("Keepers")
+    assert "older than 0.13.0" in str(caught.value) and "Nothing was changed" in str(caught.value)

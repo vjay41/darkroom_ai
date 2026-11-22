@@ -19,11 +19,17 @@ from pydantic import BaseModel, ValidationError
 from darkroom_ai.adapters.lightroom.bridge_file import BridgeFile
 from darkroom_ai.adapters.lightroom.models import (
     BridgeStatus,
+    CatalogInfo,
     CatalogPage,
+    CollectionContents,
+    CollectionCreated,
+    CollectionDeleted,
+    CollectionMembers,
     CommandList,
     ExportedTiff,
     FolderImport,
     FolderScan,
+    KeywordCreated,
     LibraryChange,
     LibraryState,
     MaskCreation,
@@ -556,6 +562,57 @@ class LightroomClient:
         params = {"folder": folder, "recursive": recursive, "max_files": max_files}
         data = self.call("import_folder", params, timeout_s=self._export_timeout_s)
         return self._typed(FolderImport, "import_folder", data)
+
+    def catalog_info(self) -> CatalogInfo:
+        return self._typed(CatalogInfo, "catalog_info", self._new_command("catalog_info", {}))
+
+    def create_collection_set(self, path: str) -> CollectionCreated:
+        data = self._new_command("create_collection_set", {"path": path})
+        return self._typed(CollectionCreated, "create_collection_set", data)
+
+    def create_collection(self, path: str) -> CollectionCreated:
+        data = self._new_command("create_collection", {"path": path})
+        return self._typed(CollectionCreated, "create_collection", data)
+
+    def add_to_collection(self, collection: str, photo_ids: Sequence[str]) -> CollectionMembers:
+        params = {"collection": collection, "photo_ids": list(photo_ids)}
+        data = self._new_command("add_to_collection", params)
+        return self._typed(CollectionMembers, "add_to_collection", data)
+
+    def remove_from_collection(
+        self, collection: str, photo_ids: Sequence[str]
+    ) -> CollectionMembers:
+        params = {"collection": collection, "photo_ids": list(photo_ids)}
+        data = self._new_command("remove_from_collection", params)
+        return self._typed(CollectionMembers, "remove_from_collection", data)
+
+    def delete_collection(self, path: str, kind: str) -> CollectionDeleted:
+        data = self._new_command("delete_collection", {"path": path, "kind": kind})
+        return self._typed(CollectionDeleted, "delete_collection", data)
+
+    def collection_photos(self, collection: str, limit: int = 100) -> CollectionContents:
+        params = {"collection": collection, "limit": limit}
+        data = self._new_command("collection_photos", params)
+        return self._typed(CollectionContents, "collection_photos", data)
+
+    def create_keyword(self, path: str) -> KeywordCreated:
+        data = self._new_command("create_keyword", {"path": path})
+        return self._typed(KeywordCreated, "create_keyword", data)
+
+    def _new_command(self, command: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Call a command added in plug-in 0.13.0; an older plug-in gets a clear error."""
+        try:
+            return self.call(command, params, timeout_s=self._export_timeout_s)
+        except DarkroomError as exc:
+            if exc.details.get("plugin_code") == "UNKNOWN_COMMAND":
+                raise DarkroomError(
+                    ErrorCode.LR_COMMAND_FAILED,
+                    f"The Lightroom plug-in is older than 0.13.0 and has no '{command}'. "
+                    "Nothing was changed.",
+                    next_step="Quit Lightroom completely and start it again so it loads the "
+                    'current plug-in, then File > Plug-in Extras > "Start darkroom_ai Bridge".',
+                ) from exc
+            raise
 
     def create_mask(
         self, photo_id: str, mask_type: str, subtype: str | None = None

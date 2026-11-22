@@ -16,11 +16,17 @@ from typing import Any, Protocol
 
 from darkroom_ai.adapters.lightroom.models import (
     BridgeStatus,
+    CatalogInfo,
     CatalogPage,
+    CollectionContents,
+    CollectionCreated,
+    CollectionDeleted,
+    CollectionMembers,
     CommandList,
     ExportedTiff,
     FolderImport,
     FolderScan,
+    KeywordCreated,
     LibraryChange,
     LibraryState,
     MaskCreation,
@@ -135,6 +141,24 @@ class LightroomAdapter(Protocol):
         self, folder: str, recursive: bool = False, max_files: int = 200
     ) -> FolderImport: ...
 
+    def catalog_info(self) -> CatalogInfo: ...
+
+    def create_collection_set(self, path: str) -> CollectionCreated: ...
+
+    def create_collection(self, path: str) -> CollectionCreated: ...
+
+    def add_to_collection(self, collection: str, photo_ids: Sequence[str]) -> CollectionMembers: ...
+
+    def remove_from_collection(
+        self, collection: str, photo_ids: Sequence[str]
+    ) -> CollectionMembers: ...
+
+    def delete_collection(self, path: str, kind: str) -> CollectionDeleted: ...
+
+    def collection_photos(self, collection: str, limit: int = 100) -> CollectionContents: ...
+
+    def create_keyword(self, path: str) -> KeywordCreated: ...
+
     def create_mask(
         self, photo_id: str, mask_type: str, subtype: str | None = None
     ) -> MaskCreation: ...
@@ -193,6 +217,22 @@ class PhotoshopAdapter(Protocol):
     def save_jpg(self, path: Path, out_path: Path | None = None, quality: int = ...) -> Path: ...
 
     def close_document(self, path: Path) -> None: ...
+
+
+class AccessStore(Protocol):
+    """The owner's allowlist of catalogs and photo folders (shared with the Lightroom plug-in).
+
+    Only a person may add to it: `allow_*` is called after the owner approved a prompt or ran the
+    command-line command, never on a model's say-so alone.
+    """
+
+    def allowed_catalogs(self) -> tuple[str, ...]: ...
+
+    def photos_roots(self) -> tuple[str, ...]: ...
+
+    def allow_catalog(self, catalog: str) -> None: ...
+
+    def allow_photos_folder(self, folder: str) -> None: ...
 
 
 class ActionJournal(Protocol):

@@ -145,3 +145,23 @@ class FakePhotoshop:
     def close_document(self, path: Path) -> None:
         self.open.discard(path)
         self._note("close_document", path)
+
+
+class FakeAccess:
+    """AccessStore that keeps the allowlist in memory."""
+
+    def __init__(self, catalogs: Sequence[str] = (), folders: Sequence[str] = ()) -> None:
+        self._catalogs = list(catalogs)
+        self._folders = list(folders)
+
+    def allowed_catalogs(self) -> tuple[str, ...]:
+        return tuple(self._catalogs)
+
+    def photos_roots(self) -> tuple[str, ...]:
+        return tuple(self._folders)
+
+    def allow_catalog(self, catalog: str) -> None:
+        self._catalogs.append(catalog)
+
+    def allow_photos_folder(self, folder: str) -> None:
+        self._folders.append(folder)

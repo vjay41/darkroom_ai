@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from darkroom_ai.adapters.lightroom.bridge_file import load_bridge_file
+from darkroom_ai.adapters.lightroom.bridge_file import BridgeAccessStore, load_bridge_file
 from darkroom_ai.adapters.lightroom.client import LightroomClient
 from darkroom_ai.adapters.photoshop.client import PhotoshopClient
 from darkroom_ai.adapters.photoshop.masks import PhotoshopSelectSubjectProvider
@@ -39,6 +39,7 @@ def build_tool_context(
         masks=masks,
         faces=build_face_detector(settings),
         processes=WindowsProcesses(),
+        access=BridgeAccessStore(),
     )
 
 

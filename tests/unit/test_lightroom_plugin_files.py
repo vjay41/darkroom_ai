@@ -112,6 +112,8 @@ def test_write_and_load_bridge_file(tmp_path: Path) -> None:
         "response_port",
         "photos_root",
         "handoff_dir",
+        "allowed_catalogs",
+        "photos_roots",
     }
 
 

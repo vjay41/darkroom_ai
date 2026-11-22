@@ -86,7 +86,7 @@ def test_one_invalid_item_means_nothing_runs(rig: Rig) -> None:
             "batch_set_library_state",
             items=[
                 {"photo_id": copy, "rating": 3},
-                {"photo_id": masters[1], "rating": 3},  # a master with no working copy
+                {"photo_id": "no-such-photo", "rating": 3},
             ],
         )
     assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
@@ -99,7 +99,7 @@ def test_the_plan_marks_the_invalid_item_in_a_dry_run(rig: Rig) -> None:
     copy = copies_for(rig, [masters[0]])[0]
     result = rig.call(
         "batch_set_library_state",
-        items=[{"photo_id": copy, "rating": 3}, {"photo_id": masters[1], "rating": 3}],
+        items=[{"photo_id": copy, "rating": 3}, {"photo_id": "no-such-photo", "rating": 3}],
         dry_run=True,
     )
     assert [i["status"] for i in result["items"]] == ["planned", "invalid"]
@@ -222,16 +222,14 @@ def test_too_many_photos_are_refused_up_front(rig: Rig) -> None:
     assert "at most 10" in str(caught.value)
 
 
-def test_a_master_and_its_own_copy_in_a_library_batch_are_refused(rig: Rig) -> None:
+def test_a_master_and_its_own_copy_are_two_photos_in_a_library_batch(rig: Rig) -> None:
     (copy,) = copies_for(rig, [MASTER])
-    with pytest.raises(DarkroomError) as caught:
-        rig.call(
-            "batch_set_library_state",
-            items=[{"photo_id": copy, "rating": 1}, {"photo_id": MASTER, "rating": 2}],
-        )
-    assert caught.value.code is ErrorCode.GUARDRAIL_REJECTED
-    assert "same working copy" in str(caught.value)
-    assert library(rig, copy)[0] is None
+    result = rig.call(
+        "batch_set_library_state",
+        items=[{"photo_id": copy, "rating": 1}, {"photo_id": MASTER, "rating": 2}],
+    )
+    assert result["ok"] == 2
+    assert library(rig, copy)[0] == 1 and library(rig, MASTER)[0] == 2
 
 
 def test_the_same_photo_twice_is_refused(rig: Rig) -> None:

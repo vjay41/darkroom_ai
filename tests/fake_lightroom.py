@@ -26,6 +26,12 @@ WRITE_COMMANDS = {
     "set_mask_values",
     "mask_operation",
     "set_library_state",
+    "create_collection",
+    "create_collection_set",
+    "add_to_collection",
+    "remove_from_collection",
+    "delete_collection",
+    "create_keyword",
 }
 
 
@@ -92,6 +98,7 @@ class FakeLightroomPlugin:
         self.garbage = garbage
         self.photos: dict[str, FakePhoto] = {"uuid-1": FakePhoto("uuid-1", "DSC_0001.jpg")}
         self.selected: list[str] = ["uuid-1"]
+        self.collections: dict[str, list[str]] = {}
         self.commands: list[str] = []
         self.deadlines: list[Any] = []
         self.exports: list[dict[str, Any]] = []
@@ -463,7 +470,7 @@ class FakeLightroomPlugin:
         return {"id": photo.id, **self._library(photo)}
 
     def _cmd_set_library_state(self, params: dict[str, Any]) -> dict[str, Any]:
-        photo = self._writable(params, needs_copy=True)
+        photo = self._writable(params)
         before = self._library(photo)
         if "rating" in params:
             photo.rating = params["rating"] or None
@@ -475,6 +482,69 @@ class FakeLightroomPlugin:
         for name in params.get("remove_keywords", []):
             photo.keywords = [k for k in photo.keywords if k.lower() != name.lower()]
         return {"before": before, "after": self._library(photo)}
+
+    def _cmd_create_collection(self, params: dict[str, Any]) -> dict[str, Any]:
+        path = params["path"]
+        created = path not in self.collections
+        self.collections.setdefault(path, [])
+        return {"path": path, "created": created, "photo_count": len(self.collections[path])}
+
+    def _cmd_create_collection_set(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"path": params["path"], "created": True}
+
+    def _cmd_remove_from_collection(self, params: dict[str, Any]) -> dict[str, Any]:
+        members = self.collections.get(params["collection"], [])
+        removed = [i for i in params["photo_ids"] if i in members]
+        self.collections[params["collection"]] = [i for i in members if i not in removed]
+        return {
+            "collection": params["collection"],
+            "removed_ids": removed,
+            "photo_count": len(self.collections[params["collection"]]),
+        }
+
+    def _cmd_delete_collection(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "deleted": self.collections.pop(params["path"], None) is not None,
+            "path": params["path"],
+        }
+
+    def _cmd_collection_photos(self, params: dict[str, Any]) -> dict[str, Any]:
+        members = self.collections.get(params["collection"], [])
+        return {
+            "collection": params["collection"],
+            "is_smart": False,
+            "total": len(members),
+            "photos": [{"id": i, "file_name": "x.jpg"} for i in members],
+        }
+
+    def _cmd_create_keyword(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"path": params["path"], "created_levels": params["path"].split("/")}
+
+    def _cmd_catalog_info(self, _: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "catalog_path": self.catalog_path,
+            "writes_allowed": self.writes_allowed,
+            "total_photos": len(self.photos),
+            "collections": [
+                {"name": name, "kind": "collection", "photo_count": len(ids)}
+                for name, ids in self.collections.items()
+            ],
+            "folders": [],
+        }
+
+    def _cmd_add_to_collection(self, params: dict[str, Any]) -> dict[str, Any]:
+        members = self.collections.get(params["collection"])
+        if members is None:
+            raise PluginError("COLLECTION_NOT_FOUND", "No such collection")
+        added = [i for i in params["photo_ids"] if i in self.photos and i not in members]
+        members.extend(added)
+        return {
+            "collection": params["collection"],
+            "added_ids": added,
+            "already_in": 0,
+            "missing_ids": [],
+            "photo_count": len(members),
+        }
 
     def _cmd_export_preview(self, params: dict[str, Any]) -> dict[str, Any]:
         self._writable(params)

@@ -100,10 +100,11 @@ def _no_duplicates(items: Sequence[Any]) -> None:
 
 
 class BatchSetLibraryStateInput(BaseModel):
-    """Set rating, pick/reject flag and keywords on several virtual copies in one batch (up to 25).
+    """Set rating, pick/reject flag and keywords on several photos in one batch (up to 25).
 
-    Each item names a photo and its values (same rules as set_library_state: virtual copies only,
-    never a master). Everything is checked first; if any item is not allowed nothing runs. A batch
+    Each item names a photo and its values (same rules as set_library_state: a master or a
+    virtual copy, exactly the photo whose id you give). Everything is checked first; if any item
+    is not allowed nothing runs. A batch
     of more than 5 photos needs the person's go-ahead, which this tool asks for itself. The run
     stops at the first failure and lists what was done, failed and not run. Use dry_run to see the
     plan without changing anything. Take a whole batch back with undo_batch.
