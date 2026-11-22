@@ -629,6 +629,12 @@ class SimulatedLightroom:
     def list_presets(self) -> tuple[PresetInfo, ...]:
         return tuple(PresetInfo(name=n, uuid=u, folder=f"Folder {u}") for n, u, _ in self.PRESETS)
 
+    def get_preset_settings(self, preset_uuid: str) -> dict[str, Any]:
+        for _name, uuid, settings in self.PRESETS:
+            if uuid == preset_uuid:
+                return dict(settings)
+        raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, "No develop preset with that id")
+
     def apply_preset(self, photo_id: str, preset_uuid: str) -> PresetChange:
         self.calls.append("apply_preset")
         self._copy_only(photo_id)

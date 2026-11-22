@@ -23,7 +23,9 @@ from darkroom_ai.tools import (
     library_tools,
     lightroom_tools,
     masks,
+    preset_tools,
     region_tools,
+    tilt_tools,
     tone_curve,
 )
 from darkroom_ai.tools.context import Outcome, ToolContext
@@ -208,6 +210,12 @@ TOOLS: tuple[Tool, ...] = (
         writes=False,
     ),
     _tool(
+        "measure_tilt",
+        tilt_tools.MeasureTiltInput,
+        tilt_tools.measure_tilt,
+        writes=False,
+    ),
+    _tool(
         "adjust_lighting",
         lightroom_tools.AdjustLightingInput,
         lightroom_tools.adjust_lighting,
@@ -308,6 +316,20 @@ TOOLS: tuple[Tool, ...] = (
     ),
     _tool(
         "apply_preset", lightroom_tools.ApplyPresetInput, lightroom_tools.apply_preset, writes=True
+    ),
+    _tool("get_preset", preset_tools.GetPresetInput, preset_tools.get_preset, writes=False),
+    _tool("try_presets", preset_tools.TryPresetsInput, preset_tools.try_presets, writes=True),
+    _tool(
+        "get_preset_notes",
+        preset_tools.GetPresetNotesInput,
+        preset_tools.get_preset_notes,
+        writes=False,
+    ),
+    _tool(
+        "save_preset_note",
+        preset_tools.SavePresetNoteInput,
+        preset_tools.save_preset_note,
+        writes=False,
     ),
 )
 

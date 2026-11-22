@@ -166,3 +166,10 @@ PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (owner decisions in section 6). Bui
 - Still open: people masks for skin tone need the person chosen in Lightroom's panel; a catalog of tens of thousands of photos is untested;
   the owner's real catalog is not on the allowlist (by design).
 - `master` was fast-forwarded to `dev` and tagged `v0.2.0` on the owner's explicit instruction (2026-11-22).
+
+## 2026-11-22 - professional skills, preset tools, tilt measurement (offline, unverified live)
+- Added tools: `get_preset`, `try_presets`, `get_preset_notes`, `save_preset_note` (local notes in `notes/`, git-ignored), `measure_tilt` (line-angle numbers, positive = clockwise).
+- Added skills: lr-edit-workflow, lr-landscape, lr-event-photography, lr-wedding-indian, lr-wedding-western, lr-parties-celebrations, lr-travel-blog, lr-style-looks, lr-black-and-white, lr-preset-advisor. Skills stay directional (no slider-number recipes: repo rule).
+- Architecture rule confirmed: darkroom_ai = granular tools only; judgement lives in Hermes skills.
+- Unverified live (computer use stopped by the user): `try_presets` against real Lightroom, `measure_tilt` on real photos.
+- Still to build: crop with aspect ratio/rotation (`plan_crop`), zone map for shadows, region view, object finder, object removal (Photoshop), spot/red-eye, export for delivery.

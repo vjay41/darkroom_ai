@@ -20,6 +20,7 @@ dist/
 logs/
 outputs/
 previews/
+notes/
 backgrounds/
 models/
 *.onnx

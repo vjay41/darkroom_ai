@@ -31,6 +31,7 @@ def make_settings(tmp_path: Path, **sections: Any) -> Settings:
         },
         "backgrounds": {"dir": str(tmp_path / "backgrounds")},
         "masks": {"backend": "synthetic"},
+        "paths": {"notes_dir": str(tmp_path / "notes")},
     }
     data.update(sections)
     return parse_settings(data)
@@ -87,6 +88,8 @@ NOT_ABOUT_ONE_PHOTO = {
     "run_selftest",
     "ensure_apps_running",
     "list_presets",
+    "get_preset_notes",
+    "save_preset_note",
     "get_selected_photos",
     "find_photo",
     "list_catalog_photos",
@@ -107,6 +110,7 @@ NOT_ABOUT_ONE_PHOTO = {
     "list_develop_parameters",
     "analyze_batch",
     "measure_region",
+    "measure_tilt",
     "batch_set_library_state",
     "batch_set_develop_parameters",
     "undo_batch",
@@ -149,6 +153,7 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "analyze_photo",
         "analyze_batch",
         "measure_region",
+        "measure_tilt",
         "adjust_lighting",
         "adjust_white_balance",
         "list_develop_parameters",
@@ -174,6 +179,10 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "undo_batch",
         "list_presets",
         "apply_preset",
+        "get_preset",
+        "try_presets",
+        "get_preset_notes",
+        "save_preset_note",
     )
     assert "run_photoshop_script" not in rig.tools.names  # left out of v1 on purpose
     schemas = rig.tools.schemas()
@@ -1400,6 +1409,13 @@ def test_measure_region_reads_boxes_without_changing_anything(rig: Rig) -> None:
     assert rig.lightroom.calls.count("create_virtual_copy") == 0
 
 
+def test_measure_tilt_reads_without_changing_anything(rig: Rig) -> None:
+    result = rig.call("measure_tilt", photo_id=MASTER)
+    assert result["reading"]["horizontal"] is None  # the flat test picture has no lines
+    assert Path(result["preview_path"]).is_file()
+    assert rig.lightroom.calls.count("create_virtual_copy") == 0
+
+
 def test_measure_region_rejects_duplicate_names_and_bad_boxes(rig: Rig) -> None:
     box = [0.0, 0.0, 1.0, 1.0]
     with pytest.raises(DarkroomError):
@@ -1412,3 +1428,75 @@ def test_measure_region_rejects_duplicate_names_and_bad_boxes(rig: Rig) -> None:
         rig.call(
             "measure_region", photo_id=MASTER, regions=[{"name": "a", "box": [0.6, 0, 0.4, 1]}]
         )
+
+
+# -- presets: get_preset, try_presets, notes ------------------------------------------------------
+
+
+def test_get_preset_shows_what_a_preset_would_write_without_applying_it(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    result = rig.call("get_preset", preset_name="Cropped Look", photo_id=MASTER)
+    assert result["total_settings"] == 2 and "CropLeft" in result["touches_framing"]
+    lines = [line for group in result["groups"].values() for line in group]
+    assert {line["setting"] for line in lines} == {"Contrast2012", "CropLeft"}
+    assert rig.lightroom.calls.count("apply_preset") == 0
+    assert rig.lightroom.calls.count("create_virtual_copy") == 0
+    masked = rig.call("get_preset", preset_name="Masked Look")
+    assert masked["masks"] == ["Sky"] and "local adjustments (masks)" in masked["groups"]
+
+
+def test_get_preset_refuses_unknown_and_ambiguous_names(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    with pytest.raises(DarkroomError):
+        rig.call("get_preset", preset_name="No Such Look")
+    with pytest.raises(DarkroomError):
+        rig.call("get_preset", preset_name="Twin")  # exists in two folders
+    assert rig.call("get_preset", preset_name="Twin", folder="Folder preset-3")["name"] == "Twin"
+
+
+def test_try_presets_measures_each_and_leaves_the_photo_as_it_was(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    before = rig.call("adjust_lighting", photo_id=MASTER, exposure=0.0).get("photo_id")
+    copy_id = before or MASTER
+    result = rig.call(
+        "try_presets", photo_id=MASTER, preset_names=["Soft Warm", "Hard Push", "Cropped Look"]
+    )
+    by_name = {t["preset"]: t for t in result["trials"]}
+    assert by_name["Soft Warm"]["status"] == "measured"
+    assert by_name["Soft Warm"]["preview_path"] and "tone_spread" in by_name["Soft Warm"]["numbers"]
+    assert by_name["Hard Push"]["status"] == "refused"  # beyond the exposure limit
+    assert by_name["Cropped Look"]["status"] == "refused"  # changes framing
+    assert result["restored"] is True
+    assert rig.value(result["photo_id"], "Exposure2012") == rig.value(copy_id, "Exposure2012") == 0
+    assert rig.value(result["photo_id"], "Contrast2012") == 0
+    assert rig.value(MASTER, "Contrast2012") == 0
+
+
+def test_try_presets_rejects_duplicates(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    with pytest.raises(DarkroomError):
+        rig.call("try_presets", photo_id=MASTER, preset_names=["Soft Warm", "soft warm"])
+
+
+def test_preset_notes_are_saved_found_and_listed_against_lightroom(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    empty = rig.call("get_preset_notes")
+    assert empty["notes"] == [] and empty["without_notes"] == empty["presets_in_lightroom"] > 0
+    saved = rig.call(
+        "save_preset_note",
+        preset_name="soft warm",
+        character=["warm", "soft"],
+        best_for=["indoor ceremonies"],
+        avoid_for=["neutral product shots"],
+        strength="moderate",
+        comment="Lifts mids gently.",
+        evidence={"tone_spread": 0.02},
+    )
+    assert saved["saved"]["name"] == "Soft Warm" and saved["notes_total"] == 1
+    found = rig.call("get_preset_notes", contains="ceremon")
+    assert [n["name"] for n in found["notes"]] == ["Soft Warm"]
+    assert found["without_notes"] == found["presets_in_lightroom"] - 1
+    with pytest.raises(DarkroomError):
+        rig.call("save_preset_note", preset_name="Twin")  # two folders: needs the folder
+    with pytest.raises(DarkroomError):
+        rig.call("save_preset_note", preset_name="Not A Preset")

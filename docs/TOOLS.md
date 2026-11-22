@@ -2,7 +2,7 @@
 
 # Tool reference
 
-52 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+57 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -33,6 +33,7 @@
 | [`analyze_photo`](#analyze_photo) | reads | Export a small preview and measure it: tones, clipping, colour cast, faces if available. |
 | [`analyze_batch`](#analyze_batch) | reads | Measure many photos in one call and return a few numbers per photo (tones, clipping, colour cast). |
 | [`measure_region`](#measure_region) | reads | Measure the colour and brightness of up to 6 rectangles of a photo as numbers (CIELAB lightness, a*, b*, hue angle, chroma, median RGB, clipping). |
+| [`measure_tilt`](#measure_tilt) | reads | Measure how far the long straight lines in a photo (horizon, walls, door frames) are from level and upright, as degrees with a confidence for the near-horizontal and the near-vertical group. |
 | [`adjust_lighting`](#adjust_lighting) | writes | Change exposure and tone by the given amounts (relative to the current values). |
 | [`adjust_white_balance`](#adjust_white_balance) | writes | Change white balance by the given amounts. |
 | [`list_develop_parameters`](#list_develop_parameters) | reads | List the Lightroom develop parameters you can read and set with get_develop_parameters and set_develop_parameters (name, panel, allowed range). |
@@ -58,6 +59,10 @@
 | [`undo_batch`](#undo_batch) | writes | Take back every change of one batch made in THIS session, by its batch_id. |
 | [`list_presets`](#list_presets) | reads | List Lightroom's develop presets (name and folder). |
 | [`apply_preset`](#apply_preset) | writes | Apply one of Lightroom's develop presets (a saved look) to the photo's virtual copy, by its exact name from list_presets. |
+| [`get_preset`](#get_preset) | reads | Read what one develop preset contains WITHOUT applying it: every setting it would write, grouped by panel (tone, colour, detail, effects, curves, masks...), with values for plain settings and a short description for big ones (curves, masks). |
+| [`try_presets`](#try_presets) | writes | Try up to 4 develop presets on the photo's working copy, one at a time: each is applied, measured on a real render (tones, clipping, colour, noise, chroma) and a preview of it is saved for you to look at, then the photo is put back exactly as it was. |
+| [`get_preset_notes`](#get_preset_notes) | reads | Read the agent's own notes on presets (character, what each is best for, where to avoid it) and see which of Lightroom's presets have no note yet. |
+| [`save_preset_note`](#save_preset_note) | reads | Save or update the agent's note about one Lightroom preset (its character, what it suits, where it goes wrong). |
 
 ### `get_app_status`
 
@@ -345,6 +350,16 @@ Measure the colour and brightness of up to 6 rectangles of a photo as numbers (C
 |---|---|---|---|---|
 | `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
 | `regions` | list of any | yes |  | min items 1, max items 6 |
+
+### `measure_tilt`
+
+Reads only.
+
+Measure how far the long straight lines in a photo (horizon, walls, door frames) are from level and upright, as degrees with a confidence for the near-horizontal and the near-vertical group. Positive means the content is rotated clockwise. It reports numbers only: look at the preview too, because a sloping street or a leaning building gives a false tilt. Reads only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
 
 ### `adjust_lighting`
 
@@ -642,3 +657,54 @@ Apply one of Lightroom's develop presets (a saved look) to the photo's virtual c
 |---|---|---|---|---|
 | `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
 | `preset_name` | string | yes |  | min length 1 |
+
+### `get_preset`
+
+Reads only.
+
+Read what one develop preset contains WITHOUT applying it: every setting it would write, grouped by panel (tone, colour, detail, effects, curves, masks...), with values for plain settings and a short description for big ones (curves, masks). Give photo_id to also see, for each setting, what the photo has now. Use it to learn what a preset really does before choosing it. Changes nothing.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `preset_name` | string | yes |  | Exact name from list_presets. min length 1 |
+| `folder` | string (may be null) | no | `None` | Folder, if the name is in several. |
+| `photo_id` | string (may be null) | no | `None` | Optional: compare with this photo's current values. |
+
+### `try_presets`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Try up to 4 develop presets on the photo's working copy, one at a time: each is applied, measured on a real render (tones, clipping, colour, noise, chroma) and a preview of it is saved for you to look at, then the photo is put back exactly as it was. Use it to compare candidates before recommending one. Nothing stays changed; apply the chosen preset with apply_preset after the person agrees. A preset that changes framing or goes beyond the limits is reported as refused.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | Catalog id of the photo or its working copy. min length 1 |
+| `preset_names` | list of string | yes |  | Exact preset names from list_presets (a name in several folders is refused). min items 1, max items 4 |
+
+### `get_preset_notes`
+
+Reads only.
+
+Read the agent's own notes on presets (character, what each is best for, where to avoid it) and see which of Lightroom's presets have no note yet. Changes nothing in Lightroom.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `contains` | string (may be null) | no | `None` | Only notes whose name, folder, tags or comment contain this. |
+| `limit` | integer | no | `50` | min 1, max 200 |
+
+### `save_preset_note`
+
+Reads only.
+
+Save or update the agent's note about one Lightroom preset (its character, what it suits, where it goes wrong). Keep it short and base it on the preset's name and folder or on a try_presets measurement. Writes only a small local notes file, never Lightroom.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `preset_name` | string | yes |  | Exact name from list_presets. min length 1 |
+| `folder` | string (may be null) | no | `None` | Folder, needed when the name exists in several folders. |
+| `character` | list of string | no |  | max items 8 |
+| `best_for` | list of string | no |  | max items 8 |
+| `avoid_for` | list of string | no |  | max items 8 |
+| `strength` | `subtle` \| `moderate` \| `strong` \| `unknown` | no | `unknown` |  |
+| `comment` | string | no | `` | max length 600 |
+| `evidence` | object | no |  |  |
