@@ -125,7 +125,7 @@ name = "Batch writes (develop and library) and undo_batch"
 tools = ["batch_set_library_state", "batch_set_develop_parameters", "undo_batch"]
 status = "verified"
 verified_on = "Lightroom 15.2.1 (JPG and Sony ARW)"
-note = "Plan, go-ahead, run, verified undo and untouched masters were confirmed live on three test photos. Stopping at a failure mid-batch and the time budget are covered by unit tests only."
+note = "Plan, go-ahead, run, verified undo and untouched masters were confirmed live on three test photos, and once driven by Hermes itself (the model chose the values). Stopping at a failure mid-batch and the time budget are covered by unit tests only."
 
 [[features]]
 name = "Catalog list filters (rating, flag, keyword, file format, ISO, capture date)"

@@ -58,8 +58,9 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 
 ## Next steps (post-v1, in rough priority)
 1. **Batch writes**: DONE (owner approved the addendum 2026-11-22). `batch_set_library_state`, `batch_set_develop_parameters`,
-   `undo_batch`; verified live on three test photos (JPG + 2 ARW). Not run live: stopping at a mid-batch failure and the time
-   budget (unit tests only). See `PRD_ADDENDUM_BATCH_WRITES.md` and `DESIGN.md` decision 16.
+   `undo_batch`; verified live on three test photos (JPG + 2 ARW) and driven by Hermes itself (2026-11-22: the model chose the
+   values, dry run, approval prompt, 2 of 2 applied, `undo_batch` read-back verified). Not run live: stopping at a mid-batch
+   failure and the time budget (unit tests only). See `PRD_ADDENDUM_BATCH_WRITES.md` and `DESIGN.md` decision 16.
 2. **Collapsed-stack detection**: DONE and verified live (plug-in 0.9.4, 2026-11-22). `get_photo`/`get_photo_info` report
    `in_stack`, `stack_collapsed` and a `stack_note` when Lightroom does not say; `create_mask` for kinds that need Develop
    refuses at once (`LR_BUSY_USER`, Expand All Stacks) instead of waiting a minute. Live: expanded stack -> collapsed=false;
@@ -72,12 +73,17 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
 ## Open threads and housekeeping
-- Unpushed commits on `dev` since v0.1.0: library tools, tone-curve tools, list filters (and this documentation update). Push only when told.
+- `dev` is pushed (the owner approved pushing dev); `master` and the v0.1.0 tag are untouched.
 - Library tools use guardrail defaults of at most 20 keywords per call; tone curve moves at most 32 per pass and 64 in total (`darkroom.toml`). Treat them as starting values.
 - Spike keywords `darkroom-ai-library-spike` and `darkroom-ai-filter-spike`, and extra virtual copies, remain in the TEST catalog; harmless.
 - Hermes profile `darkroom` now has `lr-tone-curve`, the updated `lr-batch-operations` and the developer skill `darkroom-dev-review` (under software-development, read-and-propose only). A backup of the replaced skill is in the profile's `backups/`.
 - Unverified: Windows `poetry install` itself, DNG writes, the production catalog, and edit quality across photo types.
-- `dev` is pushed up to v0.1.0; later commits are local until the owner says to push.
+- **Stale tools in Hermes (found 2026-11-22).** Two separate causes, both seen live: (1) Hermes keeps the connector process running
+  across its own restart, so it kept running pre-batch code; (2) Hermes caches the connector's tool list
+  (`cache/mcp_schema_cache.json` in the profile) and kept offering 32 of 40 tools after the connector was current. Fixes: a
+  stale idle connector now ends itself after 120 s (`runtime.stale_exit_after_s`, 0 = off) and Hermes starts a fresh one on its
+  next call (verified live); after adding tools, toggle `darkroom_ai` off and on in Hermes' Capabilities, which refreshes the
+  cache (verified live).
 - A stray Photoshop instance may be open from an earlier test; it is not needed for v1.
 - Two empty people masks may remain on one test-catalog working copy; harmless.
 - The test catalog has working copies from supervised runs (one carries Highlights -10); keep or undo as you like.
@@ -89,6 +95,8 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: connector ends itself when stale and idle (`runtime.stale_exit_*`); Hermes-driven batch run verified live (undo read-back verified).
+- 2026-11-22: list filters for file format, ISO and capture date (plug-in 0.12.0), verified live.
 - 2026-11-22: batch writes built and verified live (`scripts/batch_live.py`); `lr-batch-operations` 1.1.0 installed in the darkroom profile. Hermes needs a restart to see the three new tools.
 - 2026-11-22: plug-in 0.11.1: `inspect_masks` no longer cuts off a mask's Tools list (depth 3 to 6); verified live.
 - 2026-11-22: RAW (Sony ARW) develop writes, Kelvin white balance, lens toggles, library fields and undo verified live; `scripts/raw_live.py`. An aborted first run left one edited virtual copy in the test catalog.
