@@ -2,7 +2,7 @@
 
 # Tool reference
 
-76 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
+83 tools, all served by `darkroom mcp`. Every call is validated, journaled once (also on failure) and returned as JSON. Edit tools work on a virtual copy of the photo, never the original file, inside the guardrail limits (see `DESIGN.md`).
 
 | Tool | Kind | What it does |
 |---|---|---|
@@ -69,6 +69,13 @@
 | [`rotate_photo`](#rotate_photo) | writes | Rotate the working copy a quarter turn left or right (orientation, not the crop angle). |
 | [`set_photo_metadata`](#set_photo_metadata) | writes | Set a photo's title, caption, headline, copyright or creator, and/or its colour label (red, yellow, green, blue, purple or none). |
 | [`copy_develop_settings`](#copy_develop_settings) | writes | Copy chosen groups of develop settings from one photo to up to 10 others, giving them all the SAME values (use auto_correct instead when each photo should get values of its own). |
+| [`find_photos`](#find_photos) | reads | Find photos in the whole catalog by rating, pick flag, colour label, keyword, file format, ISO or capture date. |
+| [`create_smart_collection`](#create_smart_collection) | writes | Create a smart collection (a saved search that keeps itself up to date), for example all 4-star and better photos. |
+| [`build_smart_previews`](#build_smart_previews) | writes | Build smart previews (small editable stand-ins) for up to 25 photos, so they can be edited while the original files are offline. |
+| [`list_catalog_presets`](#list_catalog_presets) | reads | List the names of Lightroom's metadata presets (for example a copyright template) or file-naming presets. |
+| [`apply_metadata_preset`](#apply_metadata_preset) | writes | Apply a metadata preset to photos. |
+| [`enhance`](#enhance) | writes | Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100), 'rawDetails' or 'superRes' (doubles the pixels). |
+| [`reflection_removal`](#reflection_removal) | writes | Run Lightroom's AI Reflection Removal (for example glass glare) on the working copy. |
 | [`undo`](#undo) | writes | Take back darkroom_ai's edits made in THIS session: the last one, or all of them. |
 | [`get_library_state`](#get_library_state) | reads | Read a photo's star rating, pick/reject flag and keywords. |
 | [`set_library_state`](#set_library_state) | writes | Set a photo's star rating, pick/reject flag and keywords (catalog data only). |
@@ -795,6 +802,84 @@ Copy chosen groups of develop settings from one photo to up to 10 others, giving
 | `source_photo_id` | string | yes |  | min length 1 |
 | `target_photo_ids` | list of string | yes |  | min items 1, max items 10 |
 | `groups` | list of `white_balance` \| `tone` \| `presence` \| `hsl` \| `color_grading` \| `detail` \| `lens` \| `effects` \| `calibration` | yes |  | min items 1 |
+
+### `find_photos`
+
+Reads only.
+
+Find photos in the whole catalog by rating, pick flag, colour label, keyword, file format, ISO or capture date. Reads only; returns at most 200 photos.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `conditions` | list of any | yes |  | min items 1, max items 8 |
+| `combine` | `intersect` \| `union` | no | `intersect` |  |
+
+### `create_smart_collection`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Create a smart collection (a saved search that keeps itself up to date), for example all 4-star and better photos. The parent set must exist. It only adds a collection; nothing in the photos changes.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `path` | string | yes |  | Such as "Smart/Best of 2026". min length 1 |
+| `conditions` | list of any | yes |  | min items 1, max items 8 |
+| `combine` | `intersect` \| `union` | no | `intersect` |  |
+
+### `build_smart_previews`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Build smart previews (small editable stand-ins) for up to 25 photos, so they can be edited while the original files are offline. It adds files to the catalog's preview folder only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_ids` | list of string | yes |  | min items 1, max items 25 |
+
+### `list_catalog_presets`
+
+Reads only.
+
+List the names of Lightroom's metadata presets (for example a copyright template) or file-naming presets. Reads only.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `kind` | `metadata` \| `filename` | no | `metadata` |  |
+
+### `apply_metadata_preset`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Apply a metadata preset to photos. It overwrites the fields the preset fills in, so the person's go-ahead is needed first. Look the name up with list_catalog_presets.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_ids` | list of string | yes |  | min items 1, max items 50 |
+| `preset` | string | yes |  | min length 1 |
+
+### `enhance`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Run Lightroom's AI Enhance on the working copy: 'denoise' (amount 1-100), 'rawDetails' or 'superRes' (doubles the pixels). It can take minutes and uses the GPU, changes what the photo shows, saves a snapshot first and needs the person's go-ahead. Judge the result with get_preview and get_ai_panel_state.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `feature` | `denoise` \| `rawDetails` \| `superRes` | yes |  |  |
+| `amount` | integer (may be null) | no | `None` |  |
+
+### `reflection_removal`
+
+**Writes** (changes the catalog or a photo's settings).
+
+Run Lightroom's AI Reflection Removal (for example glass glare) on the working copy. Quality preview is fast, best is slow. It saves a snapshot first and needs the person's go-ahead. Judge the result with get_preview.
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `photo_id` | string | yes |  | min length 1 |
+| `amount` | integer (may be null) | no | `None` |  |
+| `quality` | `preview` \| `standard` \| `best` | no | `preview` |  |
 
 ### `undo`
 

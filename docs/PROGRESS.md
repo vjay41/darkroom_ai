@@ -185,3 +185,11 @@ PRD: docs/PRD_ADDENDUM_CATALOG_MANAGEMENT.md (owner decisions in section 6). Bui
 - New tools: `list_snapshots`, `create_snapshot`, `restore_snapshot`, `reset_develop`, `remove_distracting_people`, `get_retouch_state`, `get_ai_panel_state`, `rotate_photo`, `set_photo_metadata`, `list_keywords`, `copy_develop_settings`. New skills: lr-auto-correct, lr-save-points, lr-sync-look (plus updated edit-workflow, straighten-crop, object-removal, catalog-organisation).
 - `docs/SDK_COVERAGE.md` maps the whole SDK to tools and lists what is deliberately not exposed and why.
 - Needs a full Lightroom restart (plug-in 0.14.0). Live checks: Auto on JPG and RAW (does Auto change values per photo, how long it takes to settle), reset scopes, people removal, snapshot restore, metadata/colour label, rotate, `get_ai_panel_state` answers.
+
+## 2026-11-22 - SDK items completed (offline, unit-tested, NOT verified live)
+- Plug-in 0.15.0 (needs a full Lightroom restart). New tools: `find_photos` (incl. colour label), `create_smart_collection`, `build_smart_previews`, `list_catalog_presets`, `apply_metadata_preset`, `enhance` (Denoise / Raw Details / Super Resolution), `reflection_removal`. Searches use a whitelist of criteria and operations. `remove_distracting_people` now counts spots with `countAllSpots`.
+- Owner decision: Hermes gets the full toolset; a backup of the setup is kept by the owner. Confirmations on file-changing tools stay (repo rule).
+- Not exposed, with reasons in SDK_COVERAGE.md: Point Color swatch editing, per-spot edits, clipping overlay, Lens Blur bokeh, eye correction.
+- New skill lr-ai-enhance; lr-catalog-organisation extended.
+- Live checks needed: `enhance` and `reflection_removal` (does the callback fire, how long, snapshot restore afterwards), `create_smart_collection` criteria names (`labelColor`, `captureTime`, `keywords` operations), `find_photos`, `build_smart_previews`, `apply_metadata_preset`.
+- Mistake caught and fixed during this step: a new module briefly overwrote existing `library_tools.py`; restored from git, new code lives in `catalog_search_tools.py`.

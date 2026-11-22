@@ -21,6 +21,8 @@ the Hermes skills.
 | Distracting people detect and remove (`detectDistractingPeople`, `applyRemovalOnDetectedDistractingPeople`) | `remove_distracting_people` (snapshot first, go-ahead needed) | unverified |
 | Spot / red-eye state (`RetouchAreas`, `RedEyeInfo`) | `get_retouch_state` | unverified |
 | AI panel getters (Enhance, Reflection Removal, Remove panel) | `get_ai_panel_state` (raw answers, to learn what this version offers) | unverified |
+| AI Enhance (`toggleEnhance`: denoise, raw details, super resolution) | `enhance` (virtual copy, snapshot first, go-ahead needed) | unverified |
+| Reflection Removal (`toggleReflectionRemoval`) | `reflection_removal` (same safeguards) | unverified |
 | Rotate left/right | `rotate_photo` | unverified |
 | Background replacement, object removal, red-eye as new files | `replace_background`, `remove_objects`, `fix_red_eye` (Photoshop / OpenCV) | background verified; others unverified |
 
@@ -34,6 +36,10 @@ the Hermes skills.
 | Rating, flag, keywords | `get_library_state`, `set_library_state`, `batch_set_library_state`, `undo_library_change` | verified |
 | Title, caption, headline, copyright, creator, colour label | `set_photo_metadata` | unverified |
 | Keywords list | `list_keywords` | unverified |
+| Search the catalog incl. colour label (`findPhotos`) | `find_photos` | unverified |
+| Smart collections (`createSmartCollection`) | `create_smart_collection` | unverified |
+| Smart previews (`buildSmartPreviews`) | `build_smart_previews` | unverified |
+| Metadata and file-naming presets | `list_catalog_presets`, `apply_metadata_preset` | unverified |
 | Collections and sets, add/remove photos | `create_collection_set`, `create_collection`, `add_to_collection`, `remove_from_collection`, `get_collection_photos`, `undo_collection_change` | verified |
 | Import from folder (no move/copy) | `scan_folder`, `import_folder` | verified |
 | Virtual copies (working copies) | automatic in every edit tool | verified |
@@ -47,10 +53,10 @@ the Hermes skills.
 | `removeFromCatalog`, deleting photos or files | Destructive and not recoverable here. |
 | `LrHttp`, `LrSocket` (outside the loopback bridge), `LrFtp`, publish services, tethering | The runtime is offline: no network calls other than loopback. |
 | Export dialogs (`openExportDialog`), `LrExportSession` with arbitrary destinations | UI-driven and could write anywhere; `export_for_delivery` writes only to the exports folder. |
-| Enhance / Denoise (`toggleEnhance`, `changeDenoiseAmount`), Super Resolution | Creates new DNG files and is GPU-heavy; read the state with `get_ai_panel_state` first, then decide. |
-| Reflection Removal, Lens Blur, eye correction | Unprobed; `get_ai_panel_state` reports what this version supports. |
+| Lens Blur (`setLensBlurBokeh`), eye correction | Unprobed; `get_ai_panel_state` reports what this version supports. Lens Blur sliders are plain develop parameters (`LensBlur*`). |
+| Point Color swatch editing (`addPointColorSwatch`, `updateSelectedPointColorSwatch`) | Needs the Point Color tool open in the UI and an unprobed swatch table; the `PointColors` develop setting is readable with `get_develop_parameters`. |
+| Per-spot read/write, Show Clipping overlay | Spot format unprobed (`get_retouch_state` counts spots); the overlay is UI only, clipping is measured by `analyze_photo`. |
 | Quick Develop (`quickDevelop*`) | Duplicates the slider tools with weaker limits. |
 | `LrUndo` (Lightroom's own history) | darkroom_ai keeps its own journal (`undo`, `undo_batch`); mixing both would confuse the history. |
 | View and screen controls (`LrApplicationView` zoom, loupe, secondary display), view filters, active sources | UI state the person is using; only the Develop switch needed for masks, Auto and resets is made, and only while those run. |
 | `LrApplication.shutdown`, backups, plug-in prefs, passwords, system info | Not photo editing. |
-| Smart collections, smart previews | Candidates for later: catalog-only and low risk, but not needed for editing. |

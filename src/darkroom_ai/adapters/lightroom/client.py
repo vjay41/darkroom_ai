@@ -19,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 from darkroom_ai.adapters.lightroom.bridge_file import BridgeFile
 from darkroom_ai.adapters.lightroom.models import (
     AiPanelState,
+    AiRunResult,
     AutoAdjustment,
     BridgeStatus,
     CatalogInfo,
@@ -32,6 +33,7 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     FolderImport,
     FolderScan,
+    FoundPhotos,
     KeywordCreated,
     KeywordList,
     LibraryChange,
@@ -41,12 +43,15 @@ from darkroom_ai.adapters.lightroom.models import (
     MaskOperation,
     MaskValues,
     MetadataChange,
+    MetadataPresetApplied,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
+    PresetNames,
     PreviewFile,
+    PreviewsBuilt,
     ResetResult,
     RetouchState,
     RotateResult,
@@ -720,6 +725,57 @@ class LightroomClient:
 
     def list_keywords(self) -> KeywordList:
         return self._typed(KeywordList, "list_keywords", self.call("list_keywords", {}))
+
+    def find_photos(self, conditions: Sequence[Mapping[str, Any]], combine: str) -> FoundPhotos:
+        params = {"conditions": [dict(c) for c in conditions], "combine": combine}
+        data = self._new_command("find_photos", params)
+        return self._typed(FoundPhotos, "find_photos", data)
+
+    def create_smart_collection(
+        self, path: str, conditions: Sequence[Mapping[str, Any]], combine: str
+    ) -> CollectionCreated:
+        params = {"path": path, "conditions": [dict(c) for c in conditions], "combine": combine}
+        data = self._new_command("create_smart_collection", params)
+        return self._typed(CollectionCreated, "create_smart_collection", data)
+
+    def build_smart_previews(self, photo_ids: Sequence[str]) -> PreviewsBuilt:
+        data = self.call(
+            "build_smart_previews",
+            {"photo_ids": list(photo_ids)},
+            timeout_s=max(self._export_timeout_s, 300.0),
+        )
+        return self._typed(PreviewsBuilt, "build_smart_previews", data)
+
+    def list_metadata_presets(self) -> PresetNames:
+        return self._typed(
+            PresetNames, "list_metadata_presets", self.call("list_metadata_presets", {})
+        )
+
+    def list_filename_presets(self) -> PresetNames:
+        return self._typed(
+            PresetNames, "list_filename_presets", self.call("list_filename_presets", {})
+        )
+
+    def apply_metadata_preset(self, photo_ids: Sequence[str], preset: str) -> MetadataPresetApplied:
+        params = {"photo_ids": list(photo_ids), "preset": preset}
+        data = self.call("apply_metadata_preset", params, timeout_s=self._export_timeout_s)
+        return self._typed(MetadataPresetApplied, "apply_metadata_preset", data)
+
+    def enhance(self, photo_id: str, feature: str, amount: int | None = None) -> AiRunResult:
+        params: dict[str, Any] = {"photo_id": photo_id, "feature": feature, "max_wait_s": 600}
+        if amount is not None:
+            params["amount"] = amount
+        data = self.call("enhance", params, timeout_s=660.0)
+        return self._typed(AiRunResult, "enhance", data)
+
+    def reflection_removal(
+        self, photo_id: str, amount: int | None = None, quality: str = "preview"
+    ) -> AiRunResult:
+        params: dict[str, Any] = {"photo_id": photo_id, "quality": quality, "max_wait_s": 300}
+        if amount is not None:
+            params["amount"] = amount
+        data = self.call("reflection_removal", params, timeout_s=360.0)
+        return self._typed(AiRunResult, "reflection_removal", data)
 
     def auto_adjust(
         self, photo_id: str, tone: bool = True, white_balance: bool = False

@@ -16,6 +16,7 @@ from typing import Any, Protocol
 
 from darkroom_ai.adapters.lightroom.models import (
     AiPanelState,
+    AiRunResult,
     AutoAdjustment,
     BridgeStatus,
     CatalogInfo,
@@ -29,6 +30,7 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     FolderImport,
     FolderScan,
+    FoundPhotos,
     KeywordCreated,
     KeywordList,
     LibraryChange,
@@ -38,12 +40,15 @@ from darkroom_ai.adapters.lightroom.models import (
     MaskOperation,
     MaskValues,
     MetadataChange,
+    MetadataPresetApplied,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
+    PresetNames,
     PreviewFile,
+    PreviewsBuilt,
     ResetResult,
     RetouchState,
     RotateResult,
@@ -200,6 +205,28 @@ class LightroomAdapter(Protocol):
     def set_photo_metadata(self, photo_id: str, fields: Mapping[str, str]) -> MetadataChange: ...
 
     def list_keywords(self) -> KeywordList: ...
+
+    def find_photos(self, conditions: Sequence[Mapping[str, Any]], combine: str) -> FoundPhotos: ...
+
+    def create_smart_collection(
+        self, path: str, conditions: Sequence[Mapping[str, Any]], combine: str
+    ) -> CollectionCreated: ...
+
+    def build_smart_previews(self, photo_ids: Sequence[str]) -> PreviewsBuilt: ...
+
+    def list_metadata_presets(self) -> PresetNames: ...
+
+    def list_filename_presets(self) -> PresetNames: ...
+
+    def apply_metadata_preset(
+        self, photo_ids: Sequence[str], preset: str
+    ) -> MetadataPresetApplied: ...
+
+    def enhance(self, photo_id: str, feature: str, amount: int | None = ...) -> AiRunResult: ...
+
+    def reflection_removal(
+        self, photo_id: str, amount: int | None = ..., quality: str = ...
+    ) -> AiRunResult: ...
 
     def auto_adjust(
         self, photo_id: str, tone: bool = ..., white_balance: bool = ...

@@ -22,6 +22,11 @@ WRITE_COMMANDS = {
     "export_tiff",
     "apply_preset",
     "auto_adjust",
+    "create_smart_collection",
+    "build_smart_previews",
+    "apply_metadata_preset",
+    "enhance",
+    "reflection_removal",
     "reset_develop",
     "remove_distracting_people",
     "rotate_photo",
@@ -639,6 +644,36 @@ class FakeLightroomPlugin:
 
     def _cmd_list_keywords(self, _: dict[str, Any]) -> dict[str, Any]:
         return {"keywords": [{"path": "Family", "synonyms": []}], "truncated": False}
+
+    def _cmd_find_photos(self, params: dict[str, Any]) -> dict[str, Any]:
+        found = [
+            {"id": p.id, "file_name": p.file_name, "is_virtual_copy": p.is_virtual_copy}
+            for p in self.photos.values()
+        ]
+        return {"photos": found, "count": len(found), "truncated": False}
+
+    def _cmd_create_smart_collection(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"path": params["path"], "created": True, "photo_count": 0}
+
+    def _cmd_build_smart_previews(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"requested": len(params.get("photo_ids", []))}
+
+    def _cmd_list_metadata_presets(self, _: dict[str, Any]) -> dict[str, Any]:
+        return {"presets": ["Copyright 2026"]}
+
+    def _cmd_list_filename_presets(self, _: dict[str, Any]) -> dict[str, Any]:
+        return {"presets": ["Date - Sequence"]}
+
+    def _cmd_apply_metadata_preset(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"preset": params["preset"], "applied": len(params.get("photo_ids", []))}
+
+    def _cmd_enhance(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        return {"photo_id": photo.id, "callback_called": True, "before": {}, "after": {}}
+
+    def _cmd_reflection_removal(self, params: dict[str, Any]) -> dict[str, Any]:
+        photo = self._writable(params, needs_copy=True)
+        return {"photo_id": photo.id, "callback_called": True, "before": {}, "after": {}}
 
     def _cmd_auto_adjust(self, params: dict[str, Any]) -> dict[str, Any]:
         photo = self._writable(params, needs_copy=True)

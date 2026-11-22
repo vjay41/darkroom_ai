@@ -29,7 +29,7 @@ local LrTasks = import "LrTasks"
 
 local Json = require "Json"
 
-local PLUGIN_VERSION = "0.14.0"
+local PLUGIN_VERSION = "0.15.0"
 local PROTOCOL_VERSION = 1
 local WRITE_ACCESS_TIMEOUT_S = 10
 local MASK_WAIT_S = 25
@@ -1224,6 +1224,12 @@ function Commands.write.reset_develop(params, ctx)
 end
 
 local function retouchCount(photo)
+	local okCount, counted = LrTasks.pcall(function()
+		return LrDevelopController.countAllSpots("distractingPeopleRemoval")
+	end)
+	if okCount and type(counted) == "number" then
+		return counted
+	end
 	local ok, settings = LrTasks.pcall(function()
 		return photo:getDevelopSettings()
 	end)
@@ -2221,6 +2227,249 @@ function Commands.read.catalog_info(_, ctx)
 		collections = collectionTree(ctx, nil, 1, collectionBudget),
 		folders = folderTree(ctx, ctx.catalog:getFolders() or {}, 1, folderBudget),
 		truncated = collectionBudget.truncated or folderBudget.truncated,
+	}
+end
+
+
+-- Smart searches (the same engine as Smart Collections). Only a fixed list of criteria and
+-- operations is accepted, so a search can only READ the catalog. Names follow Lightroom's own
+-- Smart Collection settings; UNVERIFIED on this Lightroom version.
+local SEARCH_CRITERIA = {
+	rating = { ops = { ["=="] = true, [">"] = true, [">="] = true, ["<"] = true, ["<="] = true }, kind = "number" },
+	pick = { ops = { ["=="] = true }, kind = "number" },
+	labelColor = { ops = { ["=="] = true }, kind = "string" },
+	keywords = { ops = { any = true, all = true, noneOf = true }, kind = "string" },
+	fileFormat = { ops = { ["=="] = true }, kind = "string" },
+	iso = { ops = { ["=="] = true, [">"] = true, [">="] = true, ["<"] = true, ["<="] = true }, kind = "number" },
+	captureTime = { ops = { [">"] = true, [">="] = true, ["<"] = true, ["<="] = true, ["=="] = true }, kind = "string" },
+}
+
+local function buildSearchDesc(params)
+	local conditions = params.conditions
+	if type(conditions) ~= "table" or #conditions == 0 or #conditions > 8 then
+		fail("INVALID_PARAMS", "conditions must be a list of 1 to 8 conditions")
+	end
+	local combine = params.combine or "intersect"
+	if combine ~= "intersect" and combine ~= "union" then
+		fail("INVALID_PARAMS", "combine must be intersect or union")
+	end
+	local desc = { combine = combine }
+	for index, condition in ipairs(conditions) do
+		local rule = type(condition) == "table" and SEARCH_CRITERIA[condition.criteria] or nil
+		if not rule then
+			fail("INVALID_PARAMS", "condition " .. index .. ": criteria is not one that can be searched")
+		end
+		if not rule.ops[condition.operation] then
+			fail("INVALID_PARAMS", "condition " .. index .. ": operation is not valid for " .. condition.criteria)
+		end
+		local value = condition.value
+		if type(value) ~= rule.kind or (rule.kind == "string" and (value == "" or #value > 200)) then
+			fail("INVALID_PARAMS", "condition " .. index .. ": value must be a " .. rule.kind)
+		end
+		desc[#desc + 1] = { criteria = condition.criteria, operation = condition.operation, value = value }
+	end
+	return desc
+end
+
+local MAX_FOUND = 200
+
+function Commands.read.find_photos(params, ctx)
+	local desc = buildSearchDesc(params)
+	local found = ctx.catalog:findPhotos({ searchDesc = desc }) or {}
+	local out = {}
+	for index, photo in ipairs(found) do
+		if index > MAX_FOUND then
+			break
+		end
+		out[#out + 1] = {
+			id = photo:getRawMetadata("uuid"),
+			file_name = photo:getFormattedMetadata("fileName"),
+			is_virtual_copy = photo:getRawMetadata("isVirtualCopy") and true or false,
+		}
+	end
+	return { photos = list(out), count = #found, truncated = #found > MAX_FOUND }
+end
+
+function Commands.write.create_smart_collection(params, ctx)
+	local desc = buildSearchDesc(params)
+	local parts = splitPath(params.path, "path")
+	local name = table.remove(parts)
+	local parent, ok = findSet(ctx, parts)
+	if not ok then
+		fail("COLLECTION_NOT_FOUND", "The parent set does not exist: " .. table.concat(parts, "/") .. " (create it first)")
+	end
+	local existing = byName(childCollections(ctx, parent), name)
+	if not existing then
+		withWrite(ctx, "darkroom_ai: create smart collection", function()
+			ctx.catalog:createSmartCollection(name, desc, parent, true)
+		end)
+	end
+	local now = byName(childCollections(ctx, parent), name)
+	if not now then
+		fail("CREATE_FAILED", "Lightroom did not create the smart collection " .. name)
+	end
+	return { path = pathOf(now), created = existing == nil, photo_count = #(now:getPhotos() or {}) }
+end
+
+function Commands.write.build_smart_previews(params, ctx)
+	local ids = idList(params, "photo_ids")
+	local photos = {}
+	for _, id in ipairs(ids) do
+		photos[#photos + 1] = findWritablePhoto(ctx, id, false)
+	end
+	local ok, err = LrTasks.pcall(function()
+		ctx.catalog:buildSmartPreviews(photos)
+	end)
+	if not ok then
+		fail("SMART_PREVIEW_FAILED", "Lightroom could not build the smart previews: " .. tostring(err))
+	end
+	return { requested = #photos }
+end
+
+local function namedPresets(source)
+	local names = {}
+	for name in pairs(source or {}) do
+		names[#names + 1] = name
+	end
+	table.sort(names)
+	return list(names)
+end
+
+function Commands.read.list_metadata_presets(_, _)
+	return { presets = namedPresets(LrApplication.metadataPresets()) }
+end
+
+function Commands.read.list_filename_presets(_, _)
+	return { presets = namedPresets(LrApplication.filenamePresets()) }
+end
+
+-- Applies a metadata preset (for example a copyright template) to photos. It overwrites the fields
+-- the preset fills in; the person must have agreed.
+function Commands.write.apply_metadata_preset(params, ctx)
+	local ids = idList(params, "photo_ids")
+	local presets = LrApplication.metadataPresets() or {}
+	local presetId = presets[params.preset]
+	if not presetId then
+		fail("PRESET_NOT_FOUND", "No metadata preset named " .. tostring(params.preset))
+	end
+	local photos = {}
+	for _, id in ipairs(ids) do
+		photos[#photos + 1] = findWritablePhoto(ctx, id, false)
+	end
+	withWrite(ctx, "darkroom_ai: metadata preset", function()
+		for _, photo in ipairs(photos) do
+			photo:applyMetadataPreset(presetId)
+		end
+	end)
+	return { preset = params.preset, applied = #photos }
+end
+
+
+-- Lightroom's AI Enhance (Denoise, Raw Details, Super Resolution) and Reflection Removal, run on a
+-- virtual copy through the Develop controller. They can take minutes and use the GPU. A snapshot is
+-- taken first. Panel states before and after are returned. UNVERIFIED on this Lightroom version.
+local ENHANCE_FEATURES = { denoise = true, rawDetails = true, superRes = true }
+
+local function panelState(getter)
+	local ok, value = LrTasks.pcall(getter)
+	return ok and plainCopy(value, 3) or nil
+end
+
+local function waitFor(ctx, isDone, limitSeconds)
+	local waited = 0
+	while waited < limitSeconds do
+		ctx.checkpoint()
+		LrTasks.sleep(1)
+		waited = waited + 1
+		if isDone() then
+			return true, waited
+		end
+	end
+	return false, waited
+end
+
+function Commands.write.enhance(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local feature = params.feature
+	if not ENHANCE_FEATURES[feature] then
+		fail("INVALID_PARAMS", "feature must be denoise, rawDetails or superRes")
+	end
+	local amount = params.amount
+	if amount ~= nil and (type(amount) ~= "number" or amount < 1 or amount > 100) then
+		fail("INVALID_PARAMS", "amount must be a number from 1 to 100")
+	end
+	local snapshot = savePointBefore(ctx, photo, "enhance " .. feature)
+	showInDevelop(ctx, photo)
+	local function state()
+		return panelState(function()
+			return LrDevelopController.getEnhancePanelState()
+		end)
+	end
+	local before = state()
+	local finished = false
+	local ok, err = LrTasks.pcall(function()
+		LrDevelopController.toggleEnhance(feature, amount, function()
+			finished = true
+		end, {})
+	end)
+	if not ok then
+		fail("ENHANCE_FAILED", "Lightroom refused Enhance: " .. tostring(err))
+	end
+	local _, waited = waitFor(ctx, function()
+		local now = state()
+		return finished and not (now and now.enhanceIsRunning)
+	end, tonumber(params.max_wait_s) or 300)
+	return {
+		photo_id = photo:getRawMetadata("uuid"),
+		snapshot = snapshot,
+		callback_called = finished,
+		before = before,
+		after = state(),
+		waited_s = waited,
+	}
+end
+
+local REFLECTION_QUALITY = { preview = true, standard = true, best = true }
+
+function Commands.write.reflection_removal(params, ctx)
+	local photo = findWritablePhoto(ctx, params.photo_id, true)
+	local amount, quality = params.amount, params.quality or "preview"
+	if amount ~= nil and (type(amount) ~= "number" or amount < -100 or amount > 100) then
+		fail("INVALID_PARAMS", "amount must be a number from -100 to 100")
+	end
+	if not REFLECTION_QUALITY[quality] then
+		fail("INVALID_PARAMS", "quality must be preview, standard or best")
+	end
+	local snapshot = savePointBefore(ctx, photo, "reflection removal")
+	showInDevelop(ctx, photo)
+	local function state()
+		return panelState(function()
+			return LrDevelopController.getReflectionRemovalPanelState()
+		end)
+	end
+	local before = state()
+	if before and before.isSupported == false then
+		fail("ADOBE_FEATURE_UNAVAILABLE", "Lightroom says this photo does not support Reflection Removal")
+	end
+	local finished = false
+	local ok, err = LrTasks.pcall(function()
+		LrDevelopController.toggleReflectionRemoval(amount, quality, function()
+			finished = true
+		end, {})
+	end)
+	if not ok then
+		fail("REFLECTION_FAILED", "Lightroom refused Reflection Removal: " .. tostring(err))
+	end
+	local _, waited = waitFor(ctx, function()
+		return finished
+	end, tonumber(params.max_wait_s) or 180)
+	return {
+		photo_id = photo:getRawMetadata("uuid"),
+		snapshot = snapshot,
+		callback_called = finished,
+		before = before,
+		after = state(),
+		waited_s = waited,
 	}
 end
 

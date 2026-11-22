@@ -9,7 +9,7 @@ metadata:
   hermes:
     tags: [photo, lightroom, catalog, organisation, knowledge]
     related_skills: [lr-catalog-partnering, lr-batch-operations, lr-safe-operations, lr-user-guidance]
-    uses_tools: [get_catalog_info, list_catalogs, request_folder_access, scan_folder, import_folder, catalog_summary, list_catalog_photos, create_collection_set, create_collection, add_to_collection, remove_from_collection, get_collection_photos, create_keyword, list_keywords, set_photo_metadata, set_library_state, batch_set_library_state, undo_collection_change, undo_library_change, undo_batch]
+    uses_tools: [get_catalog_info, list_catalogs, request_folder_access, scan_folder, import_folder, catalog_summary, list_catalog_photos, create_collection_set, create_collection, add_to_collection, remove_from_collection, get_collection_photos, create_keyword, list_keywords, find_photos, create_smart_collection, build_smart_previews, list_catalog_presets, apply_metadata_preset, set_photo_metadata, set_library_state, batch_set_library_state, undo_collection_change, undo_library_change, undo_batch]
 ---
 
 # Organising a catalog from a folder of photos
@@ -62,3 +62,12 @@ When organised, say what now exists and offer next steps. Editing then follows l
 Use `list_keywords` to reuse the catalog's own keyword names before creating new ones. `set_photo_metadata` sets
 title, caption, headline, copyright, creator and the colour label (catalog data only; it returns the earlier
 values). Ask before writing text in the owner's name, and keep captions factual.
+
+## Searching, smart collections, presets
+`find_photos` searches the whole catalog (rating, pick flag, colour label, keyword, file format, ISO, capture
+date; combine with intersect or union). Use it to answer "where are my red-labelled photos". When the owner wants
+a search that keeps itself current, `create_smart_collection` saves the same conditions as a smart collection
+(it only adds a collection). `build_smart_previews` makes small editable stand-ins for up to 25 photos so work can
+continue when originals are offline. `list_catalog_presets` lists metadata or file-naming presets;
+`apply_metadata_preset` overwrites the fields a preset fills in, so say which fields and ask first. All of these
+are unverified on a live Lightroom yet.

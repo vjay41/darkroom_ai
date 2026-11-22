@@ -88,6 +88,11 @@ def rig(tmp_path: Path) -> Rig:
 
 
 NOT_ABOUT_ONE_PHOTO = {
+    "find_photos",
+    "create_smart_collection",
+    "build_smart_previews",
+    "list_catalog_presets",
+    "apply_metadata_preset",
     "get_app_status",
     "get_capabilities",
     "run_selftest",
@@ -197,6 +202,13 @@ def test_registry_lists_the_v1_tools_with_schemas(rig: Rig) -> None:
         "rotate_photo",
         "set_photo_metadata",
         "copy_develop_settings",
+        "find_photos",
+        "create_smart_collection",
+        "build_smart_previews",
+        "list_catalog_presets",
+        "apply_metadata_preset",
+        "enhance",
+        "reflection_removal",
         "undo",
         "get_library_state",
         "set_library_state",
@@ -1810,3 +1822,53 @@ def test_copy_develop_settings_refused_without_go_ahead(rig: Rig) -> None:
             groups=["tone"],
         )
     assert caught.value.code.value == "CONFIRMATION_REQUIRED"
+
+
+def test_find_photos_and_smart_collection(rig: Rig) -> None:
+    found = rig.call(
+        "find_photos", conditions=[{"criteria": "labelColor", "operation": "==", "value": "red"}]
+    )
+    assert found["found"]["count"] >= 1
+    made = rig.call(
+        "create_smart_collection",
+        path="Best",
+        conditions=[{"criteria": "rating", "operation": ">=", "value": 4}],
+    )
+    assert made["created"] is True
+    with pytest.raises(DarkroomError):
+        rig.call(
+            "find_photos", conditions=[{"criteria": "rating", "operation": "bogus", "value": 1}]
+        )
+    with pytest.raises(DarkroomError):
+        rig.call("find_photos", conditions=[])
+
+
+def test_previews_and_presets(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    assert rig.call("build_smart_previews", photo_ids=[MASTER])["requested"] == 1
+    names = rig.call("list_catalog_presets", kind="metadata")["presets"]
+    assert names
+    assert rig.call("apply_metadata_preset", photo_ids=[MASTER], preset=names[0])["applied"] == 1
+    assert rig.call("list_catalog_presets", kind="filename")["presets"]
+    with pytest.raises(DarkroomError):
+        rig.call("apply_metadata_preset", photo_ids=[MASTER], preset="No such preset")
+
+
+def test_metadata_preset_and_ai_runs_need_a_go_ahead(rig: Rig) -> None:
+    for name, extra in (
+        ("apply_metadata_preset", {"photo_ids": [MASTER], "preset": "Copyright 2026"}),
+        ("enhance", {"photo_id": MASTER, "feature": "denoise"}),
+        ("reflection_removal", {"photo_id": MASTER}),
+    ):
+        with pytest.raises(DarkroomError):
+            rig.tools.call(name, extra)
+
+
+def test_enhance_and_reflection_removal_run_on_a_copy_with_a_snapshot(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, confirmer=AllowAll())
+    ran = rig.call("enhance", photo_id=MASTER, feature="denoise", amount=40)
+    assert ran["working_copy_created"] and ran["run"]["snapshot"]
+    again = rig.call("reflection_removal", photo_id=ran["photo_id"], quality="standard")
+    assert again["run"]["callback_called"] and again["run"]["snapshot"]
+    with pytest.raises(DarkroomError):
+        rig.call("enhance", photo_id=MASTER, feature="denoise", amount=500)

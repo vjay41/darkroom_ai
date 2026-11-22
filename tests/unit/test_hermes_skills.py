@@ -40,6 +40,7 @@ EXPECTED = {
     "lr-straighten-crop",
     "lr-auto-correct",
     "lr-save-points",
+    "lr-ai-enhance",
     "lr-sync-look",
     "lr-upgrade",
     "lr-user-guidance",

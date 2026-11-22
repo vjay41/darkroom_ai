@@ -303,6 +303,42 @@ class KeywordList(_Result):
     truncated: bool = False
 
 
+class FoundPhoto(_Result):
+    id: str
+    file_name: str | None = None
+    is_virtual_copy: bool = False
+
+
+class FoundPhotos(_Result):
+    photos: list[FoundPhoto] = Field(default_factory=list)
+    count: int = 0
+    truncated: bool = False
+
+
+class PresetNames(_Result):
+    presets: list[str] = Field(default_factory=list)
+
+
+class PreviewsBuilt(_Result):
+    requested: int = 0
+
+
+class MetadataPresetApplied(_Result):
+    preset: str
+    applied: int = 0
+
+
+class AiRunResult(_Result):
+    """Lightroom's AI Enhance or Reflection Removal run: panel state before and after."""
+
+    photo_id: str
+    snapshot: Snapshot | None = None
+    callback_called: bool = False
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+    waited_s: float = 0.0
+
+
 class CollectionNode(_Result):
     name: str
     kind: str  # "set" or "collection"

@@ -15,6 +15,7 @@ import numpy as np
 
 from darkroom_ai.adapters.lightroom.models import (
     AiPanelState,
+    AiRunResult,
     AutoAdjustment,
     BridgeStatus,
     CatalogInfo,
@@ -30,6 +31,8 @@ from darkroom_ai.adapters.lightroom.models import (
     ExportedTiff,
     FolderImport,
     FolderScan,
+    FoundPhoto,
+    FoundPhotos,
     KeywordCreated,
     KeywordEntry,
     KeywordList,
@@ -40,12 +43,15 @@ from darkroom_ai.adapters.lightroom.models import (
     MaskOperation,
     MaskValues,
     MetadataChange,
+    MetadataPresetApplied,
     PhotoInfo,
     PhotoMetadata,
     PingInfo,
     PresetChange,
     PresetInfo,
+    PresetNames,
     PreviewFile,
+    PreviewsBuilt,
     ResetResult,
     RetouchState,
     RotateResult,
@@ -695,6 +701,65 @@ class SimulatedLightroom:
         before = {k: store.get(k, "") for k in fields}
         store.update(fields)
         return MetadataChange(photo_id=photo_id, before=before, after={k: store[k] for k in fields})
+
+    def find_photos(self, conditions: Sequence[Mapping[str, Any]], combine: str) -> FoundPhotos:
+        self.calls.append("find_photos")
+        found = [
+            FoundPhoto(
+                id=i, file_name=p["file_name"], is_virtual_copy=bool(p.get("is_virtual_copy"))
+            )
+            for i, p in self.photos.items()
+        ]
+        return FoundPhotos(photos=found, count=len(found))
+
+    def create_smart_collection(
+        self, path: str, conditions: Sequence[Mapping[str, Any]], combine: str
+    ) -> CollectionCreated:
+        self.calls.append("create_smart_collection")
+        return CollectionCreated(path=path, created=True, photo_count=0)
+
+    def build_smart_previews(self, photo_ids: Sequence[str]) -> PreviewsBuilt:
+        self.calls.append("build_smart_previews")
+        return PreviewsBuilt(requested=len(photo_ids))
+
+    def list_metadata_presets(self) -> PresetNames:
+        return PresetNames(presets=["Copyright 2026", "Wedding client"])
+
+    def list_filename_presets(self) -> PresetNames:
+        return PresetNames(presets=["Date - Sequence"])
+
+    def apply_metadata_preset(self, photo_ids: Sequence[str], preset: str) -> MetadataPresetApplied:
+        self.calls.append("apply_metadata_preset")
+        if preset not in self.list_metadata_presets().presets:
+            raise DarkroomError(ErrorCode.GUARDRAIL_REJECTED, "No metadata preset with that name")
+        return MetadataPresetApplied(preset=preset, applied=len(photo_ids))
+
+    def enhance(self, photo_id: str, feature: str, amount: int | None = None) -> AiRunResult:
+        self.calls.append("enhance")
+        self._copy_only(photo_id)
+        snapshot = self.create_snapshot(photo_id, f"darkroom_ai before enhance {feature}").snapshot
+        self.settings[photo_id][f"Enhance_{feature}"] = amount or 50
+        return AiRunResult(
+            photo_id=photo_id,
+            snapshot=snapshot,
+            callback_called=True,
+            before={"denoiseState": False},
+            after={"denoiseState": True, "denoiseAmount": amount or 50},
+        )
+
+    def reflection_removal(
+        self, photo_id: str, amount: int | None = None, quality: str = "preview"
+    ) -> AiRunResult:
+        self.calls.append("reflection_removal")
+        self._copy_only(photo_id)
+        snapshot = self.create_snapshot(photo_id, "darkroom_ai before reflection removal").snapshot
+        return AiRunResult(
+            photo_id=photo_id,
+            snapshot=snapshot,
+            callback_called=True,
+            before={"checkboxState": False, "quality": quality},
+            after={"checkboxState": True, "amount": amount if amount is not None else 100},
+        )
 
     def list_keywords(self) -> KeywordList:
         return KeywordList(
