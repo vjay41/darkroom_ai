@@ -59,15 +59,22 @@ note = "White balance on JPG/TIFF uses the relative Incremental sliders."
 [[features]]
 name = "Develop sliders on RAW/DNG (incl. Kelvin white balance)"
 tools = ["adjust_lighting", "adjust_white_balance"]
+status = "verified"
+verified_on = "Lightroom 15.2.1 (Sony ARW)"
+note = "Exposure, tone and Kelvin white balance (5600 to 5800 K) were written to the virtual copy of two ARW files, read back and undone exactly; the master and file were unchanged. DNG was not tested."
+
+[[features]]
+name = "RAW develop writes on DNG files"
+tools = ["adjust_lighting", "adjust_white_balance"]
 status = "untested"
-note = "No RAW write has been run live yet. Check the result after the first RAW edit."
+note = "Only Sony ARW has been run live. DNG has not been tested; check the result after the first DNG edit."
 
 [[features]]
 name = "Lens profile and chromatic aberration toggles"
 tools = ["set_develop_parameters", "get_develop_parameters"]
 status = "verified"
-verified_on = "Lightroom 15.2.1 (JPG)"
-note = "A profile name is only reported when Lightroom finds one for the lens; untested on RAW."
+verified_on = "Lightroom 15.2.1 (JPG, Sony ARW)"
+note = "The switches turn on and read back on ARW. A profile name is only reported when Lightroom finds one for the lens; for a Sony FE 24-70mm F2.8 GM II on an ILCE-7M5 it stayed empty, so whether a profile was applied is not confirmed."
 
 [[features]]
 name = "AI masks: subject, sky, background, objects, landscape"

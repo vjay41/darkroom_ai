@@ -35,7 +35,7 @@ local model through LM Studio. Other Adobe versions give a warning (`get_capabil
 | Masks: gradient, radial, luminance, AI subject/sky/background, people (needs the person to pick) | Verified on the test catalog |
 | Presets (look settings allowed with a summary; crop and process-version changes refused) | Verified |
 | Reliability: 20-cycle soak on the test catalog | 0 failures |
-| RAW/DNG develop writes | Not verified |
+| RAW develop writes (Sony ARW: lighting, Kelvin white balance, lens toggles, library fields, undo) | Verified on the test catalog; DNG not tested |
 | Colour and depth range masks | Not available through Lightroom's scripting interface |
 | Face detection | Left to Lightroom: people and subject masks use Lightroom's own detection. No face model is shipped or needed |
 | Import a folder into the catalog | Verified (asks first) |

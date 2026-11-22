@@ -17,7 +17,7 @@ All v1 build phases are done except the owner-only release steps. `make quality`
 | P1 Strip to MCP, P1b JPG white-balance fix | Done and verified live |
 | P1c Compatibility layer | Done: capability probing, `compatibility.toml`, `selftest`, protocol handshake, `UPGRADE.md` |
 | P2 Read tools | Done: metadata, paged catalog, develop state, generic parameter tools |
-| P3 Corrections | Done: lens profile and chromatic aberration as parameters (RAW unverified) |
+| P3 Corrections | Done: lens profile and chromatic aberration as parameters (RAW verified for Sony ARW, DNG not) |
 | P4 Masks | Done: gradient, radial, luminance, AI (subject/sky/background/objects/landscape), people; read-back after every write |
 | P5 Presets | Done: tiered rule, exact undo |
 | P6 Reliability | Done on the test catalog: 20-cycle soak, 0 failures; root cause of mask delays found (collapsed stacks) |
@@ -42,13 +42,13 @@ All v1 build phases are done except the owner-only release steps. `make quality`
   lift raised highlight clipping from 0.32% to 1.12%; the agent reported it and left it.
 
 ## Known limits (stated in the README too)
-RAW/DNG develop writes and RAW lens work unverified; colour and depth range masks unavailable through the SDK; face
+DNG is untested and a RAW lens profile name was never reported (switches work, resolution unconfirmed); colour and depth range masks unavailable through the SDK; face
 detection is left to Lightroom's own people/subject masks (no model by design); one Lightroom client at a time; mask tools take over Develop briefly; a virtual
 copy in a collapsed stack cannot be shown; Hermes needs a restart to see new tools; Adobe versions frozen until a
 deliberate, drilled update.
 
 ## Release status
-Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested, test-catalog writes only).
+Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested at release time, test-catalog writes only; ARW verified afterwards on 2026-11-22).
 
 - Repository is public: https://github.com/vjay41/darkroom_ai (MIT, `LICENSE`).
 - `dev` (default branch), `master` and tag `v0.1.0` all pointed at `3e236d9` when released; `master` was
@@ -67,7 +67,7 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested,
    they must run inside `LrTasks.pcall` (plain `pcall` fails). `darkroom doctor` also warns when the selected photo is in a collapsed stack.
 3. **List filters**: rating, flag and keyword are DONE and verified live (plug-in 0.11.0, 18 checks). There is deliberately no
    "edited" filter (Lightroom flags every virtual copy as edited). File format, capture date and ISO filters remain open.
-4. **RAW/DNG**: verify writes and lens corrections on a RAW test catalog; then update `compatibility.toml`.
+4. **RAW**: Sony ARW verified 2026-11-22 (`scripts/raw_live.py`, 2 files, all checks). Still open: DNG, and whether a lens profile really resolves for RAW.
 6. **Lua checks** in CI: provide `luac` so the 8 skipped tests run.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
@@ -76,7 +76,7 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested,
 - Library tools use guardrail defaults of at most 20 keywords per call; tone curve moves at most 32 per pass and 64 in total (`darkroom.toml`). Treat them as starting values.
 - Spike keywords `darkroom-ai-library-spike` and `darkroom-ai-filter-spike`, and extra virtual copies, remain in the TEST catalog; harmless.
 - Hermes profile `darkroom` now has `lr-tone-curve`, the updated `lr-batch-operations` and the developer skill `darkroom-dev-review` (under software-development, read-and-propose only). A backup of the replaced skill is in the profile's `backups/`.
-- Unverified: Windows `poetry install` itself, RAW/DNG writes, the production catalog, and edit quality across photo types.
+- Unverified: Windows `poetry install` itself, DNG writes, the production catalog, and edit quality across photo types.
 - `dev` is pushed up to v0.1.0; later commits are local until the owner says to push.
 - A stray Photoshop instance may be open from an earlier test; it is not needed for v1.
 - Two empty people masks may remain on one test-catalog working copy; harmless.
@@ -89,6 +89,7 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: RAW (Sony ARW) develop writes, Kelvin white balance, lens toggles, library fields and undo verified live; `scripts/raw_live.py`. An aborted first run left one edited virtual copy in the test catalog.
 - 2026-11-22: list filters (rating, flag, keyword) verified live on plug-in 0.11.0; `edited` filter dropped; batch-writes PRD addendum drafted (no build).
 - 2026-11-22: tone-curve tools (`get_tone_curve`, `adjust_tone_curve`) and `lr-tone-curve` skill; verified live.
 - 2026-11-22: library tools (rating, pick/reject, keywords, undo) on virtual copies only; verified live (plug-in 0.10.0).
