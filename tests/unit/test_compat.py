@@ -82,7 +82,9 @@ def test_get_capabilities_lists_what_is_not_verified(tmp_path: Path) -> None:
     assert got["photoshop"]["status"] == "tested"
     assert got["plugin"]["version"] is not None
     flagged = " ".join(got["not_verified"])
-    assert "RAW" in flagged and "Colour range" in flagged
+    assert "Colour range" in flagged
+    dng = next(f for f in got["features"] if f["name"] == "RAW develop writes on DNG files")
+    assert dng["status"] == "verified"
     people = next(f for f in got["features"] if f["name"] == "People mask")
     assert people["status"] == "verified"
     assert any(f["status"] == "verified" for f in got["features"])

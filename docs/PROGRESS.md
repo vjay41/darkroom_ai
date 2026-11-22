@@ -17,7 +17,7 @@ All v1 build phases are done except the owner-only release steps. `make quality`
 | P1 Strip to MCP, P1b JPG white-balance fix | Done and verified live |
 | P1c Compatibility layer | Done: capability probing, `compatibility.toml`, `selftest`, protocol handshake, `UPGRADE.md` |
 | P2 Read tools | Done: metadata, paged catalog, develop state, generic parameter tools |
-| P3 Corrections | Done: lens profile and chromatic aberration as parameters (RAW verified for Sony ARW, DNG not) |
+| P3 Corrections | Done: lens profile and chromatic aberration as parameters (RAW verified for Sony ARW and DNG) |
 | P4 Masks | Done: gradient, radial, luminance, AI (subject/sky/background/objects/landscape), people; read-back after every write |
 | P5 Presets | Done: tiered rule, exact undo |
 | P6 Reliability | Done on the test catalog: 20-cycle soak, 0 failures; root cause of mask delays found (collapsed stacks) |
@@ -42,7 +42,7 @@ All v1 build phases are done except the owner-only release steps. `make quality`
   lift raised highlight clipping from 0.32% to 1.12%; the agent reported it and left it.
 
 ## Known limits (stated in the README too)
-DNG is untested and a RAW lens profile name was never reported (switches work, resolution unconfirmed); colour and depth range masks unavailable through the SDK; face
+DNG was verified only on a file Lightroom converted from an ARW (not on camera or phone DNGs); colour and depth range masks unavailable through the SDK; face
 detection is left to Lightroom's own people/subject masks (no model by design); one Lightroom client at a time; mask tools take over Develop briefly; a virtual
 copy in a collapsed stack cannot be shown; Hermes needs a restart to see new tools; Adobe versions frozen until a
 deliberate, drilled update.
@@ -69,7 +69,7 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
    they must run inside `LrTasks.pcall` (plain `pcall` fails). `darkroom doctor` also warns when the selected photo is in a collapsed stack.
 3. **List filters**: rating, flag, keyword, file format, ISO and capture date are DONE and verified live (plug-in 0.12.0; 34 checks on 143 photos, JPG + RAW). There is deliberately no
    "edited" filter (Lightroom flags every virtual copy as edited).
-4. **RAW**: Sony ARW verified 2026-11-22 (`scripts/raw_live.py`, 2 files, all checks). Still open: DNG, and whether a lens profile really resolves for RAW.
+4. **RAW**: Sony ARW verified 2026-11-22 (`scripts/raw_live.py`, 2 files, all checks). DNG verified the same day on `DSC00482.dng`, which Lightroom made from the ARW (the ARW file stays on disk; the test catalog now points at the DNG for that photo, so scripts that named `DSC00482.ARW` need the `.dng` path). The lens profile resolves by name on ARW and DNG (`Adobe (Sony FE 24-70mm F2.8 GM II)`).
 6. **Lua checks** in CI: provide `luac` so the 8 skipped tests run.
 7. Optional: `analyze_photo` region parameter; colour/depth range mask format capture if Adobe exposes it.
 
@@ -78,7 +78,7 @@ Released as **v0.1.0** on 2026-11-22 (early release: JPG verified, RAW untested 
 - Library tools use guardrail defaults of at most 20 keywords per call; tone curve moves at most 32 per pass and 64 in total (`darkroom.toml`). Treat them as starting values.
 - Spike keywords `darkroom-ai-library-spike` and `darkroom-ai-filter-spike`, and extra virtual copies, remain in the TEST catalog; harmless.
 - Hermes profile `darkroom` now has `lr-tone-curve`, the updated `lr-batch-operations` and the developer skill `darkroom-dev-review` (under software-development, read-and-propose only). A backup of the replaced skill is in the profile's `backups/`.
-- Unverified: Windows `poetry install` itself, DNG writes, the production catalog, and edit quality across photo types.
+- Unverified: Windows `poetry install` itself, DNG files from other sources, the production catalog, and edit quality across photo types.
 - **Stale tools in Hermes (found 2026-11-22).** Two separate causes, both seen live: (1) Hermes keeps the connector process running
   across its own restart, so it kept running pre-batch code; (2) Hermes caches the connector's tool list
   (`cache/mcp_schema_cache.json` in the profile) and kept offering 32 of 40 tools after the connector was current. Fixes: a
@@ -96,6 +96,7 @@ Approved decisions and the design principles are in `DESIGN.md` (decision log) a
 there and add a dated line here.
 
 ## Change log (newest first, one line each)
+- 2026-11-22: DNG develop writes verified live and the RAW lens profile confirmed to resolve (ARW and DNG).
 - 2026-11-22: mid-batch failure and time budget verified live (`scripts/batch_failure_live.py`).
 - 2026-11-22: connector ends itself when stale and idle (`runtime.stale_exit_*`); Hermes-driven batch run verified live (undo read-back verified).
 - 2026-11-22: list filters for file format, ISO and capture date (plug-in 0.12.0), verified live.

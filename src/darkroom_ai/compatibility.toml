@@ -66,15 +66,16 @@ note = "Exposure, tone and Kelvin white balance (5600 to 5800 K) were written to
 [[features]]
 name = "RAW develop writes on DNG files"
 tools = ["adjust_lighting", "adjust_white_balance"]
-status = "untested"
-note = "Only Sony ARW has been run live. DNG has not been tested; check the result after the first DNG edit."
+status = "verified"
+verified_on = "Lightroom 15.2.1 (DNG converted from Sony ARW)"
+note = "Lighting, Kelvin white balance, lens toggles, library fields and undo passed live on a DNG made by Lightroom from an ARW (scripts/raw_live.py). Other DNG sources (for example phone or in-camera DNG) have not been run."
 
 [[features]]
 name = "Lens profile and chromatic aberration toggles"
 tools = ["set_develop_parameters", "get_develop_parameters"]
 status = "verified"
-verified_on = "Lightroom 15.2.1 (JPG, Sony ARW)"
-note = "The switches turn on and read back on ARW. A profile name is only reported when Lightroom finds one for the lens; for a Sony FE 24-70mm F2.8 GM II on an ILCE-7M5 it stayed empty, so whether a profile was applied is not confirmed."
+verified_on = "Lightroom 15.2.1 (JPG, Sony ARW, DNG)"
+note = "The switches turn on and read back, and Lightroom reports the profile it found: for a Sony FE 24-70mm F2.8 GM II on an ILCE-7M5 it named an Adobe profile for that lens on both ARW and DNG. An earlier run on the portrait JPG showed an empty name (not re-run)."
 
 [[features]]
 name = "AI masks: subject, sky, background, objects, landscape"

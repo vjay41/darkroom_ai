@@ -40,5 +40,5 @@ plug-in does not register it.
 
 ## What this does not protect against
 Anything Adobe does not expose through its SDK stays out of reach (`ADOBE_FEATURE_UNAVAILABLE`). Colour/depth range
-masks and RAW/DNG writes are not verified, and people masks need a person picked in Lightroom; `get_capabilities`
+masks are not verified, and people masks need a person picked in Lightroom; `get_capabilities`
 lists the current status of each.

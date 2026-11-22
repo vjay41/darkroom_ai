@@ -62,5 +62,5 @@ ask it for a numeric ranking of the test catalog (`analyze_batch`), choose the w
 supervised pass.
 
 ## What is *not* tested yet
-RAW/DNG develop writes and lens corrections on RAW; colour/depth range masks (unavailable); face detection (no model
+DNG files from cameras or phones (only an ARW-converted DNG was run); colour/depth range masks (unavailable); face detection (no model
 shipped); the Lua plug-in under `luac` in CI; the production catalog. These are listed in `PROGRESS.md`.
